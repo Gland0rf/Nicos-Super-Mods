@@ -3,49 +3,24 @@ package com.nico.client.wiki.screen;
 import static com.nico.client.wiki.screen.WikiScreenMetrics.*;
 
 import com.nico.client.wiki.WikiBlock;
-import com.nico.client.wiki.WikiBrowserStore;
 import com.nico.client.wiki.WikiContent;
 import com.nico.client.wiki.WikiCraftingGrid;
 import com.nico.client.wiki.WikiImage;
 import com.nico.client.wiki.WikiImageTextureCache;
 import com.nico.client.wiki.WikiInfobox;
 import com.nico.client.wiki.WikiItemSlot;
-import com.nico.client.wiki.WikiPage;
 import com.nico.client.wiki.WikiText;
-import com.nico.client.wiki.WikiTitleResolver;
-import com.nico.client.wiki.service.HypixelWikiService;
-import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.blaze3d.platform.cursor.CursorTypes;
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.screens.ConfirmLinkScreen;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.ClickEvent;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 
 import java.net.URI;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.function.Consumer;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 
 /** Draws tables, infoboxes, tabs, crafting widgets, images, and slots. */
 abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
@@ -53,7 +28,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         super(parent, itemStack);
     }
 
-    protected void renderEntry(GuiGraphicsExtractor graphics, RenderEntry entry, int y) {
+    protected void renderEntry(GuiGraphics graphics, RenderEntry entry, int y) {
         switch (entry.kind()) {
             case PAGE_TITLE -> {
                 drawCells(graphics, entry, y, TEXT);
@@ -104,7 +79,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         }
     }
 
-    protected void renderTable(GuiGraphicsExtractor graphics, RenderEntry entry, int y) {
+    protected void renderTable(GuiGraphics graphics, RenderEntry entry, int y) {
         if (!(entry.payload() instanceof TableLayout table)) {
             return;
         }
@@ -162,7 +137,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         }
     }
 
-    protected void renderTableRow(GuiGraphicsExtractor graphics, RenderEntry entry, int y) {
+    protected void renderTableRow(GuiGraphics graphics, RenderEntry entry, int y) {
         int bg = entry.aux() == 2 ? tableHeadColor() : entry.aux() == 1 ? tableAltColor() : tableRowColor();
         graphics.fill(entry.x(), y, entry.x() + entry.width(), y + entry.height(), bg);
 
@@ -225,7 +200,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
     }
 
     protected int renderCompactSlots(
-            GuiGraphicsExtractor graphics,
+            GuiGraphics graphics,
             List<WikiItemSlot> slots,
             int x,
             int y,
@@ -249,7 +224,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
     }
 
     protected int renderCompactCrafting(
-            GuiGraphicsExtractor graphics,
+            GuiGraphics graphics,
             WikiCraftingGrid grid,
             int x,
             int y,
@@ -276,12 +251,12 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
 
         int arrowX = startX + gridWidth + 4;
         int arrowY = y + step + Math.max(0, slotSize / 3);
-        graphics.text(font, "->", arrowX, arrowY, MUTED, false);
+        graphics.drawString(font, "->", arrowX, arrowY, MUTED, false);
         drawSlot(graphics, arrowX + 19, y + step - 3, outputSize, grid.output());
         return y + compactCraftingHeight(width) + 3;
     }
 
-    protected void renderInfoboxImage(GuiGraphicsExtractor graphics, RenderEntry entry, int y) {
+    protected void renderInfoboxImage(GuiGraphics graphics, RenderEntry entry, int y) {
         graphics.fill(entry.x(), y, entry.x() + entry.width(), y + entry.height(), PAGE);
         WikiInfobox.Image image = (WikiInfobox.Image) entry.payload();
         int captionHeight = entry.aux();
@@ -295,17 +270,17 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
                 Math.max(20, imageBottom - y - 6)
         );
         if (!rendered && image.image().isEmpty()) {
-            graphics.item(itemStack, entry.x() + entry.width() / 2 - 8, y + 18);
+            graphics.renderItem(itemStack, entry.x() + entry.width() / 2 - 8, y + 18);
         }
         if (!image.caption().isBlank()) {
             String caption = font.plainSubstrByWidth(image.caption().plainText(), entry.width() - 12);
-            graphics.centeredText(font, caption, entry.x() + entry.width() / 2,
+            graphics.drawCenteredString(font, caption, entry.x() + entry.width() / 2,
                     y + entry.height() - captionHeight + 2, MUTED);
         }
         renderBorder(graphics, entry, y, BORDER);
     }
 
-    protected void renderInfoboxTabs(GuiGraphicsExtractor graphics, RenderEntry entry, int y) {
+    protected void renderInfoboxTabs(GuiGraphics graphics, RenderEntry entry, int y) {
         WikiInfobox.PanelTabs tabs = (WikiInfobox.PanelTabs) entry.payload();
         if (tabs.labels().isEmpty()) {
             return;
@@ -315,12 +290,12 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
             int x = entry.x() + i * tabWidth;
             int right = i == tabs.labels().size() - 1 ? entry.x() + entry.width() : x + tabWidth;
             graphics.fill(x, y, right, y + entry.height(), i == entry.aux() ? BLUE : TAB);
-            graphics.centeredText(font, font.plainSubstrByWidth(tabs.labels().get(i), right - x - 6),
+            graphics.drawCenteredString(font, font.plainSubstrByWidth(tabs.labels().get(i), right - x - 6),
                     (x + right) / 2, y + 6, TEXT);
         }
     }
 
-    protected void renderInfoboxRow(GuiGraphicsExtractor graphics, RenderEntry entry, int y) {
+    protected void renderInfoboxRow(GuiGraphics graphics, RenderEntry entry, int y) {
         int split = entry.aux();
         graphics.fill(entry.x(), y, entry.x() + split, y + entry.height(), TABLE_ROW);
         graphics.fill(entry.x() + split, y, entry.x() + entry.width(), y + entry.height(), PAGE);
@@ -329,7 +304,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         drawCells(graphics, entry, y, TEXT);
     }
 
-    protected void renderSlotStrip(GuiGraphicsExtractor graphics, RenderEntry entry, int y, List<WikiItemSlot> slots) {
+    protected void renderSlotStrip(GuiGraphics graphics, RenderEntry entry, int y, List<WikiItemSlot> slots) {
         graphics.fill(entry.x(), y, entry.x() + entry.width(), y + entry.height(), PAGE);
         int perRow = Math.max(1, Math.min(9, (entry.width() - 8) / 22));
         for (int i = 0; i < slots.size(); i++) {
@@ -339,7 +314,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         }
     }
 
-    protected void renderTabs(GuiGraphicsExtractor graphics, RenderEntry entry, int y) {
+    protected void renderTabs(GuiGraphics graphics, RenderEntry entry, int y) {
         TabPayload payload = (TabPayload) entry.payload();
         for (TabButton button : payload.buttons()) {
             int buttonY = y + button.y() - entry.y();
@@ -347,13 +322,13 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
             graphics.fill(button.x(), buttonY, button.x() + button.width(), buttonY + button.height(), active ? TAB_ACTIVE : TAB);
             renderBorder(graphics, new RenderEntry(Kind.HR, button.x(), buttonY, button.width(), button.height(), List.of(), 0, null),
                     buttonY, BORDER);
-            graphics.centeredText(font, font.plainSubstrByWidth(button.title(), button.width() - 8),
+            graphics.drawCenteredString(font, font.plainSubstrByWidth(button.title(), button.width() - 8),
                     button.x() + button.width() / 2, buttonY + 5, TEXT);
             tabHitboxes.add(new TabHitbox(button.x(), buttonY, button.width(), button.height(), entry.aux(), button.index()));
         }
     }
 
-    protected void renderCrafting(GuiGraphicsExtractor graphics, RenderEntry entry, int y, WikiCraftingGrid grid) {
+    protected void renderCrafting(GuiGraphics graphics, RenderEntry entry, int y, WikiCraftingGrid grid) {
         int left = entry.x();
         int right = entry.x() + entry.width();
         int bottom = y + entry.height();
@@ -364,7 +339,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         graphics.fill(left, bottom - 2, right, bottom, CRAFTING_BORDER_DARK);
         graphics.fill(right - 2, y, right, bottom, CRAFTING_BORDER_DARK);
 
-        graphics.text(font, grid.shapeless() ? "Shapeless Crafting" : "Crafting Recipe",
+        graphics.drawString(font, grid.shapeless() ? "Shapeless Crafting" : "Crafting Recipe",
                 left + 8, y + 7, 0xFF3F3F3F, false);
 
         int gridX = left + 13;
@@ -384,7 +359,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         drawSlot(graphics, arrowX + 43, gridY + 18, 30, grid.output());
     }
 
-    protected void renderWikiImageEntry(GuiGraphicsExtractor graphics, RenderEntry entry, int y) {
+    protected void renderWikiImageEntry(GuiGraphics graphics, RenderEntry entry, int y) {
         graphics.fill(entry.x(), y, entry.x() + entry.width(), y + entry.height(), SLOT);
 
         WikiImage image;
@@ -406,7 +381,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
 
         if (!caption.isBlank()) {
             String visible = font.plainSubstrByWidth(caption.plainText(), entry.width() - 10);
-            graphics.centeredText(font, visible, entry.x() + entry.width() / 2,
+            graphics.drawCenteredString(font, visible, entry.x() + entry.width() / 2,
                     y + entry.height() - captionHeight + 1, MUTED);
         }
 
@@ -414,7 +389,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
     }
 
     protected boolean drawRemoteImage(
-            GuiGraphicsExtractor graphics,
+            GuiGraphics graphics,
             WikiImage image,
             int x,
             int y,
@@ -433,7 +408,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
             if (message == null || message.isBlank()) {
                 message = "Wiki image";
             }
-            graphics.centeredText(font, font.plainSubstrByWidth(message, Math.max(8, maxWidth - 4)),
+            graphics.drawCenteredString(font, font.plainSubstrByWidth(message, Math.max(8, maxWidth - 4)),
                     x + maxWidth / 2, y + maxHeight / 2 - 4, MUTED);
             return false;
         }
@@ -473,7 +448,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         return true;
     }
 
-    protected void drawSlot(GuiGraphicsExtractor graphics, int x, int y, int size, WikiItemSlot slot) {
+    protected void drawSlot(GuiGraphics graphics, int x, int y, int size, WikiItemSlot slot) {
         graphics.fill(x, y, x + size, y + size, SLOT);
         graphics.fill(x, y, x + size, y + 1, SLOT_BORDER_DARK);
         graphics.fill(x, y, x + 1, y + size, SLOT_BORDER_DARK);
@@ -496,24 +471,24 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         boolean rendered = drawRemoteImage(graphics, frame.image(), x + 2, y + 2, size - 4, size - 4);
         if (!rendered && frame.image().isEmpty() && !frame.displayName().isBlank()) {
             String shortName = font.plainSubstrByWidth(frame.displayName(), size - 4);
-            graphics.centeredText(font, shortName, x + size / 2, y + size / 2 - 4, MUTED);
+            graphics.drawCenteredString(font, shortName, x + size / 2, y + size / 2 - 4, MUTED);
         }
 
         if (!frame.stackSize().isBlank()) {
             String amount = frame.stackSize();
-            graphics.text(font, amount, x + size - font.width(amount) - 2, y + size - 10, TEXT, true);
+            graphics.drawString(font, amount, x + size - font.width(amount) - 2, y + size - 10, TEXT, true);
         }
     }
 
 
-    protected void renderBorder(GuiGraphicsExtractor graphics, RenderEntry entry, int y, int color) {
+    protected void renderBorder(GuiGraphics graphics, RenderEntry entry, int y, int color) {
         graphics.fill(entry.x(), y, entry.x() + entry.width(), y + 1, color);
         graphics.fill(entry.x(), y + entry.height() - 1, entry.x() + entry.width(), y + entry.height(), color);
         graphics.fill(entry.x(), y, entry.x() + 1, y + entry.height(), color);
         graphics.fill(entry.x() + entry.width() - 1, y, entry.x() + entry.width(), y + entry.height(), color);
     }
 
-    protected void drawCells(GuiGraphicsExtractor graphics, RenderEntry entry, int y, int color) {
+    protected void drawCells(GuiGraphics graphics, RenderEntry entry, int y, int color) {
         for (Cell cell : entry.cells()) {
             int lineY = y + cell.yOffset();
             for (FormattedCharSequence line : cell.lines()) {
@@ -524,13 +499,13 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
     }
 
     protected void drawInteractiveLine(
-            GuiGraphicsExtractor graphics,
+            GuiGraphics graphics,
             FormattedCharSequence line,
             int x,
             int y,
             int color
     ) {
-        graphics.text(font, line, x, y, color, true);
+        graphics.drawString(font, line, x, y, color, true);
 
         final int[] cursorX = {x};
         final int[] segmentStart = {x};

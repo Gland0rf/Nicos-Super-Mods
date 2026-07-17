@@ -8,7 +8,7 @@ import com.nico.client.minions.base.*;
 import com.nico.client.utils.BazaarService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 
 import java.io.IOException;
@@ -61,7 +61,7 @@ public final class MinionGuiOverlay {
         this.layoutManager = layoutManager;
     }
 
-    public void onRenderPost(Screen screen, GuiGraphicsExtractor graphics) {
+    public void onRenderPost(Screen screen, GuiGraphics graphics) {
         Optional<DetectedMinionWindow> optionalWindow = detector.detect(screen);
 
         if (optionalWindow.isEmpty()) {
@@ -143,7 +143,7 @@ public final class MinionGuiOverlay {
         }
     }
 
-    private void renderPanel(GuiGraphicsExtractor graphics, DetectedMinionWindow window) {
+    private void renderPanel(GuiGraphics graphics, DetectedMinionWindow window) {
         if (!NsmConfig.INSTANCE.island.minionInfo.enabled) return;
 
         Minecraft minecraft = Minecraft.getInstance();
@@ -189,7 +189,7 @@ public final class MinionGuiOverlay {
                 0xCC202020
         );
 
-        graphics.outline(
+        graphics.renderOutline(
                 panelX,
                 panelY,
                 naturalPanelWidth,
@@ -200,18 +200,18 @@ public final class MinionGuiOverlay {
         int textX = PANEL_PADDING;
         int textY = PANEL_PADDING;
 
-        graphics.text(font, "Minion Output", textX, textY, 0xFFEFEFEF, true);
+        graphics.drawString(font, "Minion Output", textX, textY, 0xFFEFEFEF, true);
         textY += 12;
 
         int maxTextWidth = naturalPanelWidth - PANEL_PADDING * 2;
 
         for (String line : lines) {
             if (textY > naturalPanelHeight - 11) {
-                graphics.text(font, "...", textX, textY, 0xFFAAAAAA, true);
+                graphics.drawString(font, "...", textX, textY, 0xFFAAAAAA, true);
                 break;
             }
 
-            graphics.text(
+            graphics.drawString(
                     font,
                     trimToWidth(font, line, maxTextWidth),
                     textX,

@@ -82,17 +82,17 @@ public class GoldorTerminalHighlighter {
 
         Map<DungeonClass, List<TargetSelector>> sectionOne = new EnumMap<>(DungeonClass.class);
 
-        sectionOne.put(DungeonClass.TANK, Arrays.asList(
+        sectionOne.put(DungeonClass.Tank, Arrays.asList(
                 TargetSelector.terminal(1),
                 TargetSelector.terminal(2)
         ));
 
-        sectionOne.put(DungeonClass.MAGE, Arrays.asList(
+        sectionOne.put(DungeonClass.Mage, Arrays.asList(
                 TargetSelector.terminal(3),
                 TargetSelector.terminal(4)
         ));
 
-        sectionOne.put(DungeonClass.HEALER, Arrays.asList(
+        sectionOne.put(DungeonClass.Healer, Arrays.asList(
                 TargetSelector.device()
         ));
 
@@ -436,7 +436,7 @@ public class GoldorTerminalHighlighter {
                 DungeonClass clazz = dungeonPlayer.getClazz();
 
                 if (clazz == null) {
-                    return DungeonClass.EMPTY;
+                    return DungeonClass.Unknown;
                 }
 
                 return clazz;
@@ -445,7 +445,7 @@ public class GoldorTerminalHighlighter {
             throwable.printStackTrace();
         }
 
-        return DungeonClass.EMPTY;
+        return DungeonClass.Unknown;
     }
 
     private static String describeTargets(List<TargetPoint> targets) {

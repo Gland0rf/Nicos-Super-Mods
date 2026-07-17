@@ -8,8 +8,6 @@ import com.nico.client.configuration.NsmConfig;
 import com.nico.client.configuration.category.CategoryDungeons;
 import com.nico.client.utils.LocationUtils;
 import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -536,7 +534,7 @@ public final class SecretRoomTimerClient {
         Minecraft mc = Minecraft.getInstance();
 
         if (mc.player != null) {
-            mc.player.sendSystemMessage(Component.literal(message));
+            mc.player.displayClientMessage(Component.literal(message), false);
         }
     }
 

@@ -79,7 +79,7 @@ public class RoomStackingDetector {
                     ignored -> new RoomStackState()
             );
 
-            mc.player.sendSystemMessage(Component.literal(state.score + " score"));
+            mc.player.displayClientMessage(Component.literal(state.score + " score"), false);
 
             updateRoomScore(state, roomName, players, globalSecretDelta, now);
 
@@ -326,11 +326,12 @@ public class RoomStackingDetector {
              }
          } else {
              if (NsmConfig.INSTANCE.dungeons.roomStacking.showOtherStackingChatAlert) {
-                 mc.player.sendSystemMessage(
+                 mc.player.displayClientMessage(
                          Component.literal("[NSM] ")
                                  .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
                                  .append(Component.literal(allNames + " are stacking in " + roomName + ".")
-                                         .withStyle(ChatFormatting.RED))
+                                         .withStyle(ChatFormatting.RED)),
+                         false
                  );
              }
 
@@ -410,7 +411,7 @@ public class RoomStackingDetector {
 
                 DungeonClass clazz = dungeonPlayer.getClazz();
 
-                if (clazz == null || clazz == DungeonClass.EMPTY) {
+                if (clazz == null || clazz == DungeonClass.Unknown) {
                     return "Unknown";
                 }
 

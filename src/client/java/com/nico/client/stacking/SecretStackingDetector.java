@@ -181,12 +181,13 @@ public final class SecretStackingDetector {
 
         lastAlertAt = now;
 
-        minecraft.player.sendSystemMessage(
+        minecraft.player.displayClientMessage(
                 Component.literal(
                         "§c§l[NSM] Stacking detected in §b"
                                 + roomName
                                 + "§c!"
-                )
+                ),
+                false
         );
 
         System.out.println(

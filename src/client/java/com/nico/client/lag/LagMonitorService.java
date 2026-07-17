@@ -202,7 +202,7 @@ public class LagMonitorService {
         if (client.gui != null && client.gui.getChat() != null) {
             for (var line : lastSummary.compactChatLines()) {
                 if (client.player != null) {
-                    client.player.sendSystemMessage(line);
+                    client.player.displayClientMessage(line, false);
                 }
             }
         }

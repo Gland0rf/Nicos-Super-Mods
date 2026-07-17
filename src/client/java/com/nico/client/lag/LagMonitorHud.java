@@ -4,7 +4,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
@@ -21,7 +21,7 @@ final class LagMonitorHud {
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, ID, LagMonitorHud::extract);
     }
 
-    private static void extract(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
+    private static void extract(GuiGraphics graphics, DeltaTracker deltaTracker) {
         LagMonitorService service = LagMonitorService.getInstance();
         LagMonitorConfig config = service.config();
         LagSnapshot snapshot = service.snapshot();
@@ -59,7 +59,7 @@ final class LagMonitorHud {
         int textY = y + 4;
         for (int index = 0; index < lines.size(); index++) {
             int color = index == lines.size() - 1 ? snapshot.diagnosis().color() : 0xFFFFFFFF;
-            graphics.text(client.font, lines.get(index), x + 7, textY, color, true);
+            graphics.drawString(client.font, lines.get(index), x + 7, textY, color, true);
             textY += 10;
         }
     }

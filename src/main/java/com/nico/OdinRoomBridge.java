@@ -154,7 +154,7 @@ public class OdinRoomBridge {
     private static boolean doorTouchesFairyRoom(Door door) {
         try {
 
-            for (MapRoom.Tile tileObject : door.getRooms()) {
+            for (var tileObject : door.getRooms()) {
                 MapRoom owner = tileObject.getOwner();
 
                 if (owner == null) continue;

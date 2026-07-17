@@ -1,7 +1,7 @@
 package com.nico.client.lag;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -28,16 +28,16 @@ public final class LagSummaryScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(
-            GuiGraphicsExtractor graphics,
+    public void render(
+            GuiGraphics graphics,
             int mouseX,
             int mouseY,
             float partialTick
     ) {
-        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, mouseX, mouseY, partialTick);
 
         graphics.fill(0, 0, width, height, 0xE0101218);
-        graphics.centeredText(font, Component.literal("Lag Summary"), width / 2, 18, 0xFF55FFFF);
+        graphics.drawCenteredString(font, Component.literal("Lag Summary"), width / 2, 18, 0xFF55FFFF);
 
         List<String> lines = summary == null ? List.of("No completed session yet.") : summary.lines();
         int panelWidth = Math.min(430, width - 30);
@@ -51,7 +51,7 @@ public final class LagSummaryScreen extends Screen {
         int y = panelTop + 8;
         for (String line : lines) {
             if (!line.isEmpty()) {
-                graphics.text(font, line, panelLeft + 10, y, 0xFFE6EAF0, true);
+                graphics.drawString(font, line, panelLeft + 10, y, 0xFFE6EAF0, true);
             }
             y += 12;
             if (y >= panelBottom - 8) {

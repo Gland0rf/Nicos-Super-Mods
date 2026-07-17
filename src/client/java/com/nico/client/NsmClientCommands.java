@@ -5,7 +5,7 @@ import com.nico.client.configuration.NsmConfigManager;
 import com.odtheking.odin.utils.skyblock.dungeon.DungeonPlayer;
 import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -34,7 +34,7 @@ public final class NsmClientCommands {
                     > dispatcher
     ) {
         dispatcher.register(
-                ClientCommands.literal("nsmrooms")
+                ClientCommandManager.literal("nsmrooms")
                         .executes(context -> executeRoomsCommand())
         );
     }
@@ -45,12 +45,12 @@ public final class NsmClientCommands {
                     > dispatcher
     ) {
         dispatcher.register(
-                ClientCommands.literal("nsmconfig")
+                ClientCommandManager.literal("nsmconfig")
                         .executes(context -> openConfigScreen())
         );
 
         dispatcher.register(
-                ClientCommands.literal("nsm")
+                ClientCommandManager.literal("nsm")
                         .executes(context -> openConfigScreen())
         );
     }
@@ -165,7 +165,7 @@ public final class NsmClientCommands {
         Minecraft minecraft = Minecraft.getInstance();
 
         if (minecraft.player != null) {
-            minecraft.player.sendSystemMessage(message);
+            minecraft.player.displayClientMessage(message, false);
         }
     }
 }

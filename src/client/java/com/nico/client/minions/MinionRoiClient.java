@@ -25,7 +25,7 @@ public final class MinionRoiClient {
         );
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
-            ScreenEvents.afterExtract(screen).register(
+            ScreenEvents.afterRender(screen).register(
                     (screen1, graphics, mouseX, mouseY, tickProgress) -> {
                         overlay.onRenderPost(screen1, graphics);
                     }

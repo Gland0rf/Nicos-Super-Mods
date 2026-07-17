@@ -1,6 +1,5 @@
 package com.nico.client.utils
 
-import com.nico.client.SecretStackTrackerClient
 import com.nico.client.goldor.GoldorTerminalHighlighter
 import com.nico.client.stacking.SecretStackingDetector
 import com.odtheking.odin.events.RenderEvent
@@ -8,7 +7,6 @@ import com.odtheking.odin.events.RoomEnterEvent
 import com.odtheking.odin.events.core.*
 import com.odtheking.odin.utils.noControlCodes
 import net.minecraft.network.protocol.game.ClientboundSystemChatPacket
-import java.lang.IO.println
 import java.util.regex.Pattern
 
 object SecretEventBridge {

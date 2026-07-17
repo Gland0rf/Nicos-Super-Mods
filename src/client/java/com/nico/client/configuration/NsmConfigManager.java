@@ -74,7 +74,7 @@ public final class NsmConfigManager {
                 new GuiContext(new GuiElementComponent(editor)),
                 parent
         ) {
-          @Override
+
           public void removed() {
               NsmConfigManager.save();
               super.removed();

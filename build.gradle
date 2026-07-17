@@ -1,6 +1,6 @@
 plugins {
-	id 'net.fabricmc.fabric-loom' version "${loom_version}"
-	id 'org.jetbrains.kotlin.jvm' version "2.4.0"
+	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
+	id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
 	id 'maven-publish'
 }
 
@@ -55,33 +55,45 @@ sourceSets {
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 
-	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
-	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	mappings loom.officialMojangMappings()
+
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
 	implementation "org.jetbrains.kotlin:kotlin-stdlib:2.4.0"
-	implementation "net.fabricmc:fabric-language-kotlin:1.13.12+kotlin.2.4.0"
+	modImplementation "net.fabricmc:fabric-language-kotlin:1.13.12+kotlin.2.4.0"
 
 	implementation "org.jsoup:jsoup:1.18.3"
 	include "org.jsoup:jsoup:1.18.3"
 
-	clientImplementation "com.terraformersmc:modmenu:${project.modmenu_version}"
+	modClientImplementation "com.terraformersmc:modmenu:${project.modmenu_version}"
 
-	clientImplementation include("org.notenoughupdates.moulconfig:modern-26.1:4.7.2")
+	modClientImplementation include("org.notenoughupdates.moulconfig:modern-1.21.11:4.7.2")
 
-	compileOnly files("libs/odin.jar")
+	modCompileOnly files("libs/odin.jar")
 }
 
 processResources {
-	def version = project.version
-	inputs.property "version", version
+	inputs.property "version", project.version
+	inputs.property "minecraft_version", project.minecraft_version
+	inputs.property "loader_version", project.loader_version
 
 	filesMatching("fabric.mod.json") {
-		expand "version": version
+		expand(
+				version: project.version,
+				minecraft_version: project.minecraft_version,
+				loader_version: project.loader_version
+		)
 	}
 }
 
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 25
+	it.options.release = 21
+	options.encoding = "UTF-8"
+}
+
+kotlin {
+	jvmToolchain(21)
 }
 
 java {
@@ -90,16 +102,17 @@ java {
 	// If you remove this line, sources will not be generated.
 	withSourcesJar()
 
-	sourceCompatibility = JavaVersion.VERSION_25
-	targetCompatibility = JavaVersion.VERSION_25
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
 }
 
 jar {
-	def projectName = project.name
-	inputs.property "projectName", projectName
+	inputs.property "archivesName", project.archives_base_name
 
 	from("LICENSE") {
-		rename { "${it}_$projectName"}
+		rename {
+			"${it}_${project.archives_base_name}"
+		}
 	}
 }
 
