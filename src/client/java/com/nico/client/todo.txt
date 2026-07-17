@@ -1,0 +1,33 @@
+#1 Remove logs when you are done
+#2 Sometimes, picking up an item-secret wont count and the attempt gets invalidated.
+Doesnt even enter the SecretPacketHooks
+#3 Clean up the code DONE
+#4 Expand f7/m7 goldor routes
+#5 Split helper with a line on the floor of where to go, until the split ends
+#6 Scam / Rat protection? Example tier boosted pets
+#7 Show minion upgrade quality -> Tell them how long it takes to make the money back. DONE
+#8 Save inventory as "overlay" and when setting it up, select it and show what item goes where.
+
+
+Room stacking concept:
+-> The idea is to alert the player if they are doing work that is already being done by
+   another player. This includes clearing and doing secrets.
+-> The player should get an alert if they are stacking with another player.
+-> This alert should work with a "confidence" score. Starting at 0 and sending at a specific point.
+-> It should IMMEDIATELY be disregarded if:
+   1. The current room is the start room
+   2. The current room is the fairy room
+   3. The player is in boss fight.
+   4. The current room is cleared and has a secret count of 100%
+   5. The global secret count is >= 80%
+   6. The player is alone in a room
+   7. The room is part of the blood rush.
+-> If these conditions do not apply, the following conditions are checked:
+   1. 2 or more players are in the same room. This adds a score of 60, once.
+   2. For every 5 seconds those 2 or more same players are in the same room, add a score of 30.
+   3. For every time the global secret count goes up, add a score of 5.
+   4. The score is immediately set back to 0 if the player count is <= 1 or the room is cleared and
+      the room secrets are at 100%.
+   5. This applies for EVERY room and EVERY player!
+If the score goes above 100, alert the player.
+

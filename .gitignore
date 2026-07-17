@@ -1,0 +1,92 @@
+# gradle
+
+.gradle/
+build/
+out/
+classes/
+
+**/build/
+**/out/
+
+# eclipse
+
+*.launch
+
+# idea
+
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# vscode
+
+.settings/
+.vscode/
+bin/
+.classpath
+.project
+
+# macos
+
+*.DS_Store
+
+# fabric
+
+run/
+
+# java
+
+hs_err_*.log
+replay_*.log
+*.hprof
+*.jfr
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+hs_err_pid*
+replay_pid*
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and crash output
+*.log
+logs/
+crash-reports/
+
+# Temporary and backup files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+.cache/
+
+# Local Minecraft files
+options.txt
+optionsof.txt
+servers.dat
+servers.dat_old
+usercache.json
+usernamecache.json
+launcher_accounts.json
+launcher_profiles.json
+launcher_msa_credentials.bin
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+secrets.properties
+local.properties
+
+# Local API-key files
+*apikey*
+*api-key*
+*token*
