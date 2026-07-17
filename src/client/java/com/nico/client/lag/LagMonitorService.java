@@ -17,7 +17,8 @@ public class LagMonitorService {
     private volatile LagSessionSummary lastSummary;
 
     private LagMonitorConfig config = new LagMonitorConfig();
-    private LagSessionStats sessionStats;
+    private LagSessionStats dungeonStats;
+    private boolean dungeonRunActive;
     private long joinedNanos;
     private long lastTickNanos;
     private int clientTicks;
@@ -46,6 +47,10 @@ public class LagMonitorService {
         return lastSummary;
     }
 
+    public synchronized boolean isDungeonRunActive() {
+        return dungeonRunActive;
+    }
+
     public void onInboundPacket(Packet<?> packet) {
         long now = System.nanoTime();
         lastInboundPacketNanos = now;
@@ -64,7 +69,8 @@ public class LagMonitorService {
         joinedNanos = now;
         lastTickNanos = now;
         clientTicks = 0;
-        sessionStats = new LagSessionStats(now);
+        dungeonStats = null;
+        dungeonRunActive = false;
         snapshot = LagSnapshot.inactive();
 
         if (lastSummary != null && config.showPreviousSummaryAfterJoin) {
@@ -75,21 +81,61 @@ public class LagMonitorService {
     }
 
     public synchronized void onDisconnect() {
-        if (sessionStats != null) {
-            lastSummary = sessionStats.finish(System.nanoTime());
-        }
-        sessionStats = null;
+        // A disconnect is not a completed dungeon run, so discard partial data.
+        dungeonStats = null;
+        dungeonRunActive = false;
         snapshot = LagSnapshot.inactive();
         pendingSummaryTicks = -1;
     }
 
+    /** Call once when the dungeon run actually starts. */
+    public synchronized void onDungeonRunStart() {
+        if (!config.enabled) {
+            return;
+        }
+
+        long now = System.nanoTime();
+        dungeonStats = new LagSessionStats(now);
+        dungeonRunActive = true;
+        pingTracker.reset();
+    }
+
+    /**
+     * Call once when the dungeon completion is confirmed. Duplicate end calls
+     * are ignored, which is useful when multiple completion packets arrive.
+     */
+    public synchronized void onDungeonRunEnd(Minecraft client) {
+        if (!dungeonRunActive || dungeonStats == null) {
+            return;
+        }
+
+        lastSummary = dungeonStats.finish(System.nanoTime());
+        dungeonStats = null;
+        dungeonRunActive = false;
+
+        if (config.showDungeonSummary) {
+            sendSummary(client, lastSummary);
+        }
+    }
+
+    /** Call when leaving/aborting a run without completing it. */
+    public synchronized void onDungeonRunAbort() {
+        dungeonStats = null;
+        dungeonRunActive = false;
+    }
+
     public synchronized void tick(Minecraft client) {
         long now = System.nanoTime();
-        double deltaSeconds = Math.max(0.0D, Math.min(0.25D, (now - lastTickNanos) / 1_000_000_000.0D));
+        double deltaSeconds = Math.max(
+                0.0D,
+                Math.min(0.25D, (now - lastTickNanos) / 1_000_000_000.0D)
+        );
         lastTickNanos = now;
         clientTicks++;
 
-        boolean connected = client.player != null && client.level != null && client.getConnection() != null;
+        boolean connected = client.player != null
+                && client.level != null
+                && client.getConnection() != null;
         boolean allowedServer = !config.onlyOnHypixel || HypixelServerDetector.isHypixel(client);
         boolean active = config.enabled && connected && allowedServer;
 
@@ -98,14 +144,12 @@ public class LagMonitorService {
             return;
         }
 
-        if (sessionStats == null) {
-            onJoin(client);
-        }
-
         if (clientTicks % config.pingSampleIntervalTicks == 0) {
             int ping = readPing(client);
             pingTracker.addSample(ping);
-            sessionStats.recordPingSample(ping, pingTracker.jitter());
+            if (dungeonStats != null) {
+                dungeonStats.recordPingSample(ping, pingTracker.jitter());
+            }
         }
 
         double tps = tpsEstimator.currentTps(now, config.tpsSampleStaleSeconds);
@@ -116,6 +160,12 @@ public class LagMonitorService {
         boolean warmingUp = now - joinedNanos < config.warmupSeconds * 1_000_000_000L;
 
         LagDiagnosis diagnosis = diagnose(tps, ping, jitter, packetGapMillis, fps, warmingUp);
+        double serverDelay = dungeonStats == null
+                ? 0.0D
+                : dungeonStats.estimatedServerDelaySeconds();
+        double stallSeconds = dungeonStats == null
+                ? 0.0D
+                : dungeonStats.networkStallSeconds();
 
         LagSnapshot next = new LagSnapshot(
                 true,
@@ -125,25 +175,26 @@ public class LagMonitorService {
                 jitter,
                 packetGapMillis,
                 fps,
-                sessionStats.estimatedServerDelaySeconds(),
-                sessionStats.networkStallSeconds(),
+                serverDelay,
+                stallSeconds,
                 diagnosis
         );
 
-        sessionStats.accept(next, deltaSeconds, config);
-
-        next = new LagSnapshot(
-                next.active(),
-                next.warmingUp(),
-                next.estimatedTps(),
-                next.pingMillis(),
-                next.jitterMillis(),
-                next.packetGapMillis(),
-                next.fps(),
-                sessionStats.estimatedServerDelaySeconds(),
-                sessionStats.networkStallSeconds(),
-                next.diagnosis()
-        );
+        if (dungeonStats != null) {
+            dungeonStats.accept(next, deltaSeconds, config);
+            next = new LagSnapshot(
+                    next.active(),
+                    next.warmingUp(),
+                    next.estimatedTps(),
+                    next.pingMillis(),
+                    next.jitterMillis(),
+                    next.packetGapMillis(),
+                    next.fps(),
+                    dungeonStats.estimatedServerDelaySeconds(),
+                    dungeonStats.networkStallSeconds(),
+                    next.diagnosis()
+            );
+        }
 
         snapshot = next;
         titleNotifier.tick(client, next, config, now);
@@ -192,6 +243,15 @@ public class LagMonitorService {
         return info == null ? -1 : info.getLatency();
     }
 
+    private static void sendSummary(Minecraft client, LagSessionSummary summary) {
+        if (client == null || client.player == null || summary == null) {
+            return;
+        }
+        for (var line : summary.compactChatLines()) {
+            client.player.sendSystemMessage(line);
+        }
+    }
+
     private void tickPendingSummary(Minecraft client) {
         if (pendingSummaryTicks < 0 || lastSummary == null) {
             return;
@@ -199,13 +259,7 @@ public class LagMonitorService {
         if (pendingSummaryTicks-- > 0) {
             return;
         }
-        if (client.gui != null && client.gui.getChat() != null) {
-            for (var line : lastSummary.compactChatLines()) {
-                if (client.player != null) {
-                    client.player.sendSystemMessage(line);
-                }
-            }
-        }
+        sendSummary(client, lastSummary);
         pendingSummaryTicks = -1;
     }
 }

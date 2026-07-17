@@ -1,5 +1,6 @@
 package com.nico.mixin;
 
+import com.nico.client.lag.LagMonitorService;
 import com.nico.client.secretTimer.SecretPacketHooks;
 import com.nico.client.utils.LocationUtils;
 import io.netty.channel.ChannelFutureListener;
@@ -48,6 +49,8 @@ public abstract class ConnectionMixin {
             Packet<?> packet,
             CallbackInfo ci
     ) {
+        LagMonitorService.getInstance().onInboundPacket(packet);
+
         runOnClientThread(() -> {
             handleLocationPacket(packet);
             handleSecretPacket(packet);

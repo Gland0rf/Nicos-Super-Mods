@@ -15,6 +15,7 @@ public class LagSessionStats {
     private double secondsBelow15;
     private double secondsBelow10;
     private double estimatedServerDelaySeconds;
+    private double estimatedPingDelaySeconds;
     private double networkStallSeconds;
 
     private long pingTotal;
@@ -51,10 +52,18 @@ public class LagSessionStats {
     }
 
     void accept(LagSnapshot snapshot, double intervalSeconds, LagMonitorConfig config) {
-        if (!snapshot.active() || snapshot.warmingUp()) return;
+        if (!snapshot.active() || snapshot.warmingUp()) {
+            return;
+        }
 
         double dt = Math.max(0.0D, Math.min(0.25D, intervalSeconds));
         totalTrackedSeconds += dt;
+
+        boolean stalled = snapshot.packetGapMillis() >= config.stallWarningMillis;
+        boolean lowTps = snapshot.hasTpsEstimate()
+                && snapshot.estimatedTps() < config.serverWarningTps;
+        boolean highPing = snapshot.hasPing()
+                && snapshot.pingMillis() >= config.highPingWarningMillis;
 
         if (snapshot.hasTpsEstimate()) {
             double tps = snapshot.estimatedTps();
@@ -69,12 +78,22 @@ public class LagSessionStats {
                 secondsBelow10 += dt;
             }
 
-            estimatedServerDelaySeconds += dt * Math.max(0.0D, 1.0D - tps / 20.0D);
+            // Avoid double-counting intervals already classified as a full stall.
+            if (!stalled) {
+                estimatedServerDelaySeconds += dt * Math.max(0.0D, 1.0D - tps / 20.0D);
+            }
         }
 
-        boolean lowTps = snapshot.hasTpsEstimate() && snapshot.estimatedTps() < config.serverWarningTps;
-        boolean highPing = snapshot.hasPing() && snapshot.pingMillis() >= config.highPingWarningMillis;
-        boolean stalled = snapshot.packetGapMillis() >= config.stallWarningMillis;
+        if (snapshot.hasPing() && !stalled) {
+            double excessRoundTripSeconds = Math.max(
+                    0.0D,
+                    snapshot.pingMillis() - config.pingLossBaselineMillis
+            ) / 1000.0D;
+
+            estimatedPingDelaySeconds += dt
+                    * excessRoundTripSeconds
+                    * config.pingSensitiveActionsPerSecond;
+        }
 
         if (lowTps && !wasLowTps) {
             tpsDropCount++;
@@ -109,17 +128,29 @@ public class LagSessionStats {
     }
 
     LagSessionSummary finish(long nowNanos) {
-        double sessionSeconds = Math.max(totalTrackedSeconds, (nowNanos - startedNanos) / 1_000_000_000.0D);
-        double averageTps = tpsWeightSeconds > 0.0D ? weightedTpsTotal / tpsWeightSeconds : Double.NaN;
-        double minTps = lowestTps == Double.POSITIVE_INFINITY ? Double.NaN : lowestTps;
-        double averagePing = pingCount > 0 ? pingTotal / (double) pingCount : Double.NaN;
-        double averageJitter = jitterCount > 0 ? jitterTotal / jitterCount : Double.NaN;
+        double sessionSeconds = Math.max(
+                totalTrackedSeconds,
+                (nowNanos - startedNanos) / 1_000_000_000.0D
+        );
+        double averageTps = tpsWeightSeconds > 0.0D
+                ? weightedTpsTotal / tpsWeightSeconds
+                : Double.NaN;
+        double minTps = lowestTps == Double.POSITIVE_INFINITY
+                ? Double.NaN
+                : lowestTps;
+        double averagePing = pingCount > 0
+                ? pingTotal / (double) pingCount
+                : Double.NaN;
+        double averageJitter = jitterCount > 0
+                ? jitterTotal / jitterCount
+                : Double.NaN;
 
         int p95 = percentile95(pingSamples);
 
         return new LagSessionSummary(
                 sessionSeconds,
                 estimatedServerDelaySeconds,
+                estimatedPingDelaySeconds,
                 networkStallSeconds,
                 averageTps,
                 minTps,

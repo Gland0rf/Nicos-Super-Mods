@@ -10,6 +10,7 @@ import java.util.Locale;
 public record LagSessionSummary(
         double sessionSeconds,
         double estimatedServerDelaySeconds,
+        double estimatedPingDelaySeconds,
         double networkStallSeconds,
         double averageTps,
         double lowestTps,
@@ -24,11 +25,22 @@ public record LagSessionSummary(
         int stallCount,
         double longestStallSeconds
 ) {
+    public double estimatedNetworkDelaySeconds() {
+        return estimatedPingDelaySeconds + networkStallSeconds;
+    }
+
+    public double estimatedTotalLostSeconds() {
+        return estimatedServerDelaySeconds + estimatedNetworkDelaySeconds();
+    }
+
     public List<String> lines() {
         List<String> lines = new ArrayList<>();
         lines.add("Run time: " + formatDuration(sessionSeconds));
-        lines.add("Estimated server-lag delay: " + formatSeconds(estimatedServerDelaySeconds));
-        lines.add("Connection stall time: " + formatSeconds(networkStallSeconds));
+        lines.add("Estimated total time lost: " + formatSeconds(estimatedTotalLostSeconds()));
+        lines.add("TPS time lost: " + formatSeconds(estimatedServerDelaySeconds));
+        lines.add("Ping/network time lost: " + formatSeconds(estimatedNetworkDelaySeconds()));
+        lines.add("  Ping estimate: " + formatSeconds(estimatedPingDelaySeconds));
+        lines.add("  Connection stalls: " + formatSeconds(networkStallSeconds));
         lines.add("");
         lines.add("Average estimated TPS: " + formatDouble(averageTps));
         lines.add("Lowest estimated TPS: " + formatDouble(lowestTps));
@@ -49,15 +61,18 @@ public record LagSessionSummary(
 
     public List<Component> compactChatLines() {
         List<Component> lines = new ArrayList<>();
-        lines.add(Component.literal("Lag summary").withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD));
+        lines.add(Component.literal("Dungeon lag summary")
+                .withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD));
         lines.add(Component.literal(
-                "Delay: " + formatSeconds(estimatedServerDelaySeconds)
-                        + "  Stalls: " + formatSeconds(networkStallSeconds)
+                "Avg TPS: " + formatDouble(averageTps)
+                        + "  |  Avg ping: " + formatPing(averagePingMillis)
         ).withStyle(ChatFormatting.GRAY));
         lines.add(Component.literal(
-                "TPS avg/min: " + formatDouble(averageTps) + "/" + formatDouble(lowestTps)
-                        + "  Ping avg/p95: " + formatPing(averagePingMillis) + "/"
-                        + (p95PingMillis < 0 ? "N/A" : p95PingMillis + " ms")
+                "Estimated time lost: " + formatSeconds(estimatedTotalLostSeconds())
+        ).withStyle(ChatFormatting.YELLOW));
+        lines.add(Component.literal(
+                "TPS: " + formatSeconds(estimatedServerDelaySeconds)
+                        + "  |  Ping/network: " + formatSeconds(estimatedNetworkDelaySeconds())
         ).withStyle(ChatFormatting.GRAY));
         return List.copyOf(lines);
     }
@@ -74,11 +89,15 @@ public record LagSessionSummary(
     }
 
     private static String formatSeconds(double seconds) {
-        return Double.isFinite(seconds) ? String.format(Locale.US, "%.1fs", Math.max(0.0D, seconds)) : "N/A";
+        return Double.isFinite(seconds)
+                ? String.format(Locale.US, "%.1fs", Math.max(0.0D, seconds))
+                : "N/A";
     }
 
     private static String formatDouble(double value) {
-        return Double.isFinite(value) ? String.format(Locale.US, "%.1f", value) : "N/A";
+        return Double.isFinite(value)
+                ? String.format(Locale.US, "%.1f", value)
+                : "N/A";
     }
 
     private static String formatPing(double value) {

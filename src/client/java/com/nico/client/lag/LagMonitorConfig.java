@@ -20,6 +20,7 @@ public class LagMonitorConfig {
     public boolean onlyOnHypixel = true;
     public boolean showHud = true;
     public boolean showTitles = true;
+    public boolean showDungeonSummary = true;
     public boolean showPreviousSummaryAfterJoin = true;
 
     public int warmupSeconds = 6;
@@ -32,6 +33,15 @@ public class LagMonitorConfig {
     public int highPingCriticalMillis = 500;
     public double highJitterWarningMillis = 90.0D;
     public int stallWarningMillis = 1500;
+
+    /*
+     * Ping cannot be converted into exact lost time without knowing how many
+     * latency-sensitive interactions the player made. This estimate assumes
+     * the configured number of server round trips per second and counts only
+     * latency above the configured baseline.
+     */
+    public int pingLossBaselineMillis = 100;
+    public double pingSensitiveActionsPerSecond = 0.5D;
 
     public int tpsTitleDelayMillis = 2000;
     public int pingTitleDelayMillis = 2000;
@@ -84,6 +94,8 @@ public class LagMonitorConfig {
         highPingCriticalMillis = clamp(highPingCriticalMillis, highPingWarningMillis, 10_000);
         highJitterWarningMillis = clamp(highJitterWarningMillis, 5.0D, 2000.0D);
         stallWarningMillis = clamp(stallWarningMillis, 500, 15_000);
+        pingLossBaselineMillis = clamp(pingLossBaselineMillis, 0, 5000);
+        pingSensitiveActionsPerSecond = clamp(pingSensitiveActionsPerSecond, 0.0D, 20.0D);
         tpsTitleDelayMillis = clamp(tpsTitleDelayMillis, 0, 30_000);
         pingTitleDelayMillis = clamp(pingTitleDelayMillis, 0, 30_000);
         stallTitleDelayMillis = clamp(stallTitleDelayMillis, 0, 30_000);
@@ -100,5 +112,4 @@ public class LagMonitorConfig {
     private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }
-
 }
