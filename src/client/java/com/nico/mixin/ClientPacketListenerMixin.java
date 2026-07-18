@@ -58,7 +58,7 @@ public abstract class ClientPacketListenerMixin {
         }
     }
 
-    @Inject(method = "handleSetObjectivePacket", at = @At("HEAD"), require = 1, order = 900)
+    @Inject(method = "handleAddObjective", at = @At("HEAD"), require = 1, order = 900)
     private void nsm$handleSetObjective(
             ClientboundSetObjectivePacket packet,
             CallbackInfo ci

@@ -1,67 +1,98 @@
 package com.nico.client.lag;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 
-public class TpsEstimator {
-    private static final int SAMPLE_WINDOW = 9;
+/**
+ * Estimates server TPS from Hypixel's per-server-tick ClientboundPingPacket.
+ *
+ * Hypixel sends a non-zero common ping packet once for each server tick. Using
+ * a multi-second timestamp window makes the estimate resistant to normal
+ * network jitter and packet batching.
+ */
+public final class TpsEstimator {
+    private static final long WINDOW_NANOS = 5_000_000_000L;
+    private static final int MAX_WINDOW_SAMPLES = 160;
 
-    private final ArrayDeque<Double> samples = new ArrayDeque<>();
-    private long lastGameTime = Long.MIN_VALUE;
-    private long lastPacketNanos;
+    private final ArrayDeque<Long> tickTimes = new ArrayDeque<>();
+
+    private long lastServerTickNanos;
+    private long totalServerTicks;
     private double smoothedTps = Double.NaN;
 
     synchronized void reset() {
-        samples.clear();
-        lastGameTime = Long.MIN_VALUE;
-        lastPacketNanos = 0L;
+        tickTimes.clear();
+        lastServerTickNanos = 0L;
+        totalServerTicks = 0L;
         smoothedTps = Double.NaN;
     }
 
-    synchronized void onTimePacket(long gameTime, long nowNanos) {
-        if (lastGameTime != Long.MIN_VALUE && lastPacketNanos > 0L) {
-            long tickDelta = gameTime - lastGameTime;
-            double seconds = (nowNanos - lastPacketNanos) / 1_000_000_000.0D;
-
-            if (tickDelta > 0L && tickDelta <= 400L && seconds >= 0.20D && seconds <= 12.0D) {
-                double rawTps = Math.min(20.0D, tickDelta / seconds);
-                if (rawTps >= 0.5D && Double.isFinite(rawTps)) {
-                    samples.addLast(rawTps);
-                    while (samples.size() > SAMPLE_WINDOW) {
-                        samples.removeFirst();
-                    }
-
-                    double median = median(samples);
-                    smoothedTps = Double.isFinite(smoothedTps)
-                            ? smoothedTps * 0.72D + median * 0.28D
-                            : median;
-                }
-            }
+    synchronized void onServerTick(long nowNanos) {
+        if (nowNanos <= 0L) {
+            return;
         }
 
-        lastGameTime = gameTime;
-        lastPacketNanos = nowNanos;
+        // Prevent duplicate processing if another hook forwards the same packet.
+        if (lastServerTickNanos != 0L && nowNanos <= lastServerTickNanos) {
+            return;
+        }
+
+        lastServerTickNanos = nowNanos;
+        totalServerTicks++;
+        tickTimes.addLast(nowNanos);
+
+        long cutoff = nowNanos - WINDOW_NANOS;
+        while (tickTimes.size() > 2 && tickTimes.getFirst() < cutoff) {
+            tickTimes.removeFirst();
+        }
+        while (tickTimes.size() > MAX_WINDOW_SAMPLES) {
+            tickTimes.removeFirst();
+        }
+
+        if (tickTimes.size() < 2) {
+            return;
+        }
+
+        long first = tickTimes.getFirst();
+        long last = tickTimes.getLast();
+        long elapsedNanos = last - first;
+        int tickIntervals = tickTimes.size() - 1;
+
+        if (elapsedNanos <= 0L || tickIntervals <= 0) {
+            return;
+        }
+
+        double rawTps = tickIntervals * 1_000_000_000.0D / elapsedNanos;
+        rawTps = Math.max(0.0D, Math.min(20.0D, rawTps));
+
+        if (!Double.isFinite(rawTps) || rawTps < 0.5D) {
+            return;
+        }
+
+        // The window already smooths heavily. This small EMA removes remaining
+        // display flicker without hiding a sustained TPS drop.
+        smoothedTps = Double.isFinite(smoothedTps)
+                ? smoothedTps * 0.70D + rawTps * 0.30D
+                : rawTps;
     }
 
     synchronized double currentTps(long nowNanos, int staleSeconds) {
-        if (!Double.isFinite(smoothedTps) || lastPacketNanos <= 0L) {
+        if (!Double.isFinite(smoothedTps) || lastServerTickNanos <= 0L) {
             return Double.NaN;
         }
-        if (nowNanos - lastPacketNanos > staleSeconds * 1_000_000_000L) {
+
+        long staleNanos = Math.max(1, staleSeconds) * 1_000_000_000L;
+        if (nowNanos - lastServerTickNanos > staleNanos) {
             return Double.NaN;
         }
+
         return smoothedTps;
     }
 
-    private static double median(ArrayDeque<Double> values) {
-        List<Double> sorted = new ArrayList<>(values);
-        Collections.sort(sorted);
-        int middle = sorted.size() / 2;
-        if ((sorted.size() & 1) == 1) {
-            return sorted.get(middle);
-        }
-        return (sorted.get(middle - 1) + sorted.get(middle)) / 2.0D;
+    synchronized long totalServerTicks() {
+        return totalServerTicks;
+    }
+
+    synchronized int windowSampleCount() {
+        return tickTimes.size();
     }
 }

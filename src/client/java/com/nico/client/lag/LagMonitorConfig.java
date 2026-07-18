@@ -2,6 +2,7 @@ package com.nico.client.lag;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.nico.client.configuration.category.CategoryDungeons;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -20,11 +21,16 @@ public class LagMonitorConfig {
     public boolean onlyOnHypixel = true;
     public boolean showHud = true;
     public boolean showTitles = true;
+    public boolean showDungeonSummary = true;
+    public boolean copyTpsLossToClipboard = true;
+    public boolean debugLogging = true;
     public boolean showPreviousSummaryAfterJoin = true;
 
     public int warmupSeconds = 6;
     public int pingSampleIntervalTicks = 20;
     public int tpsSampleStaleSeconds = 6;
+    public int tcpPingSampleIntervalSeconds = 10;
+    public int tcpPingTimeoutMillis = 2000;
 
     public double serverWarningTps = 15.0D;
     public double serverCriticalTps = 10.0D;
@@ -32,6 +38,15 @@ public class LagMonitorConfig {
     public int highPingCriticalMillis = 500;
     public double highJitterWarningMillis = 90.0D;
     public int stallWarningMillis = 1500;
+
+    /*
+     * Ping cannot be converted into exact lost time without knowing how many
+     * latency-sensitive interactions the player made. This estimate assumes
+     * the configured number of server round trips per second and counts only
+     * latency above the configured baseline.
+     */
+    public int pingLossBaselineMillis = 100;
+    public double pingSensitiveActionsPerSecond = 0.5D;
 
     public int tpsTitleDelayMillis = 2000;
     public int pingTitleDelayMillis = 2000;
@@ -78,12 +93,16 @@ public class LagMonitorConfig {
         warmupSeconds = clamp(warmupSeconds, 0, 30);
         pingSampleIntervalTicks = clamp(pingSampleIntervalTicks, 5, 200);
         tpsSampleStaleSeconds = clamp(tpsSampleStaleSeconds, 2, 30);
+        tcpPingSampleIntervalSeconds = clamp(tcpPingSampleIntervalSeconds, 2, 60);
+        tcpPingTimeoutMillis = clamp(tcpPingTimeoutMillis, 250, 10_000);
         serverWarningTps = clamp(serverWarningTps, 1.0D, 20.0D);
         serverCriticalTps = clamp(serverCriticalTps, 1.0D, serverWarningTps);
         highPingWarningMillis = clamp(highPingWarningMillis, 50, 5000);
         highPingCriticalMillis = clamp(highPingCriticalMillis, highPingWarningMillis, 10_000);
         highJitterWarningMillis = clamp(highJitterWarningMillis, 5.0D, 2000.0D);
         stallWarningMillis = clamp(stallWarningMillis, 500, 15_000);
+        pingLossBaselineMillis = clamp(pingLossBaselineMillis, 0, 5000);
+        pingSensitiveActionsPerSecond = clamp(pingSensitiveActionsPerSecond, 0.0D, 20.0D);
         tpsTitleDelayMillis = clamp(tpsTitleDelayMillis, 0, 30_000);
         pingTitleDelayMillis = clamp(pingTitleDelayMillis, 0, 30_000);
         stallTitleDelayMillis = clamp(stallTitleDelayMillis, 0, 30_000);
@@ -93,6 +112,19 @@ public class LagMonitorConfig {
         hudYOffset = clamp(hudYOffset, 0, 500);
     }
 
+    public void applyMoulConfig(
+            CategoryDungeons.DungeonLagMonitor settings
+    ) {
+        if (settings == null) {
+            return;
+        }
+
+        enabled = settings.enabled;
+        showTitles = settings.showTitles;
+        showDungeonSummary = settings.showEndReport;
+        copyTpsLossToClipboard = settings.copyTpsLossToClipboard;
+    }
+
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
@@ -100,5 +132,4 @@ public class LagMonitorConfig {
     private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }
-
 }

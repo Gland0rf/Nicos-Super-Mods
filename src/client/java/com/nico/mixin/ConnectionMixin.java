@@ -1,5 +1,6 @@
 package com.nico.mixin;
 
+import com.nico.client.lag.DungeonRunPacketDetector;
 import com.nico.client.lag.LagMonitorService;
 import com.nico.client.secretTimer.SecretPacketHooks;
 import com.nico.client.utils.LocationUtils;
@@ -54,6 +55,7 @@ public abstract class ConnectionMixin {
         runOnClientThread(() -> {
             handleLocationPacket(packet);
             handleSecretPacket(packet);
+            DungeonRunPacketDetector.handle(packet);
         });
     }
 

@@ -10,6 +10,7 @@ import java.util.Locale;
 public record LagSessionSummary(
         double sessionSeconds,
         double estimatedServerDelaySeconds,
+        double estimatedPingDelaySeconds,
         double networkStallSeconds,
         double averageTps,
         double lowestTps,
@@ -24,11 +25,22 @@ public record LagSessionSummary(
         int stallCount,
         double longestStallSeconds
 ) {
+    public double estimatedNetworkDelaySeconds() {
+        return estimatedPingDelaySeconds + networkStallSeconds;
+    }
+
+    public double estimatedTotalLostSeconds() {
+        return estimatedServerDelaySeconds + estimatedNetworkDelaySeconds();
+    }
+
     public List<String> lines() {
         List<String> lines = new ArrayList<>();
         lines.add("Run time: " + formatDuration(sessionSeconds));
-        lines.add("Estimated server-lag delay: " + formatSeconds(estimatedServerDelaySeconds));
-        lines.add("Connection stall time: " + formatSeconds(networkStallSeconds));
+        lines.add("Estimated total time lost: " + formatSeconds(estimatedTotalLostSeconds()));
+        lines.add("TPS time lost: " + formatSeconds(estimatedServerDelaySeconds));
+        lines.add("Ping/network time lost: " + formatSeconds(estimatedNetworkDelaySeconds()));
+        lines.add("  Ping estimate: " + formatSeconds(estimatedPingDelaySeconds));
+        lines.add("  Connection stalls: " + formatSeconds(networkStallSeconds));
         lines.add("");
         lines.add("Average estimated TPS: " + formatDouble(averageTps));
         lines.add("Lowest estimated TPS: " + formatDouble(lowestTps));
@@ -48,18 +60,72 @@ public record LagSessionSummary(
     }
 
     public List<Component> compactChatLines() {
+        Component prefix = Component.literal("[NSM] ")
+                .withStyle(ChatFormatting.DARK_AQUA, ChatFormatting.BOLD);
+
         List<Component> lines = new ArrayList<>();
-        lines.add(Component.literal("Lag summary").withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD));
-        lines.add(Component.literal(
-                "Delay: " + formatSeconds(estimatedServerDelaySeconds)
-                        + "  Stalls: " + formatSeconds(networkStallSeconds)
-        ).withStyle(ChatFormatting.GRAY));
-        lines.add(Component.literal(
-                "TPS avg/min: " + formatDouble(averageTps) + "/" + formatDouble(lowestTps)
-                        + "  Ping avg/p95: " + formatPing(averagePingMillis) + "/"
-                        + (p95PingMillis < 0 ? "N/A" : p95PingMillis + " ms")
-        ).withStyle(ChatFormatting.GRAY));
+        lines.add(prefix.copy().append(
+                Component.literal("Dungeon Lag Report")
+                        .withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD)
+        ));
+
+        lines.add(prefix.copy()
+                .append(Component.literal("Server  ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(formatDouble(averageTps) + " TPS")
+                        .withStyle(tpsColor(averageTps), ChatFormatting.BOLD))
+                .append(Component.literal("  •  ").withStyle(ChatFormatting.DARK_GRAY))
+                .append(Component.literal(formatSeconds(estimatedServerDelaySeconds) + " lost")
+                        .withStyle(lossColor(estimatedServerDelaySeconds))));
+
+        lines.add(prefix.copy()
+                .append(Component.literal("Network ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(formatPing(averagePingMillis))
+                        .withStyle(pingColor(averagePingMillis), ChatFormatting.BOLD))
+                .append(Component.literal("  •  ").withStyle(ChatFormatting.DARK_GRAY))
+                .append(Component.literal(formatSeconds(estimatedNetworkDelaySeconds()) + " lost")
+                        .withStyle(lossColor(estimatedNetworkDelaySeconds()))));
+
+        lines.add(prefix.copy()
+                .append(Component.literal("Total estimated loss: ")
+                        .withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(formatSeconds(estimatedTotalLostSeconds()))
+                        .withStyle(lossColor(estimatedTotalLostSeconds()), ChatFormatting.BOLD)));
+
         return List.copyOf(lines);
+    }
+
+    public Component clipboardConfirmationLine() {
+        return Component.literal("[NSM] ")
+                .withStyle(ChatFormatting.DARK_AQUA, ChatFormatting.BOLD)
+                .append(Component.literal("Copied TPS loss to clipboard: ")
+                        .withStyle(ChatFormatting.DARK_GRAY))
+                .append(Component.literal(formatSeconds(estimatedServerDelaySeconds))
+                        .withStyle(ChatFormatting.AQUA));
+    }
+
+    public String tpsLossClipboardText() {
+        return formatSeconds(estimatedServerDelaySeconds);
+    }
+
+    private static ChatFormatting tpsColor(double tps) {
+        if (!Double.isFinite(tps)) return ChatFormatting.GRAY;
+        if (tps >= 19.0D) return ChatFormatting.GREEN;
+        if (tps >= 15.0D) return ChatFormatting.YELLOW;
+        return ChatFormatting.RED;
+    }
+
+    private static ChatFormatting pingColor(double pingMillis) {
+        if (!Double.isFinite(pingMillis)) return ChatFormatting.GRAY;
+        if (pingMillis < 100.0D) return ChatFormatting.GREEN;
+        if (pingMillis < 200.0D) return ChatFormatting.YELLOW;
+        return ChatFormatting.RED;
+    }
+
+    private static ChatFormatting lossColor(double seconds) {
+        if (!Double.isFinite(seconds)) return ChatFormatting.GRAY;
+        if (seconds < 1.0D) return ChatFormatting.GREEN;
+        if (seconds < 5.0D) return ChatFormatting.YELLOW;
+        return ChatFormatting.RED;
     }
 
     private static String formatDuration(double seconds) {
@@ -74,11 +140,15 @@ public record LagSessionSummary(
     }
 
     private static String formatSeconds(double seconds) {
-        return Double.isFinite(seconds) ? String.format(Locale.US, "%.1fs", Math.max(0.0D, seconds)) : "N/A";
+        return Double.isFinite(seconds)
+                ? String.format(Locale.US, "%.1fs", Math.max(0.0D, seconds))
+                : "N/A";
     }
 
     private static String formatDouble(double value) {
-        return Double.isFinite(value) ? String.format(Locale.US, "%.1f", value) : "N/A";
+        return Double.isFinite(value)
+                ? String.format(Locale.US, "%.1f", value)
+                : "N/A";
     }
 
     private static String formatPing(double value) {

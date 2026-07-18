@@ -32,6 +32,13 @@ public class CategoryDungeons {
     @Accordion
     public GoldorTerminal goldorTerminal = new GoldorTerminal();
 
+    @ConfigOption(
+            name = "Dungeon Lag Monitor",
+            desc = "Tracks TPS, ping, and estimated time lost during dungeon runs."
+    )
+    @Accordion
+    public DungeonLagMonitor dungeonLagMonitor = new DungeonLagMonitor();
+
     public static class RoomStacking {
 
         @ConfigOption(
@@ -163,5 +170,35 @@ public class CategoryDungeons {
         )
         @ConfigEditorBoolean
         public boolean enabled = false;
+    }
+
+    public static class DungeonLagMonitor {
+        @ConfigOption(
+                name = "Enabled",
+                desc = "Tracks TPS and ping during dungeon runs."
+        )
+        @ConfigEditorBoolean
+        public boolean enabled = true;
+
+        @ConfigOption(
+                name = "Show Warning Titles",
+                desc = "Shows title alerts for low TPS, high ping, and connection stalls."
+        )
+        @ConfigEditorBoolean
+        public boolean showTitles = true;
+
+        @ConfigOption(
+                name = "Show End Report",
+                desc = "Shows a lag report when your dungeon run ends."
+        )
+        @ConfigEditorBoolean
+        public boolean showEndReport = true;
+
+        @ConfigOption(
+                name = "Copy TPS Loss",
+                desc = "Copies the estimated TPS time loss to your clipboard after the run."
+        )
+        @ConfigEditorBoolean
+        public boolean copyTpsLossToClipboard = true;
     }
 }

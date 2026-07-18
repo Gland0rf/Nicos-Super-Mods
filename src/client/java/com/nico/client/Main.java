@@ -1,6 +1,9 @@
 package com.nico.client;
 
+import com.nico.client.configuration.NsmConfig;
+import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.hud.HudLayoutManager;
+import com.nico.client.lag.LagMonitorFeature;
 import com.nico.client.stacking.SecretStackingDetector;
 import com.nico.client.utils.BazaarService;
 import com.nico.client.utils.HypixelApiClient;
@@ -32,6 +35,8 @@ public final class Main implements ClientModInitializer {
 
         NsmClientCommands.register();
         ClientTickHandler.register();
+
+        LagMonitorFeature.initialize(() -> NsmConfigManager.getConfig().dungeons.dungeonLagMonitor);
     }
 
     public HypixelApiClient getApiClient() {
