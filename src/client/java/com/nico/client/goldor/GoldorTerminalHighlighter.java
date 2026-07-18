@@ -101,7 +101,7 @@ public class GoldorTerminalHighlighter {
 
     private GoldorTerminalHighlighter() { }
 
-    public static void tick() {
+    /*public static void tick() {
         Minecraft mc = Minecraft.getInstance();
 
         if (!NsmConfig.INSTANCE.dungeons.goldorTerminal.enabled || mc.level == null || mc.player == null) {
@@ -153,16 +153,17 @@ public class GoldorTerminalHighlighter {
         }
 
         serviceQueuedSounds(mc);
-    }
+    }*/
 
     public static void render(RenderEvent.Extract event) {
         Minecraft mc = Minecraft.getInstance();
 
-        if (!NsmConfig.INSTANCE.dungeons.goldorTerminal.enabled || mc.level == null || mc.player == null) {
+        /*if (!NsmConfig.INSTANCE.dungeons.goldorTerminal.enabled || mc.level == null || mc.player == null) {
             return;
-        }
+        }*/
+        return; // temporary
 
-        if (!active || !isInGoldorPhase()) return;
+        /*if (!active || !isInGoldorPhase()) return;
 
         SectionDefinition section = SECTIONS.get(goldorSection);
         if (section == null) return;
@@ -205,7 +206,7 @@ public class GoldorTerminalHighlighter {
                     DEPTH_CHECKED_RENDERING,
                     5.0F
             );
-        }
+        }*/
     }
 
     public static void onChatMessage(String message) {

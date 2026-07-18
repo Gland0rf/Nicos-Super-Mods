@@ -196,9 +196,10 @@ public final class SecretStackingDetector {
     }
 
     private static boolean isDetectorEnabled() {
-        return NsmConfig.INSTANCE
+        /*return NsmConfig.INSTANCE
                 .dungeons
-                .secretStackingDetectorEnabled;
+                .secretStackingDetectorEnabled;*/
+        return false; // temporary
     }
 
     private static boolean isValidDungeonState(

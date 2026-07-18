@@ -29,9 +29,9 @@ public final class ClientTickHandler {
     }
 
     private static void tickGoldorTerminalHighlighter() {
-        if (NsmConfig.INSTANCE.dungeons.goldorTerminal.enabled) {
+        /*if (NsmConfig.INSTANCE.dungeons.goldorTerminal.enabled) {
             GoldorTerminalHighlighter.tick();
-        }
+        }*/
     }
 
     private static void tickOncePerSecond() {

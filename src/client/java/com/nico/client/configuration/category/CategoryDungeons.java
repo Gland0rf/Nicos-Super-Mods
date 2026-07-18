@@ -4,12 +4,12 @@ import com.nico.client.secretTimer.SecretRoomTimerClient;
 import io.github.notenoughupdates.moulconfig.annotations.*;
 
 public class CategoryDungeons {
-    @ConfigOption(
+    /*@ConfigOption(
             name = "Secret Stacking Detector",
             desc = "Detects when you and another player are likely doing secrets in the same room."
     )
     @ConfigEditorBoolean
-    public boolean secretStackingDetectorEnabled = false;
+    public boolean secretStackingDetectorEnabled = false;*/
 
     @ConfigOption(
             name = "Room Stacking Detector",
@@ -25,12 +25,12 @@ public class CategoryDungeons {
     @Accordion
     public SecretRoomTimer secretRoomTimer = new SecretRoomTimer();
 
-    @ConfigOption(
+    /*@ConfigOption(
             name = "Goldor Terminal Highlighter",
             desc = "Highlights your designated terminals in f7/m7"
     )
     @Accordion
-    public GoldorTerminal goldorTerminal = new GoldorTerminal();
+    public GoldorTerminal goldorTerminal = new GoldorTerminal();*/
 
     @ConfigOption(
             name = "Dungeon Lag Monitor",
@@ -162,7 +162,7 @@ public class CategoryDungeons {
     }
 
 
-    public static class GoldorTerminal {
+    /*public static class GoldorTerminal {
 
         @ConfigOption(
                 name = "Enabled",
@@ -170,7 +170,7 @@ public class CategoryDungeons {
         )
         @ConfigEditorBoolean
         public boolean enabled = false;
-    }
+    }*/
 
     public static class DungeonLagMonitor {
         @ConfigOption(
