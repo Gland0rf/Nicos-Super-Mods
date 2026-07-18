@@ -8,6 +8,7 @@ Doesnt even enter the SecretPacketHooks
 #7 Show minion upgrade quality -> Tell them how long it takes to make the money back. DONE
 #8 Save inventory as "overlay" and when setting it up, select it and show what item goes where.
 
+#1 Only show tps hud when in dungeon
 
 Room stacking concept:
 -> The idea is to alert the player if they are doing work that is already being done by

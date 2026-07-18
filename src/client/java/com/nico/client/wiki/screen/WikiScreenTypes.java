@@ -13,7 +13,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Package-private records and enums shared by the screen layers. */
 enum PageKind { HELP, NEW_TAB, ARTICLE }
 enum OpenDisposition { CURRENT_TAB, NEW_TAB, EXTERNAL }
 enum SpecialAction { TOGGLE_STYLE, OPEN_BOOKMARK, FOCUS_SEARCH }

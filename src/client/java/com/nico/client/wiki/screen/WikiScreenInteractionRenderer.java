@@ -12,7 +12,6 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Hover detection and Wiki-style tooltip rendering. */
 abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
     protected WikiScreenInteractionRenderer(Screen parent, ItemStack itemStack) {
         super(parent, itemStack);

@@ -11,7 +11,6 @@ import net.minecraft.world.item.ItemStack;
 import java.util.List;
 import java.util.Optional;
 
-/** Mouse and keyboard interaction layer. */
 abstract class WikiScreenInput extends WikiScreenInteractionRenderer {
     protected WikiScreenInput(Screen parent, ItemStack itemStack) {
         super(parent, itemStack);

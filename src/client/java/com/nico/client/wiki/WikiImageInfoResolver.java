@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Resolves a MediaWiki file title to the original file URL via prop=imageinfo. */
 final class WikiImageInfoResolver {
     private static final String API = "https://hypixelskyblock.minecraft.wiki/api.php";
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()

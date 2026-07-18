@@ -142,11 +142,6 @@ public class RoomStackingDetector {
             state.playerNames.addAll(currentPlayers);
             state.lastTimeScoreAtMs = now;
         } else if (!state.playerNames.equals(currentPlayers)) {
-            /*
-             * Same room still has 2+ players, so do not hard reset.
-             * But the "same players for every 5 seconds" timer should restart
-             * because the group changed.
-             */
             state.playerNames.clear();
             state.playerNames.addAll(currentPlayers);
             state.lastTimeScoreAtMs = now;

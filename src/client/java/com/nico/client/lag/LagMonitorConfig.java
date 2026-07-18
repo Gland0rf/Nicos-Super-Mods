@@ -39,12 +39,6 @@ public class LagMonitorConfig {
     public double highJitterWarningMillis = 90.0D;
     public int stallWarningMillis = 1500;
 
-    /*
-     * Ping cannot be converted into exact lost time without knowing how many
-     * latency-sensitive interactions the player made. This estimate assumes
-     * the configured number of server round trips per second and counts only
-     * latency above the configured baseline.
-     */
     public int pingLossBaselineMillis = 100;
     public double pingSensitiveActionsPerSecond = 0.5D;
 

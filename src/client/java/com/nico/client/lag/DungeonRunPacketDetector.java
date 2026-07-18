@@ -10,10 +10,6 @@ import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 
 import java.util.Locale;
 
-/**
- * Starts dungeon tracking from the Hypixel countdown chat message and ends it
- * from the completion title/chat messages.
- */
 public final class DungeonRunPacketDetector {
     private DungeonRunPacketDetector() {
     }

@@ -2,13 +2,6 @@ package com.nico.client.lag;
 
 import java.util.ArrayDeque;
 
-/**
- * Estimates server TPS from Hypixel's per-server-tick ClientboundPingPacket.
- *
- * Hypixel sends a non-zero common ping packet once for each server tick. Using
- * a multi-second timestamp window makes the estimate resistant to normal
- * network jitter and packet batching.
- */
 public final class TpsEstimator {
     private static final long WINDOW_NANOS = 5_000_000_000L;
     private static final int MAX_WINDOW_SAMPLES = 160;

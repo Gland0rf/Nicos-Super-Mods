@@ -100,15 +100,6 @@ public class BazaarService {
         return new BazaarSnapshot(lastUpdated, products);
     }
 
-    /**
-     * INSTANT_SELL:
-     *   Price you care about for minion output.
-     *   "If I sell this output instantly, roughly how many coins do I get?"
-     *
-     * INSTANT_BUY:
-     *   Price you care about for upgrade costs.
-     *   "If I buy these upgrade materials instantly, roughly how many coins do I pay?"
-     */
     public OptionalDouble getPrice(String productId, PriceMode mode) throws IOException {
         Optional<BazaarProduct> product = getSnapshot().getProduct(productId);
 

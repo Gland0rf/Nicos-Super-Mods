@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Downloads original wiki files asynchronously and registers them as dynamic textures. */
 public final class WikiImageTextureCache {
     private static final int MAX_DOWNLOAD_BYTES = 12 * 1024 * 1024;
     private static final int MAX_DIMENSION = 4096;

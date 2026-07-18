@@ -1,9 +1,5 @@
 package com.nico.client.wiki;
 
-/**
- * Exact HTML classes currently emitted by the community Hypixel SkyBlock Wiki.
- * The parser deliberately fails closed instead of scoring or guessing arbitrary elements.
- */
 public final class WikiHtmlContract {
     private WikiHtmlContract() { }
 

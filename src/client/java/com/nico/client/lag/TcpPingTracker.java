@@ -11,13 +11,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntConsumer;
 
-/**
- * Hypixel commonly exposes a useless 0/1 ms value through PlayerInfo latency.
- * This tracker measures a separate TCP handshake to the currently selected
- * server address. It measures the route to the Hypixel edge, not the exact
- * internal dungeon instance, but is substantially more useful than the
- * spoofed tab-list value.
- */
 final class TcpPingTracker {
     private static final int DEFAULT_PORT = 25565;
 

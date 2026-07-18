@@ -21,7 +21,6 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Builds the immutable render-entry list from the Wiki model. */
 abstract class WikiScreenLayout extends WikiScreenActions {
     protected WikiScreenLayout(Screen parent, ItemStack itemStack) {
         super(parent, itemStack);
@@ -89,10 +88,6 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         lastAnimationStep = animationStep();
     }
 
-    /**
-     * Multi-column data tables need the full reading width at ordinary GUI scales.
-     * Keeping the infobox beside them makes descriptions wrap every few words.
-     */
     protected static boolean containsWideTable(List<WikiBlock> blocks) {
         if (blocks == null) {
             return false;

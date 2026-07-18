@@ -171,10 +171,6 @@ public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 		pendingSelfSecretRoom = null;
 	}
 
-	/**
-	 * Command-only debug output.
-	 * This prints room names only when you manually run /sstrooms.
-	 **/
 /**
 	private static void printPlayerRooms() {
 		Minecraft mc = Minecraft.getInstance();

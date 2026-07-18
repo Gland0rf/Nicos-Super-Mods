@@ -15,10 +15,14 @@ import java.util.Map;
 
 public class HudLayoutManager {
     public static final String MINION_OUTPUT = "minion_output";
+    public static final String LAG_MONITOR = "lag_monitor";
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON =
+            new GsonBuilder().setPrettyPrinting().create();
 
-    private final Map<String, HudElement> elements = new LinkedHashMap<>();
+    private final Map<String, HudElement> elements =
+            new LinkedHashMap<>();
+
     private final Path configPath;
 
     public HudLayoutManager() {
@@ -38,6 +42,16 @@ public class HudLayoutManager {
                 12,
                 12
         ));
+
+        HudElement lagMonitor = new HudElement(
+                LAG_MONITOR,
+                "Dungeon Lag Monitor",
+                12,
+                72
+        );
+
+        lagMonitor.setMeasuredSize(94, 58);
+        register(lagMonitor);
     }
 
     private void register(HudElement element) {
@@ -74,8 +88,10 @@ public class HudLayoutManager {
                 SavedElement saved = new SavedElement();
                 saved.x = element.getX();
                 saved.y = element.getY();
-                saved.width = element.getWidth();
-                saved.height = element.getHeight();
+
+                saved.width = element.getMeasuredWidth();
+                saved.height = element.getMeasuredHeight();
+
                 saved.scale = element.getScale();
                 saved.seen = element.hasBeenSeen();
 
@@ -86,8 +102,11 @@ public class HudLayoutManager {
                     configPath,
                     GSON.toJson(layout).getBytes(StandardCharsets.UTF_8)
             );
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (IOException exception) {
+            System.err.println(
+                    "[NSM] Failed to save HUD layout: "
+                            + exception.getMessage()
+            );
         }
     }
 
@@ -98,29 +117,43 @@ public class HudLayoutManager {
         }
 
         try {
-            String json = new String(Files.readAllBytes(configPath), StandardCharsets.UTF_8);
-            SavedLayout layout = GSON.fromJson(json, SavedLayout.class);
+            String json = new String(
+                    Files.readAllBytes(configPath),
+                    StandardCharsets.UTF_8
+            );
 
-            if (layout == null || layout.elements == null) return;
+            SavedLayout layout =
+                    GSON.fromJson(json, SavedLayout.class);
 
-            for (Map.Entry<String, SavedElement> entry : layout.elements.entrySet()) {
+            if (layout == null || layout.elements == null) {
+                return;
+            }
+
+            for (Map.Entry<String, SavedElement> entry
+                    : layout.elements.entrySet()) {
                 HudElement element = elements.get(entry.getKey());
                 SavedElement saved = entry.getValue();
 
-                if (element == null || saved == null) continue;
+                if (element == null || saved == null) {
+                    continue;
+                }
 
                 element.setPosition(saved.x, saved.y);
                 element.setMeasuredSize(saved.width, saved.height);
                 element.setScale(saved.scale);
                 element.setSeen(saved.seen);
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (IOException | RuntimeException exception) {
+            System.err.println(
+                    "[NSM] Failed to load HUD layout: "
+                            + exception.getMessage()
+            );
         }
     }
 
     private static final class SavedLayout {
-        private Map<String, SavedElement> elements = new LinkedHashMap<>();
+        private Map<String, SavedElement> elements =
+                new LinkedHashMap<>();
     }
 
     private static final class SavedElement {

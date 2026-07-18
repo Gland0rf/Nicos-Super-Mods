@@ -16,22 +16,12 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Parses crafting grids, inventory slots, images, and rich cell/paragraph content. */
 abstract class WikiContentParser extends WikiServiceSupport {
     protected static WikiCraftingGrid tryParseCraftingGrid(Element root) {
         List<WikiCraftingGrid> grids = tryParseCraftingGrids(root);
         return grids.isEmpty() ? null : grids.get(0);
     }
 
-    /**
-     * Parses every synchronized frame of one Wiki crafting widget.
-     *
-     * The Wiki's crafting database uses // to define alternative recipes.
-     * Those alternatives are emitted as coordinated animated frames inside
-     * each inventory slot. Empty frames are significant: dropping them turns
-     * the alternatives into the union of every recipe, which is what caused
-     * plus-shaped and horizontal Hemoglass recipes to overlap.
-     */
     protected static List<WikiCraftingGrid> tryParseCraftingGrids(Element root) {
         Element input = ownedDescendantWithClass(
                 root,
@@ -208,12 +198,6 @@ abstract class WikiContentParser extends WikiServiceSupport {
                 continue;
             }
 
-            /*
-             * The Wiki uses ordinary linked <img> elements for many inline
-             * item/mob icons. They are not article illustrations and must not
-             * be expanded into large standalone images. Preserve them as a
-             * small item slot so they can still be hovered.
-             */
             if (isInlineWikiIcon(image, parsed)) {
                 Element anchor = nearestAncestorTag(image, "a");
                 Element hoverSource = nearestAncestorWithAttribute(image, "data-minetip-title");
@@ -422,10 +406,6 @@ abstract class WikiContentParser extends WikiServiceSupport {
             return "";
         }
 
-        /*
-         * Keep the Wiki's Minecraft formatting codes and line breaks. The
-         * screen renderer understands both '&' and section-sign codes.
-         */
         String normalized = value
                 .replace("<br />", "\n")
                 .replace("<br/>", "\n")
@@ -435,10 +415,6 @@ abstract class WikiContentParser extends WikiServiceSupport {
 
         normalized = org.jsoup.parser.Parser.unescapeEntities(normalized, false);
 
-        /*
-         * Module:Inventory_slot uses '/' as a line separator and '//' as a
-         * blank line in data-minetip-text. Preserve escaped literal slashes.
-         */
         String escapedSlash = "\u0000NSM_WIKI_SLASH\u0000";
         normalized = normalized
                 .replace("\\/", escapedSlash)

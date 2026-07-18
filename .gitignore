@@ -8,6 +8,8 @@ classes/
 **/build/
 **/out/
 
+src/main/odtheking
+
 # eclipse
 
 *.launch

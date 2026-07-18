@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Resolves an item ID through Hypixel's resource registry, then resolves an exact MediaWiki page. */
 public final class WikiTitleResolver {
     private static final String HYPIXEL_ITEMS_ENDPOINT = "https://api.hypixel.net/resources/skyblock/items";
     private static final String WIKI_API_ENDPOINT = "https://hypixelskyblock.minecraft.wiki/api.php";
@@ -60,7 +59,6 @@ public final class WikiTitleResolver {
     }
 
 
-    /** Resolves either a Wiki title/search phrase or a Hypixel internal item ID. */
     public static CompletableFuture<ResolvedWikiTitle> resolveQuery(String rawQuery) {
         String query = rawQuery == null ? "" : rawQuery.trim();
         if (query.isBlank()) {
@@ -86,7 +84,6 @@ public final class WikiTitleResolver {
         }));
     }
 
-    /** MediaWiki exact/prefix/full-text search used by the browser address bar. */
     public static CompletableFuture<java.util.List<SearchResult>> searchTitles(String rawQuery, int requestedLimit) {
         String query = rawQuery == null ? "" : rawQuery.trim();
         if (query.isBlank()) {

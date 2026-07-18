@@ -18,7 +18,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Replaces the Wiki's JavaScript-only Bazaar placeholders with Hypixel API values. */
 public final class WikiBazaarEnricher {
     private static final Pattern TRAILING_TIER_ID = Pattern.compile("^(.*)_([0-9]+)$");
     private static final Pattern ROMAN_TIER = Pattern.compile("(?:^|\\s)([IVXLCDM]+)$", Pattern.CASE_INSENSITIVE);
@@ -126,10 +125,6 @@ public final class WikiBazaarEnricher {
         return List.copyOf(result);
     }
 
-    /**
-     * Recognizes the Wiki's Bazaar table by its exact column labels. It does not
-     * treat arbitrary tables containing question marks as Bazaar data.
-     */
     private static WikiBlock.Table enrichBazaarTable(
             WikiBlock.Table table,
             String requestedProductId,

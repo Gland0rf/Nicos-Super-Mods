@@ -47,12 +47,6 @@ public final class Main implements ClientModInitializer {
         return bazaarService;
     }
 
-    /*
-     * Compatibility methods.
-     *
-     * Existing mixins, packet hooks, or Kotlin code can continue calling
-     * SecretStackTrackerClient without knowing about the new detector class.
-     */
 
     public static void onRoomSecretsPacket(int foundSecrets, int totalSecrets) {
         SecretStackingDetector.onRoomSecretsPacket(foundSecrets, totalSecrets);

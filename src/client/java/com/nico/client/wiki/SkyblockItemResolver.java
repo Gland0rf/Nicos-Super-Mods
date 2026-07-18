@@ -8,13 +8,6 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Extracts the stable Hypixel item ID from the ItemStack.
- *
- * Modern Hypixel item data may expose the ID directly inside minecraft:custom_data,
- * while older stacks stored it inside ExtraAttributes. Both are read without trying
- * to strip or maintain a list of reforges.
- */
 public final class SkyblockItemResolver {
     private SkyblockItemResolver() { }
 

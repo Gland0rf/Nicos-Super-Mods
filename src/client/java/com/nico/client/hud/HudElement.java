@@ -45,6 +45,14 @@ public class HudElement {
         return Math.max(1, (int) Math.round(height * scale));
     }
 
+    public int getMeasuredWidth() {
+        return width;
+    }
+
+    public int getMeasuredHeight() {
+        return height;
+    }
+
     public double getScale() {
         return scale;
     }
@@ -92,9 +100,9 @@ public class HudElement {
 
     public boolean contains(double mouseX, double mouseY) {
         return mouseX >= x
-                && mouseX <= x + width
+                && mouseX <= x + getWidth()
                 && mouseY >= y
-                && mouseY <= y + height;
+                && mouseY <= y + getHeight();
     }
 
     private static double clamp(double value, double min, double max) {

@@ -17,7 +17,6 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Converts a rendered MediaWiki article into the strict Wiki model. */
 abstract class WikiArticleParser extends WikiWidgetParser {
     protected static WikiPage parseRenderedArticle(String title, URI pageUri, String revisionId, String html) {
         Document document = Jsoup.parse(html, WIKI_ARTICLE_BASE);
@@ -158,13 +157,6 @@ abstract class WikiArticleParser extends WikiWidgetParser {
         return List.copyOf(blocks);
     }
 
-    /*
-     * Do not merge adjacent WikiBlock.Crafting values. Adjacent blocks can be
-     * completely different recipes or different table rows. Recipe animation
-     * is represented only by multiple crafting grids inside the same
-     * WikiContent, or by multiple frames inside the same WikiItemSlot.
-     */
-
     protected static void appendChildrenAsBlocks(Element parent, List<WikiBlock> blocks, int listDepth) {
         for (Element child : parent.children()) {
             appendElementAsBlocks(child, blocks, listDepth);
@@ -176,10 +168,6 @@ abstract class WikiArticleParser extends WikiWidgetParser {
             return;
         }
 
-        // TabberNeue has an explicit header/tabs/section/panel contract. A few
-        // transcluded pages still contain the legacy Extension:Tabber markup.
-        // A generic class="tabber" without either exact contract is merely a
-        // container and must not make the whole article fail.
         WikiBlock.TabGroup tabGroup = tryParseTabGroup(element, WikiArticleParser::parsePanelBlocks);
         if (tabGroup != null) {
             blocks.add(tabGroup);

@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 
-/** Tab history, Wiki-link navigation, address-bar submission, and URL resolution. */
 abstract class WikiScreenNavigation extends WikiScreenBase {
     protected WikiScreenNavigation(Screen parent, ItemStack itemStack) {
         super(parent, itemStack);

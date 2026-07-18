@@ -4,7 +4,6 @@ import com.nico.client.wiki.WikiBlock;
 
 import java.util.Locale;
 
-/** Shared layout calculations used by both layout and rendering layers. */
 final class WikiScreenMetrics {
     private WikiScreenMetrics() { }
 

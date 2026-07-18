@@ -14,7 +14,6 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
-/** Draws browser chrome, special pages, and document frames. */
 abstract class WikiScreenRenderer extends WikiScreenLayout {
     protected WikiScreenRenderer(Screen parent, ItemStack itemStack) {
         super(parent, itemStack);

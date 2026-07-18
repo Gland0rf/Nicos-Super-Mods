@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-/** Find-in-page, bookmarks, context menus, style toggle, and anchor scrolling. */
 abstract class WikiScreenActions extends WikiScreenNavigation {
     protected WikiScreenActions(Screen parent, ItemStack itemStack) {
         super(parent, itemStack);
@@ -199,7 +198,4 @@ abstract class WikiScreenActions extends WikiScreenNavigation {
             }
         }
     }
-
-
-    /** Implemented by the layout layer. */
 }

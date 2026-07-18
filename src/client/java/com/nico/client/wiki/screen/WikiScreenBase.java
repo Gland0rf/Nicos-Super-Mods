@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
-/** Shared widgets, browser state, asynchronous loading, and tab snapshots. */
 abstract class WikiScreenBase extends Screen {
     protected static final int OUTER_MARGIN = 16;
     protected static final int HEADER_HEIGHT = 56;

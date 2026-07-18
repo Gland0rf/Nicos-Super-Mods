@@ -4,14 +4,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.ping.ClientboundPongResponsePacket;
 import net.minecraft.network.protocol.ping.ServerboundPingRequestPacket;
 
-/**
- * Measures round-trip latency on the active Minecraft play connection.
- *
- * Unlike a raw TCP connect probe, this packet travels through the same
- * connection and proxy path as the dungeon traffic. The long token is echoed
- * by the server in ClientboundPongResponsePacket, allowing the client to
- * calculate the full round-trip time.
- */
 final class ConnectionPingTracker {
     private static final long NO_PENDING_TOKEN = Long.MIN_VALUE;
 
@@ -80,10 +72,6 @@ final class ConnectionPingTracker {
         }
     }
 
-    /**
-     * @return measured RTT in milliseconds, or -1 when this pong does not
-     * belong to a request made by this tracker.
-     */
     synchronized int accept(ClientboundPongResponsePacket packet) {
         if (packet == null
                 || pendingToken == NO_PENDING_TOKEN

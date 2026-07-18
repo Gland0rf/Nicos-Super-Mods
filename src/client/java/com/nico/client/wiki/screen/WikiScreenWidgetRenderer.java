@@ -22,7 +22,6 @@ import java.net.URI;
 import java.util.List;
 import java.util.Objects;
 
-/** Draws tables, infoboxes, tabs, crafting widgets, images, and slots. */
 abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
     protected WikiScreenWidgetRenderer(Screen parent, ItemStack itemStack) {
         super(parent, itemStack);
