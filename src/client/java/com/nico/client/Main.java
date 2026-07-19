@@ -7,7 +7,7 @@ import com.nico.client.lag.LagMonitorFeature;
 import com.nico.client.stacking.SecretStackingDetector;
 import com.nico.client.utils.BazaarService;
 import com.nico.client.utils.HypixelApiClient;
-import com.nico.client.wiki.service.HypixelWikiService;
+//import com.nico.client.wiki.service.HypixelWikiService; TEMPORARY
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.core.BlockPos;
 
@@ -29,7 +29,7 @@ public final class Main implements ClientModInitializer {
         apiClient = new HypixelApiClient(null);
         bazaarService = new BazaarService(apiClient);
 
-        HypixelWikiService.setBazaarService(bazaarService);
+        //HypixelWikiService.setBazaarService(bazaarService); TEMPORARY
 
         HUD_LAYOUT = ClientFeatureInitializer.initialize();
 

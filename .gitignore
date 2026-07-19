@@ -1,5 +1,8 @@
 # gradle
 
+# Temporary
+src/main/java/com/nico/client/wiki
+
 .gradle/
 build/
 out/

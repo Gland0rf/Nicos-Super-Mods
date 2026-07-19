@@ -27,8 +27,8 @@ public class NsmConfig extends Config {
     @Category(name = "Island", desc = "Things to help you with on your island")
     public CategoryIsland island = new CategoryIsland();
 
-    @Category(name = "Other", desc = "Misc features")
-    public CategoryOther other = new CategoryOther();
+    /*Category(name = "Other", desc = "Misc features")
+    public CategoryOther other = new CategoryOther();*/ // TEMPORARY
 
 
 }

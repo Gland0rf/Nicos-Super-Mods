@@ -6,7 +6,7 @@ import org.lwjgl.glfw.GLFW;
 
 public class CategoryOther {
 
-    @ConfigOption(
+    /*@ConfigOption(
             name = "Integrated Wiki",
             desc = "Open up the skyblock wiki inside minecraft, so you don't have to tab out all the time."
     )
@@ -27,6 +27,6 @@ public class CategoryOther {
         )
         @ConfigEditorKeybind(defaultKey = GLFW.GLFW_MOUSE_BUTTON_RIGHT)
         public int wikiShortcut = GLFW.GLFW_MOUSE_BUTTON_RIGHT;
-    }
+    }*/
 
 }
