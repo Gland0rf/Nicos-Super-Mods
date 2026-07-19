@@ -27,7 +27,6 @@ public class LagMonitorFeature {
         service.configure(config);
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            // Allows MoulConfig changes to take effect immediately.
             syncConfig();
             service.tick(client);
         });

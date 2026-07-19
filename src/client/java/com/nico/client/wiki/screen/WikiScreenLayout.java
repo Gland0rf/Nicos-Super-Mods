@@ -41,7 +41,7 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         pageWidth = Math.min(MAX_PAGE_WIDTH, Math.max(280, width - OUTER_MARGIN * 2));
         pageLeft = (width - pageWidth) / 2;
 
-        int desiredInfoboxWidth = Math.min(INFOBOX_WIDTH, Math.max(205, pageWidth * 29 / 100));
+        int desiredInfoboxWidth = Math.min(INFOBOX_WIDTH, Math.max(175, pageWidth * 27 / 100));
         int candidateArticleWidth = pageWidth - PAGE_PADDING * 2 - desiredInfoboxWidth - COLUMN_GAP;
         boolean wide = !page.infobox().isEmpty()
                 && candidateArticleWidth >= MIN_ARTICLE_WIDTH

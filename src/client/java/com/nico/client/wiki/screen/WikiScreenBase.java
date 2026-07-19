@@ -1,9 +1,6 @@
 package com.nico.client.wiki.screen;
 
-import com.nico.client.wiki.WikiBlock;
-import com.nico.client.wiki.WikiBrowserStore;
-import com.nico.client.wiki.WikiPage;
-import com.nico.client.wiki.WikiTitleResolver;
+import com.nico.client.wiki.*;
 import com.nico.client.wiki.service.HypixelWikiService;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -30,7 +27,7 @@ abstract class WikiScreenBase extends Screen {
     protected static final int PAGE_PADDING = 16;
     protected static final int COLUMN_GAP = 14;
     protected static final int INFOBOX_WIDTH = 240;
-    protected static final int MIN_ARTICLE_WIDTH = 500;
+    protected static final int MIN_ARTICLE_WIDTH = 330;
     protected static final int MAX_PAGE_WIDTH = 1240;
     protected static final int LINE_HEIGHT = 12;
     protected static final int SCROLL_STEP = 28;
@@ -71,6 +68,7 @@ abstract class WikiScreenBase extends Screen {
     protected final Screen parent;
     protected final ItemStack itemStack;
     protected final String initialTitle;
+    protected final String initialSearchQuery;
 
     protected final List<RenderEntry> entries = new ArrayList<>();
     protected final List<TabHitbox> tabHitboxes = new ArrayList<>();
@@ -125,8 +123,20 @@ abstract class WikiScreenBase extends Screen {
         super(Component.literal("Hypixel SkyBlock Wiki"));
         this.parent = parent;
         this.itemStack = itemStack;
-        this.initialTitle = itemStack.getHoverName().getString();
+
+        SkyblockItemResolver.ItemIdentity identity =
+                SkyblockItemResolver.resolveIdentity(itemStack);
+
+        this.initialTitle = identity.displayName().isBlank()
+                ? itemStack.getHoverName().getString()
+                : identity.displayName();
+
+        this.initialSearchQuery = identity.hasInternalId()
+                ? identity.internalId()
+                : identity.displayName();
+
         this.visibleTitle = initialTitle;
+
         this.browserTabs.add(PageTab.help());
         this.browserTabs.add(PageTab.initial(initialTitle));
         this.activeBrowserTabIndex = 1;
@@ -310,7 +320,7 @@ abstract class WikiScreenBase extends Screen {
                     ? tab.requestQuery
                     : tab.requestUri != null
                     ? tab.requestUri.toString()
-                    : tab.kind == PageKind.NEW_TAB ? "" : initialTitle;
+                    : tab.kind == PageKind.NEW_TAB ? "" : initialSearchQuery;
             addressBox.setValue(address);
             suppressAddressResponder = false;
         }

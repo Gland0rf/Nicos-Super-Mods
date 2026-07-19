@@ -1,14 +1,16 @@
 package com.nico.mixin;
 
-import com.nico.client.wiki.WikiScreen;
+import com.nico.client.configuration.NsmConfig;
+import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.wiki.screen.WikiScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import org.jspecify.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
+import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,26 +25,66 @@ public abstract class AbstractContainerScreenMixin {
     protected Slot hoveredSlot;
 
     @Inject(
-            method="mouseClicked",
+            method = "keyPressed",
             at = @At("HEAD"),
             cancellable = true
     )
-    private void nsm$openWikiPage(
+    private void nsm$openWikiWithKeyboard(
+            KeyEvent event,
+            CallbackInfoReturnable<Boolean> callback
+    ) {
+        CategoryOther config = NsmConfig.INSTANCE.other;
+
+        if (!event.hasControlDownWithQuirk()) {
+            return;
+        }
+
+        if (event.input() != config.wikiShortcut) {
+            return;
+        }
+
+        if (nsm$openHoveredItem()) {
+            callback.setReturnValue(true);
+        }
+    }
+
+    @Inject(
+            method = "mouseClicked",
+            at = @At("HEAD"),
+            cancellable = true
+    )
+    private void nsm$openWikiWithMouse(
             MouseButtonEvent event,
             boolean doubleClick,
             CallbackInfoReturnable<Boolean> callback
     ) {
-        if (event.button() != GLFW.GLFW_MOUSE_BUTTON_RIGHT) return;
+        CategoryOther config = NsmConfig.INSTANCE.other;
 
-        if (!event.hasControlDownWithQuirk()) return;
+        if (!event.hasControlDownWithQuirk()) {
+            return;
+        }
 
+        if (event.input() != config.wikiShortcut) {
+            return;
+        }
+
+        if (nsm$openHoveredItem()) {
+            callback.setReturnValue(true);
+        }
+    }
+
+    private boolean nsm$openHoveredItem() {
         Slot slot = hoveredSlot;
 
-        if (slot == null || !slot.hasItem()) return;
+        if (slot == null || !slot.hasItem()) {
+            return false;
+        }
 
         ItemStack stack = slot.getItem();
 
-        if (stack.isEmpty()) return;
+        if (stack.isEmpty()) {
+            return false;
+        }
 
         Minecraft client = Minecraft.getInstance();
         Screen currentScreen = (Screen) (Object) this;
@@ -54,7 +96,6 @@ public abstract class AbstractContainerScreenMixin {
                 )
         );
 
-        callback.setReturnValue(true);
+        return true;
     }
-
 }

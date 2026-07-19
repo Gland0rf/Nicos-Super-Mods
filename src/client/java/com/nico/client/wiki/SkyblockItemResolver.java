@@ -1,6 +1,7 @@
 package com.nico.client.wiki;
 
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 
@@ -17,30 +18,52 @@ public final class SkyblockItemResolver {
         }
 
         String internalId = readInternalId(stack);
-        String displayName = cleanDisplayName(stack.getHoverName().getString());
+        String modifier = readModifier(stack);
+
+        String displayName = cleanDisplayName(
+                stack.getHoverName().getString(),
+                modifier
+        );
+
         return new ItemIdentity(internalId, displayName);
     }
 
+    private static String readModifier(ItemStack stack) {
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        if (customData == null) {
+            return "";
+        }
+
+        CompoundTag data = customData.copyTag();
+
+        String directModifier = data.getString("modifier").orElse("").trim();
+        if (!directModifier.isBlank()) {
+            return directModifier;
+        }
+
+        return data.getCompound("ExtraAttributes")
+                .flatMap(extra -> extra.getString("modifier"))
+                .orElse("")
+                .trim();
+    }
+
     private static String readInternalId(ItemStack stack) {
-        // Minecraft 26.1 / modern item components.
-        try {
-            CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-            if (customData != null) {
-                String id = readIdFromCustomDataRoot(customData.copyTag());
-                if (!id.isBlank()) {
-                    return id;
-                }
-            }
-        } catch (RuntimeException | LinkageError ignored) {
-            // Keep the reflection compatibility path below for older mappings/stacks.
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        if (customData == null) {
+            return "";
         }
 
-        String legacy = readIdFromCustomDataRoot(tryLegacyTag(stack));
-        if (!legacy.isBlank()) {
-            return legacy;
+        CompoundTag data = customData.copyTag();
+
+        String directId = data.getString("id").orElse("").trim();
+        if (!directId.isBlank()) {
+            return directId;
         }
 
-        return readIdFromCustomDataRoot(tryCustomDataReflectively(stack));
+        return data.getCompound("ExtraAttributes")
+                .flatMap(extra -> extra.getString("id"))
+                .orElse("")
+                .trim();
     }
 
     private static String readIdFromCustomDataRoot(Object rootTag) {
@@ -159,17 +182,56 @@ public final class SkyblockItemResolver {
         return value instanceof Optional<?> optional ? optional.orElse(null) : value;
     }
 
-    private static String cleanDisplayName(String input) {
+    private static String cleanDisplayName(String input, String modifier) {
         if (input == null || input.isBlank()) {
             return "";
         }
 
-        return input
+        String cleaned = input
                 .replaceAll("(?i)\\u00a7[0-9A-FK-ORX]", "")
                 .replaceAll("[\\u278A-\\u2793\\u272A\\u2726\\u2605\\u2606]+", "")
                 .replaceFirst("(?i)^\\s*\\[\\s*Lvl\\s+\\d+\\s*]\\s*", "")
                 .replaceAll("\\s+", " ")
                 .trim();
+
+        String reforgePrefix = formatModifier(modifier);
+        if (!reforgePrefix.isBlank()) {
+            cleaned = cleaned.replaceFirst(
+                    "(?i)^" + java.util.regex.Pattern.quote(reforgePrefix) + "\\s+",
+                    ""
+            );
+        }
+
+        return cleaned.trim();
+    }
+
+    private static String formatModifier(String modifier) {
+        if (modifier == null || modifier.isBlank()) {
+            return "";
+        }
+
+        String normalized = modifier
+                .trim()
+                .toLowerCase(java.util.Locale.ROOT)
+                .replaceFirst("_(sword|bow)$", "")
+                .replace('_', ' ');
+
+        StringBuilder result = new StringBuilder();
+
+        for (String word : normalized.split("\\s+")) {
+            if (word.isBlank()) {
+                continue;
+            }
+
+            if (result.length() > 0) {
+                result.append(' ');
+            }
+
+            result.append(Character.toUpperCase(word.charAt(0)))
+                    .append(word.substring(1));
+        }
+
+        return result.toString();
     }
 
     public record ItemIdentity(String internalId, String displayName) {

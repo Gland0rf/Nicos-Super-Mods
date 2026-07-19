@@ -57,7 +57,6 @@ final class ConnectionPingTracker {
             return;
         }
 
-        // The server echoes this exact value in the pong packet.
         long token = now;
         pendingToken = token;
         pendingSinceNanos = now;
