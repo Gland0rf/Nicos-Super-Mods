@@ -35,11 +35,15 @@ public abstract class AbstractContainerScreenMixin {
     ) {
         CategoryOther config = NsmConfig.INSTANCE.other;
 
+        if (!config.wiki.wikiShortcutEnabled) {
+            return;
+        }
+
         if (!event.hasControlDownWithQuirk()) {
             return;
         }
 
-        if (event.input() != config.wikiShortcut) {
+        if (event.input() != config.wiki.wikiShortcut) {
             return;
         }
 
@@ -60,11 +64,15 @@ public abstract class AbstractContainerScreenMixin {
     ) {
         CategoryOther config = NsmConfig.INSTANCE.other;
 
+        if (!config.wiki.wikiShortcutEnabled) {
+            return;
+        }
+
         if (!event.hasControlDownWithQuirk()) {
             return;
         }
 
-        if (event.input() != config.wikiShortcut) {
+        if (event.input() != config.wiki.wikiShortcut) {
             return;
         }
 
