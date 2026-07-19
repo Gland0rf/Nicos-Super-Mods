@@ -54,11 +54,8 @@ HUD positions and scales are saved automatically.
 
 ## Requirements
 
-### For players
-
 - **Mod loader:** Fabric Loader
-- **Required mods:** Fabric API, Odin
-- **Java:** 21
+- **Required mods:** Fabric API, Fabric Language Kotlin, Odin, ModMenu
 
 ## Configuration
 
