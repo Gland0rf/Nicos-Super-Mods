@@ -35,10 +35,6 @@ public class LagMonitorService {
 
     public synchronized void configure(LagMonitorConfig config) {
         this.config = config == null ? new LagMonitorConfig() : config;
-        debug("Configured: enabled=" + this.config.enabled
-                + ", onlyOnHypixel=" + this.config.onlyOnHypixel
-                + ", showDungeonSummary=" + this.config.showDungeonSummary
-                + ", debugLogging=" + this.config.debugLogging);
     }
 
     public LagMonitorConfig config() {
@@ -104,15 +100,11 @@ public class LagMonitorService {
         dungeonRunActive = false;
         snapshot = LagSnapshot.inactive();
         pendingSummaryTicks = -1;
-        debug("Disconnected; cleared active dungeon tracking");
     }
 
     public synchronized void onDungeonRunStart() {
         Minecraft client = Minecraft.getInstance();
         long nowNanos = System.nanoTime();
-
-        debug("Chat start requested: alreadyActive=" + dungeonRunActive
-                + ", statsPresent=" + (dungeonStats != null));
 
         if (!config.enabled || dungeonRunActive) {
             return;
@@ -120,8 +112,6 @@ public class LagMonitorService {
 
         dungeonStats = new LagSessionStats(nowNanos);
         dungeonRunActive = true;
-        pingTracker.reset();
-        tpsEstimator.reset();
         lastDebugHeartbeatNanos = 0L;
 
         int cachedPing = connectionPingTracker.latest();
@@ -134,9 +124,6 @@ public class LagMonitorService {
                 client,
                 config.tcpPingTimeoutMillis
         );
-
-        System.out.println("[NSM Lag] Dungeon lag tracking started from chat"
-                + " (cachedPlayPing=" + (cachedPing < 0 ? "N/A" : cachedPing + "ms") + ")");
     }
 
     private synchronized void onConnectionPingSample(int pingMillis) {
@@ -148,16 +135,14 @@ public class LagMonitorService {
         if (dungeonRunActive && dungeonStats != null) {
             dungeonStats.recordPingSample(pingMillis, pingTracker.jitter());
         }
-
-        debug("Active-connection ping sample=" + pingMillis + "ms, active=" + dungeonRunActive);
     }
 
     public synchronized void onDungeonRunEnd(Minecraft client) {
-        debug("End requested: active=" + dungeonRunActive
-                + ", statsPresent=" + (dungeonStats != null));
+        if (!dungeonRunActive) {
+            return;
+        }
 
         if (!dungeonRunActive || dungeonStats == null) {
-            System.out.println("[NSM Lag] Dungeon end ignored: no active tracked run");
             return;
         }
 
@@ -169,24 +154,11 @@ public class LagMonitorService {
 
         LagSessionSummary completedSummary = dungeonStats.finish(System.nanoTime(), config);
 
-        debug("Final sample counts: ping=" + dungeonStats.pingSampleCount()
-                + ", serverTickPackets=" + tpsEstimator.totalServerTicks()
-                + ", packetTpsSeconds=" + dungeonStats.packetTpsSampleSeconds());
-
         lastSummary = completedSummary;
         dungeonStats = null;
         dungeonRunActive = false;
-        tpsEstimator.reset();
 
-        System.out.println("[NSM Lag] Dungeon lag tracking finished");
-        debug("Summary values: duration=" + completedSummary.sessionSeconds()
-                + "s, avgTps=" + completedSummary.averageTps()
-                + ", avgPing=" + completedSummary.averagePingMillis()
-                + "ms, tpsLoss=" + completedSummary.estimatedServerDelaySeconds()
-                + "s, pingLoss=" + completedSummary.estimatedPingDelaySeconds()
-                + "s, stalls=" + completedSummary.networkStallSeconds() + "s");
-
-        if (config.showDungeonSummary) {
+        if (config.showEndReport) {
             sendSummary(client, completedSummary);
         }
         if (config.copyTpsLossToClipboard) {
@@ -195,11 +167,12 @@ public class LagMonitorService {
     }
 
     public synchronized void onDungeonRunAbort() {
-        debug("Abort requested: active=" + dungeonRunActive
-                + ", statsPresent=" + (dungeonStats != null));
+        if (!dungeonRunActive) {
+            return;
+        }
+
         dungeonStats = null;
         dungeonRunActive = false;
-        tpsEstimator.reset();
     }
 
     public synchronized void tick(Minecraft client) {
@@ -214,13 +187,17 @@ public class LagMonitorService {
         boolean connected = client.player != null
                 && client.level != null
                 && client.getConnection() != null;
-        boolean allowedServer = !config.onlyOnHypixel || HypixelServerDetector.isHypixel(client);
+        boolean allowedServer = HypixelServerDetector.isHypixel(client);
         // Once a chat message has positively identified a dungeon run, do not
         // disable sampling merely because getCurrentServer() exposes a proxy or
         // non-Hypixel hostname. That gate previously allowed ping callbacks but
         // prevented tick-based TPS and loss accumulation.
+        boolean correctContext =
+                !config.onlyShowInDungeons || dungeonRunActive;
+
         boolean active = config.enabled
                 && connected
+                && correctContext
                 && (dungeonRunActive || allowedServer);
 
         if (!active) {
@@ -228,13 +205,11 @@ public class LagMonitorService {
             return;
         }
 
-        if (dungeonRunActive) {
-            connectionPingTracker.tick(
-                    client,
-                    config.tcpPingSampleIntervalSeconds,
-                    config.tcpPingTimeoutMillis
-            );
-        }
+        connectionPingTracker.tick(
+                client,
+                config.tcpPingSampleIntervalSeconds,
+                config.tcpPingTimeoutMillis
+        );
 
         double tps = tpsEstimator.currentTps(now, config.tpsSampleStaleSeconds);
         int ping = pingTracker.latest();
@@ -285,17 +260,6 @@ public class LagMonitorService {
         if (config.debugLogging && dungeonRunActive
                 && now - lastDebugHeartbeatNanos >= 5_000_000_000L) {
             lastDebugHeartbeatNanos = now;
-            debug("Heartbeat: serverTickTps="
-                    + (Double.isFinite(tps)
-                    ? String.format(java.util.Locale.US, "%.2f", tps)
-                    : "N/A")
-                    + ", playPing=" + ping
-                    + ", pingSamples=" + (dungeonStats == null ? 0 : dungeonStats.pingSampleCount())
-                    + ", serverTickPackets=" + tpsEstimator.totalServerTicks()
-                    + ", tickWindowSamples=" + tpsEstimator.windowSampleCount()
-                    + ", packetTpsSeconds="
-                    + (dungeonStats == null ? 0.0D : dungeonStats.packetTpsSampleSeconds())
-                    + ", packetGap=" + packetGapMillis + "ms");
         }
 
         titleNotifier.tick(client, next, config, now);

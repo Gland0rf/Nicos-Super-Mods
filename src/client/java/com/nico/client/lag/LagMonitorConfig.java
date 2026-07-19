@@ -18,13 +18,13 @@ public class LagMonitorConfig {
             .resolve("nsm-lag-monitor.json");
 
     public boolean enabled = true;
-    public boolean onlyOnHypixel = true;
     public boolean showHud = true;
     public boolean showTitles = true;
-    public boolean showDungeonSummary = true;
+    public boolean showEndReport = true;
     public boolean copyTpsLossToClipboard = true;
     public boolean debugLogging = true;
     public boolean showPreviousSummaryAfterJoin = true;
+    public boolean onlyShowInDungeons = true;
 
     public int warmupSeconds = 6;
     public int pingSampleIntervalTicks = 20;
@@ -114,8 +114,10 @@ public class LagMonitorConfig {
         }
 
         enabled = settings.enabled;
+        onlyShowInDungeons = settings.onlyShowInDungeons;
+        showHud = settings.showHud;
         showTitles = settings.showTitles;
-        showDungeonSummary = settings.showEndReport;
+        showEndReport = settings.showEndReport;
         copyTpsLossToClipboard = settings.copyTpsLossToClipboard;
     }
 

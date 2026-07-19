@@ -181,6 +181,25 @@ public class CategoryDungeons {
         public boolean enabled = true;
 
         @ConfigOption(
+                name = "Show HUD",
+                desc = "Displays TPS, ping, jitter, and the current lag diagnosis."
+        )
+        @ConfigEditorBoolean
+        public boolean showHud = true;
+
+        @ConfigOption(
+                name = "Only Show in Dungeons",
+                desc = """
+                    Only displays and samples the lag monitor during dungeon runs.
+
+                    When disabled, the monitor remains active outside dungeons
+                    and displays TPS, ping, and jitter everywhere.
+                    """
+        )
+        @ConfigEditorBoolean
+        public boolean onlyShowInDungeons = false;
+
+        @ConfigOption(
                 name = "Show Warning Titles",
                 desc = "Shows title alerts for low TPS, high ping, and connection stalls."
         )

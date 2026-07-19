@@ -39,7 +39,7 @@ final class LagMonitorHud {
         LagMonitorConfig config = service.config();
         LagSnapshot snapshot = service.snapshot();
 
-        if (!config.showHud || !snapshot.active()) {
+        if (!config.showHud || !snapshot.active() || (config.onlyShowInDungeons && !service.isDungeonRunActive())) {
             return;
         }
 
