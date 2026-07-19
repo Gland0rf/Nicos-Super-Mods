@@ -83,9 +83,6 @@ public class OdinRoomBridge {
             int dx = Math.abs(doorX - roomX);
             int dz = Math.abs(doorZ - roomZ);
 
-            // Door positions sit between room tiles.
-            // Depending on orientation, they are usually 16 blocks away on one axis
-            // and aligned on the other.
             boolean northSouthDoor = dx == 0 && dz == 16;
             boolean eastWestDoor = dz == 0 && dx == 16;
 

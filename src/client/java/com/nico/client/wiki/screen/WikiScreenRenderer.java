@@ -38,7 +38,6 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         renderHeader(graphics);
         renderBody(graphics);
 
-        // Widgets (toolbar buttons and edit boxes) render above the custom page background.
         super.render(graphics, mouseX, mouseY, partialTick);
 
         renderSearchSuggestions(graphics);

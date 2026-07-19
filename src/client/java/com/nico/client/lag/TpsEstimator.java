@@ -24,7 +24,6 @@ public final class TpsEstimator {
             return;
         }
 
-        // Prevent duplicate processing if another hook forwards the same packet.
         if (lastServerTickNanos != 0L && nowNanos <= lastServerTickNanos) {
             return;
         }
@@ -61,8 +60,6 @@ public final class TpsEstimator {
             return;
         }
 
-        // The window already smooths heavily. This small EMA removes remaining
-        // display flicker without hiding a sustained TPS drop.
         smoothedTps = Double.isFinite(smoothedTps)
                 ? smoothedTps * 0.70D + rawTps * 0.30D
                 : rawTps;

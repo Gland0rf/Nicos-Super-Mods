@@ -36,7 +36,6 @@ public final class DungeonRunPacketDetector {
             );
         }
 
-        // The start signal must come from chat, not an action bar/title.
         if (packet instanceof ClientboundSystemChatPacket && isDungeonStart(text)) {
             System.out.println("[NSM Lag][Detector] START matched: " + text);
             service.onDungeonRunStart();

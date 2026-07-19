@@ -80,7 +80,7 @@ final class TcpPingTracker {
                 );
                 latestMillis = result;
             } catch (Exception ignored) {
-                // Keep the last successful value. The next interval retries.
+
             } finally {
                 inFlight.set(false);
                 if (result >= 0 && callback != null) {

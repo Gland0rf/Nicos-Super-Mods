@@ -335,7 +335,7 @@ public final class SecretPacketHooks {
                 return uuid;
             }
         } catch (ReflectiveOperationException ignored) {
-            // Different Minecraft versions expose skull profiles differently.
+
         }
 
         return null;
@@ -350,7 +350,7 @@ public final class SecretPacketHooks {
                 return gameProfile.id();
             }
         } catch (ReflectiveOperationException ignored) {
-            // Different Minecraft versions expose skull profiles differently.
+
         }
 
         return null;

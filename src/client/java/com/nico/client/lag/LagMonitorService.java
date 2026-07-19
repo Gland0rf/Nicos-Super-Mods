@@ -57,9 +57,6 @@ public class LagMonitorService {
         long now = System.nanoTime();
         lastInboundPacketNanos = now;
 
-        // Same server-tick signal used by Odin: Hypixel sends a non-zero
-        // ClientboundPingPacket once per server tick. This is independent of
-        // dungeon timers, scoreboard text, and ClientboundSetTimePacket.
         if (packet instanceof ClientboundPingPacket pingPacket
                 && pingPacket.getId() != 0) {
             tpsEstimator.onServerTick(now);
@@ -188,10 +185,6 @@ public class LagMonitorService {
                 && client.level != null
                 && client.getConnection() != null;
         boolean allowedServer = HypixelServerDetector.isHypixel(client);
-        // Once a chat message has positively identified a dungeon run, do not
-        // disable sampling merely because getCurrentServer() exposes a proxy or
-        // non-Hypixel hostname. That gate previously allowed ping callbacks but
-        // prevented tick-based TPS and loss accumulation.
         boolean correctContext =
                 !config.onlyShowInDungeons || dungeonRunActive;
 

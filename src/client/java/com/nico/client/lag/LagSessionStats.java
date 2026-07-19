@@ -34,8 +34,6 @@ public class LagSessionStats {
     private boolean wasHighPing;
     private boolean wasStalled;
 
-    // Tab timer fallback. Hypixel does not always provide usable time-update
-    // packets, so derive effective TPS from server timer progress vs wall time.
     private int firstTimerSeconds = -1;
     private int lastTimerSeconds = -1;
     private long firstTimerNanos;
@@ -119,8 +117,6 @@ public class LagSessionStats {
             return;
         }
 
-        // Do not use the connection warm-up flag here. The dungeon timer itself
-        // defines the beginning of this session.
         double dt = Math.max(0.0D, Math.min(0.25D, intervalSeconds));
         totalTrackedSeconds += dt;
 
@@ -224,9 +220,6 @@ public class LagSessionStats {
         boolean hasTimerSpan = timerWallSpan >= 0.20D && timerServerSpan > 0.0D;
         boolean hasTimerTps = timerTpsWeightSeconds > 0.0D || hasTimerSpan;
 
-        // Prefer the per-change weighted result, but a first/last timer span is
-        // enough to provide an effective TPS even if some intermediate tab
-        // packets were coalesced or missed.
         double timerAverageTps = timerTpsWeightSeconds > 0.0D
                 ? timerWeightedTpsTotal / timerTpsWeightSeconds
                 : hasTimerSpan
@@ -259,7 +252,6 @@ public class LagSessionStats {
         int finalDropCount = tpsDropCount;
 
         if (!usePacketTps && hasTimerSpan) {
-            // Allow for the one-second display quantization before calling it lag.
             finalServerDelay = Math.max(0.0D, timerWallSpan - timerServerSpan - 0.75D);
             finalBelow15 = timerSecondsBelow15;
             finalBelow10 = timerSecondsBelow10;
@@ -273,9 +265,6 @@ public class LagSessionStats {
                 ? jitterTotal / jitterCount
                 : Double.NaN;
 
-        // A ping sample can arrive late in a run. Estimate the whole-run impact
-        // from the observed average so the result does not stay at 0.0 merely
-        // because there were few tick intervals after the first pong.
         double finalPingDelay = estimatedPingDelaySeconds;
         if (Double.isFinite(averagePing) && config != null) {
             double excessRoundTripSeconds = Math.max(

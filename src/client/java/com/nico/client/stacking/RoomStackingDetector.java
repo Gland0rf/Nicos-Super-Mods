@@ -100,7 +100,7 @@ public class RoomStackingDetector {
             return true;
         }
 
-        if (players == null || players.size() < 2) { // CHANGE THIS AFTER
+        if (players == null || players.size() < 2) {
             return true;
         }
 
