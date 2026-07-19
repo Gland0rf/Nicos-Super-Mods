@@ -15,7 +15,7 @@ public class CategoryOther {
 
     public static class IntegratedWiki {
         @ConfigOption(
-                name = "Enable Wiki Shortcut",
+                name = "Enable",
                 desc = "Allows opening the Wiki from inventory items."
         )
         @ConfigEditorBoolean
