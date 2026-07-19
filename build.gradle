@@ -25,6 +25,14 @@ repositories {
 		name = "NotEnoughUpdates"
 		url = "https://maven.notenoughupdates.org/releases/"
 	}
+
+	maven {
+		name = "Modrinth"
+		url = uri("https://api.modrinth.com/maven")
+		content {
+			includeGroup "maven.modrinth"
+		}
+	}
 }
 
 loom {
