@@ -69,7 +69,7 @@ dependencies {
 	implementation "org.jsoup:jsoup:1.18.3"
 	include "org.jsoup:jsoup:1.18.3"
 
-	modClientImplementation "com.terraformersmc:modmenu:${project.modmenu_version}"
+	modClientImplementation "maven.modrinth:modmenu:${project.modmenu_version}"
 
 	modClientImplementation include("org.notenoughupdates.moulconfig:modern-1.21.11:4.7.2")
 
