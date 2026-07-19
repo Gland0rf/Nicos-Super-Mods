@@ -65,7 +65,7 @@ dependencies {
 
 	modClientImplementation include("org.notenoughupdates.moulconfig:modern-1.21.11:4.7.2")
 
-	modCompileOnly files("libs/odin.jar")
+	modCompileOnly "maven.modrinth:odin:0.2.1"
 }
 
 processResources {
