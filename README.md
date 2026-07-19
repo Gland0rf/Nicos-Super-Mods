@@ -15,6 +15,7 @@ The goal of NSM is to fill niche gaps in Hypixel SkyBlock by providing high-qual
 - **Lag Monitor**
 
 ### Hypixel Wiki browser
+> THIS FEATURE IS CURRENTLY UNAVAILABLE!
 
 NSM contains an in-game browser for the Hypixel SkyBlock Wiki, so you don't have to open up your external browser every single time.
 
