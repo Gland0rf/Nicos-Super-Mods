@@ -98,3 +98,5 @@ local.properties
 *apikey*
 *api-key*
 *token*
+
+*.py
