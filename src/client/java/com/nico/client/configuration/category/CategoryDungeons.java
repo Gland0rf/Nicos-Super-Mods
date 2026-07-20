@@ -63,6 +63,13 @@ public class CategoryDungeons {
         public boolean showOtherStackingChatAlert = true;
 
         @ConfigOption(
+                name = "Copy message to clipboard",
+                desc = "Copies the displayed title or chat message to you clipboard."
+        )
+        @ConfigEditorBoolean
+        public boolean copyStackingMessageToClipboard = true;
+
+        @ConfigOption(
                 name = "Alert Sounds",
                 desc = "Plays a sound when stacking is detected."
         )

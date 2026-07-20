@@ -310,6 +310,8 @@ public class RoomStackingDetector {
                  );
              }
 
+             copyStackingMessageToClipboard("[NSM] Stacking with " + otherNames);
+
              if (NsmConfig.INSTANCE.dungeons.roomStacking.playAlertSounds) {
                  mc.player.playSound(
                          SoundEvents.BELL_BLOCK,
@@ -322,11 +324,13 @@ public class RoomStackingDetector {
                  mc.player.displayClientMessage(
                          Component.literal("[NSM] ")
                                  .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
-                                 .append(Component.literal(allNames + " are stacking in " + roomName + ".")
+                                 .append(Component.literal(allNames + " are stacking in " + roomName + "!")
                                          .withStyle(ChatFormatting.RED)),
                          false
                  );
              }
+
+             copyStackingMessageToClipboard("[NSM] " + allNames + " are stacking in " + roomName + "!");
 
              if (NsmConfig.INSTANCE.dungeons.roomStacking.playAlertSounds) {
                  mc.player.playSound(
@@ -425,6 +429,20 @@ public class RoomStackingDetector {
         name = name.toLowerCase(Locale.ROOT);
 
         return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+    }
+
+    private static void copyStackingMessageToClipboard(String message) {
+        if (!NsmConfig.INSTANCE.dungeons.roomStacking.copyStackingMessageToClipboard) {
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+
+        if (mc.keyboardHandler == null || message == null || message.isBlank()) {
+            return;
+        }
+
+        mc.keyboardHandler.setClipboard(message);
     }
 
     private static final class RoomStackState {
