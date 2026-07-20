@@ -29,20 +29,12 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Strict parser for the current community Hypixel SkyBlock Wiki markup.
- * It does not score arbitrary elements and it does not infer widget types from descendant text.
- */
 public final class HypixelWikiService extends WikiArticleParser {
     private static final Map<String, CompletableFuture<WikiPage>> CACHE = new ConcurrentHashMap<>();
     private static volatile BazaarService bazaarService;
 
     private HypixelWikiService() { }
 
-    /**
-     * Optional Bazaar integration. Call this once after constructing your HypixelApiClient.
-     * Passing null disables live Bazaar enrichment.
-     */
     public static void setBazaarService(BazaarService service) {
         bazaarService = service;
         CACHE.clear();
@@ -88,7 +80,6 @@ public final class HypixelWikiService extends WikiArticleParser {
     }
 
 
-    /** Resolves a browser search/address query. Internal IDs such as ASPECT_OF_THE_END are supported. */
     public static CompletableFuture<WikiPage> findPageQuery(String rawQuery) {
         String query = rawQuery == null ? "" : rawQuery.trim();
         if (query.isBlank()) {
@@ -117,10 +108,6 @@ public final class HypixelWikiService extends WikiArticleParser {
         return WikiTitleResolver.searchTitles(query, limit);
     }
 
-    /**
-     * Loads an exact article URL from the community Wiki. This is used by the
-     * in-game browser tabs when a rendered article link is clicked.
-     */
     public static CompletableFuture<WikiPage> findPage(URI articleUri) {
         String title = articleTitleFromUri(articleUri);
         String key = "wiki:" + title.toLowerCase(Locale.ROOT);
