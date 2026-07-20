@@ -139,7 +139,7 @@ final class LagMonitorHud {
                 ? Math.round(snapshot.jitterMillis()) + " ms"
                 : "--";
 
-        lines.add("[NSM] Dungeon Lag");
+        lines.add("Lag Monitor");
         lines.add("TPS     " + tps);
         lines.add("Ping    " + ping);
         lines.add("Jitter  " + jitter);

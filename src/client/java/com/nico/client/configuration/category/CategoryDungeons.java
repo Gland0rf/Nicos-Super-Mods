@@ -33,7 +33,7 @@ public class CategoryDungeons {
     public GoldorTerminal goldorTerminal = new GoldorTerminal();*/
 
     @ConfigOption(
-            name = "Dungeon Lag Monitor",
+            name = "Lag Monitor",
             desc = "Tracks TPS, ping, and estimated time lost during dungeon runs."
     )
     @Accordion
