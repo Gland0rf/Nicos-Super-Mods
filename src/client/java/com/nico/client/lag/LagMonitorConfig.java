@@ -15,6 +15,7 @@ public class LagMonitorConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path PATH = FabricLoader.getInstance()
             .getConfigDir()
+            .resolve("nicos_super_mods")
             .resolve("nsm-lag-monitor.json");
 
     public boolean enabled = true;
