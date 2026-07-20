@@ -45,7 +45,7 @@ public class HudLayoutManager {
 
         HudElement lagMonitor = new HudElement(
                 LAG_MONITOR,
-                "Lag Monitor",
+                "alright, please Lag Monitor",
                 12,
                 72
         );
