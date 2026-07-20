@@ -23,7 +23,6 @@ public class LagMonitorService {
     private long joinedNanos;
     private long lastTickNanos;
     private int clientTicks;
-    private int pendingSummaryTicks = -1;
     private long lastDebugHeartbeatNanos;
 
     private LagMonitorService() {
@@ -83,10 +82,6 @@ public class LagMonitorService {
         dungeonStats = null;
         dungeonRunActive = false;
         snapshot = LagSnapshot.inactive();
-
-        pendingSummaryTicks = lastSummary != null && config.showPreviousSummaryAfterJoin
-                ? 40
-                : -1;
     }
 
     public synchronized void onDisconnect() {
@@ -96,7 +91,6 @@ public class LagMonitorService {
         dungeonStats = null;
         dungeonRunActive = false;
         snapshot = LagSnapshot.inactive();
-        pendingSummaryTicks = -1;
     }
 
     public synchronized void onDungeonRunStart() {
@@ -256,7 +250,6 @@ public class LagMonitorService {
         }
 
         titleNotifier.tick(client, next, config, now);
-        tickPendingSummary(client);
     }
 
     private LagDiagnosis diagnose(
@@ -329,16 +322,5 @@ public class LagMonitorService {
         if (config != null && config.debugLogging) {
             System.out.println("[NSM Lag][Debug] " + message);
         }
-    }
-
-    private void tickPendingSummary(Minecraft client) {
-        if (pendingSummaryTicks < 0 || lastSummary == null) {
-            return;
-        }
-        if (pendingSummaryTicks-- > 0) {
-            return;
-        }
-        sendSummary(client, lastSummary);
-        pendingSummaryTicks = -1;
     }
 }

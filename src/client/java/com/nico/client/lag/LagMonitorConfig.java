@@ -23,7 +23,6 @@ public class LagMonitorConfig {
     public boolean showEndReport = true;
     public boolean copyTpsLossToClipboard = true;
     public boolean debugLogging = true;
-    public boolean showPreviousSummaryAfterJoin = true;
     public boolean onlyShowInDungeons = true;
 
     public int warmupSeconds = 6;
