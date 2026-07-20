@@ -79,8 +79,6 @@ public class RoomStackingDetector {
                     ignored -> new RoomStackState()
             );
 
-            mc.player.displayClientMessage(Component.literal(state.score + " score"), false);
-
             updateRoomScore(state, roomName, players, globalSecretDelta, now);
 
             if (state.score > ALERT_THRESHOLD) {
