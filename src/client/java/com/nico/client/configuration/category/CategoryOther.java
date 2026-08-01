@@ -18,9 +18,16 @@ public class CategoryOther {
             desc = "Open up the skyblock wiki inside minecraft, so you don't have to tab out all the time."
     )
     @Accordion
-    public IntegratedWiki wiki = new IntegratedWiki();
+    public IntegratedWiki wiki = new IntegratedWiki();*/
 
-    public static class IntegratedWiki {
+    @ConfigOption(
+            name = "Heart Rate HUD",
+            desc = "Displays your live Heart Rate on the HUD, via Pulsoid."
+    )
+    @Accordion
+    public HeartRateHud heartRateHud = new HeartRateHud();
+
+    /*public static class IntegratedWiki {
         @ConfigOption(
                 name = "Enable",
                 desc = "Allows opening the Wiki from inventory items."
@@ -64,6 +71,42 @@ public class CategoryOther {
         )
         @ConfigEditorBoolean
         public boolean matchStackCounts = false;
+    }
+
+    public static class HeartRateHud {
+
+        @ConfigOption(
+                name = "Enable",
+                desc = "Displays your live Heart Rate on the HUD, via Pulsoid."
+        )
+        @ConfigEditorBoolean
+        public boolean enabled = false;
+
+        @ConfigOption(
+                name = "Reconnect Pulsoid",
+                desc = "Reconnect using the currently saved Pulsoid login."
+        )
+        @ConfigEditorButton(buttonText = "Reconnect")
+        public Runnable reconnect = HeartRateFeature::reconnect;
+
+        @ConfigOption(
+                name = "Reset Pulsoid Login",
+                desc = "Forget the saved Pulsoid token and open a new authorization page."
+        )
+        @ConfigEditorButton(buttonText = "Reset Login")
+        public Runnable resetLogin = HeartRateFeature::resetAuthorization;
+
+        @ConfigOption(
+                name = "High BPM Threshold",
+                desc = "BPM values at or above this number use the darker warning colour."
+        )
+        @ConfigEditorSlider(
+                minValue = 60,
+                maxValue = 220,
+                minStep = 1
+        )
+        public int highBpmThreshold = 120;
+
     }
 
 }

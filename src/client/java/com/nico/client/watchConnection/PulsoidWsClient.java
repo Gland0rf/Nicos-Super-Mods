@@ -29,6 +29,7 @@ public class PulsoidWsClient implements WebSocket.Listener {
     private volatile boolean connecting;
     private volatile long nextReconnectAt;
     private volatile int reconnectAttempts;
+    private volatile boolean desiredConnected;
 
     public PulsoidWsClient(
             String accessToken,
@@ -64,10 +65,13 @@ public class PulsoidWsClient implements WebSocket.Listener {
 
         String token = accessToken;
         if (token.isBlank()) {
+            desiredConnected = false;
             state.setConnected(false);
             state.setStatus("Pulsoid authorization required");
             return;
         }
+
+        desiredConnected = true;
 
         connecting = true;
         reconnectNeeded = false;
@@ -105,14 +109,37 @@ public class PulsoidWsClient implements WebSocket.Listener {
                 });
     }
 
+    public void disconnect() {
+        desiredConnected = false;
+        reconnectNeeded = false;
+        connecting = false;
+        reconnectAttempts = 0;
+        nextReconnectAt = 0L;
+
+        WebSocket current = webSocket;
+        webSocket = null;
+
+        if (current != null) {
+            current.abort();
+        }
+
+        state.setConnected(false);
+    }
+
     public boolean shouldReconnect() {
-        return reconnectNeeded
+        return desiredConnected
+                && reconnectNeeded
                 && !connecting
+                && webSocket == null
                 && !accessToken.isBlank()
                 && System.currentTimeMillis() >= nextReconnectAt;
     }
 
     public void reconnect() {
+        if (!desiredConnected) {
+            return;
+        }
+
         connect();
     }
 
@@ -203,6 +230,10 @@ public class PulsoidWsClient implements WebSocket.Listener {
     }
 
     private void scheduleReconnect() {
+        if (!desiredConnected) {
+            return;
+        }
+
         long multiplier = 1L << Math.min(reconnectAttempts, 5);
         long delay = Math.min(
                 MAX_RECONNECT_DELAY_MS,

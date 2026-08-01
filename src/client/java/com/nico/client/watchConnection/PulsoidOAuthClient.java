@@ -15,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class PulsoidOAuthClient {
     private static final URI DEVICE_AUTHORIZATION_URI =
@@ -28,6 +29,7 @@ public final class PulsoidOAuthClient {
     private final HttpClient httpClient;
     private final String clientId;
     private final AtomicBoolean authorizing = new AtomicBoolean(false);
+    private final AtomicLong authorizationAttempt = new AtomicLong(0L);
 
     public PulsoidOAuthClient(String clientId) {
         this.clientId = clientId == null ? "" : clientId.trim();
@@ -38,6 +40,11 @@ public final class PulsoidOAuthClient {
 
     public boolean isAuthorizing() {
         return authorizing.get();
+    }
+
+    public void cancelAuthorization() {
+        authorizing.set(false);
+        authorizationAttempt.incrementAndGet();
     }
 
     public void authorize(Listener listener) {
@@ -54,6 +61,7 @@ public final class PulsoidOAuthClient {
             return;
         }
 
+        long attempt = authorizationAttempt.incrementAndGet();
         listener.onStatus("Starting Pulsoid authorization...");
 
         HttpRequest request = formRequest(
@@ -64,8 +72,13 @@ public final class PulsoidOAuthClient {
 
         httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .whenComplete((response, throwable) -> {
+                    if (!isActive(attempt)) {
+                        return;
+                    }
+
                     if (throwable != null) {
                         fail(
+                                attempt,
                                 listener,
                                 "Could not start Pulsoid authorization.",
                                 unwrap(throwable)
@@ -105,6 +118,7 @@ public final class PulsoidOAuthClient {
                         );
 
                         pollForToken(
+                                attempt,
                                 deviceCode,
                                 interval,
                                 deadline,
@@ -112,6 +126,7 @@ public final class PulsoidOAuthClient {
                         );
                     } catch (Exception exception) {
                         fail(
+                                attempt,
                                 listener,
                                 "Pulsoid returned an invalid authorization response.",
                                 exception
@@ -121,17 +136,23 @@ public final class PulsoidOAuthClient {
     }
 
     private void pollForToken(
+            long attempt,
             String deviceCode,
             int intervalSeconds,
             long deadline,
             Listener listener
     ) {
-        if (!authorizing.get()) {
+        if (!isActive(attempt)) {
             return;
         }
 
         if (System.currentTimeMillis() >= deadline) {
-            fail(listener, "Pulsoid authorization expired.", null);
+            fail(
+                    attempt,
+                    listener,
+                    "Pulsoid authorization expired.",
+                    null
+            );
             return;
         }
 
@@ -139,6 +160,7 @@ public final class PulsoidOAuthClient {
                 intervalSeconds,
                 TimeUnit.SECONDS
         ).execute(() -> requestToken(
+                attempt,
                 deviceCode,
                 intervalSeconds,
                 deadline,
@@ -147,11 +169,16 @@ public final class PulsoidOAuthClient {
     }
 
     private void requestToken(
+            long attempt,
             String deviceCode,
             int intervalSeconds,
             long deadline,
             Listener listener
     ) {
+        if (!isActive(attempt)) {
+            return;
+        }
+
         HttpRequest request = formRequest(
                 TOKEN_URI,
                 "grant_type", DEVICE_GRANT_TYPE,
@@ -161,8 +188,13 @@ public final class PulsoidOAuthClient {
 
         httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .whenComplete((response, throwable) -> {
+                    if (!isActive(attempt)) {
+                        return;
+                    }
+
                     if (throwable != null) {
                         fail(
+                                attempt,
                                 listener,
                                 "Could not complete Pulsoid authorization.",
                                 unwrap(throwable)
@@ -183,7 +215,10 @@ public final class PulsoidOAuthClient {
                                     0L
                             );
 
-                            authorizing.set(false);
+                            if (!finish(attempt)) {
+                                return;
+                            }
+
                             listener.onAuthorized(
                                     new AccessToken(token, expiresIn)
                             );
@@ -199,28 +234,33 @@ public final class PulsoidOAuthClient {
 
                         switch (error) {
                             case "authorization_pending" -> pollForToken(
+                                    attempt,
                                     deviceCode,
                                     intervalSeconds,
                                     deadline,
                                     listener
                             );
                             case "slow_down" -> pollForToken(
+                                    attempt,
                                     deviceCode,
                                     intervalSeconds + 5,
                                     deadline,
                                     listener
                             );
                             case "expired_token" -> fail(
+                                    attempt,
                                     listener,
                                     "Pulsoid authorization expired.",
                                     null
                             );
                             case "access_denied" -> fail(
+                                    attempt,
                                     listener,
                                     "Pulsoid authorization was denied.",
                                     null
                             );
                             case "invalid_grant" -> fail(
+                                    attempt,
                                     listener,
                                     description.isBlank()
                                             ? "Pulsoid authorization was not granted."
@@ -228,6 +268,7 @@ public final class PulsoidOAuthClient {
                                     null
                             );
                             default -> fail(
+                                    attempt,
                                     listener,
                                     "Pulsoid token request returned HTTP "
                                             + response.statusCode()
@@ -239,6 +280,7 @@ public final class PulsoidOAuthClient {
                         }
                     } catch (Exception exception) {
                         fail(
+                                attempt,
                                 listener,
                                 "Pulsoid returned an invalid token response.",
                                 exception
@@ -247,12 +289,30 @@ public final class PulsoidOAuthClient {
                 });
     }
 
+    private boolean isActive(long attempt) {
+        return authorizing.get()
+                && authorizationAttempt.get() == attempt;
+    }
+
+    private boolean finish(long attempt) {
+        if (!isActive(attempt)) {
+            return false;
+        }
+
+        authorizing.set(false);
+        return authorizationAttempt.get() == attempt;
+    }
+
     private void fail(
+            long attempt,
             Listener listener,
             String message,
             Throwable throwable
     ) {
-        authorizing.set(false);
+        if (!finish(attempt)) {
+            return;
+        }
+
         listener.onFailure(message, throwable);
     }
 
