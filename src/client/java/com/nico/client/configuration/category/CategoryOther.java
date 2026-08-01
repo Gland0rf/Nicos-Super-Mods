@@ -84,18 +84,12 @@ public class CategoryOther {
         public boolean enabled = false;
 
         @ConfigOption(
-                name = "Reconnect Pulsoid",
-                desc = "Reconnect using the currently saved Pulsoid login."
+                name = "Pulsoid Authorization",
+                desc = "Sends a authorization link for Pulsoid into chat."
         )
-        @ConfigEditorButton(buttonText = "Reconnect")
-        public Runnable reconnect = HeartRateFeature::reconnect;
-
-        @ConfigOption(
-                name = "Reset Pulsoid Login",
-                desc = "Forget the saved Pulsoid token and open a new authorization page."
-        )
-        @ConfigEditorButton(buttonText = "Reset Login")
-        public Runnable resetLogin = HeartRateFeature::resetAuthorization;
+        @ConfigEditorButton(buttonText = "Show Link")
+        public transient Runnable showAuthorizationLink =
+                HeartRateFeature::showAuthorizationLink;
 
         @ConfigOption(
                 name = "High BPM Threshold",
@@ -107,6 +101,22 @@ public class CategoryOther {
                 minStep = 1
         )
         public int highBpmThreshold = 120;
+
+        @ConfigOption(
+                name = "Reconnect Pulsoid",
+                desc = "Reconnect using the currently saved Pulsoid login."
+        )
+        @ConfigEditorButton(buttonText = "Reconnect")
+        public transient Runnable reconnect =
+                HeartRateFeature::reconnect;
+
+        @ConfigOption(
+                name = "Reset Pulsoid Login",
+                desc = "Forget the saved token and authorize Pulsoid again."
+        )
+        @ConfigEditorButton(buttonText = "Reset Login")
+        public transient Runnable resetLogin =
+                HeartRateFeature::resetAuthorization;
 
     }
 
