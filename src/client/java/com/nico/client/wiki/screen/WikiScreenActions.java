@@ -1,49 +1,15 @@
 package com.nico.client.wiki.screen;
 
-import com.nico.client.wiki.WikiBlock;
-import com.nico.client.wiki.WikiBrowserStore;
-import com.nico.client.wiki.WikiContent;
-import com.nico.client.wiki.WikiCraftingGrid;
-import com.nico.client.wiki.WikiImage;
-import com.nico.client.wiki.WikiImageTextureCache;
-import com.nico.client.wiki.WikiInfobox;
-import com.nico.client.wiki.WikiItemSlot;
-import com.nico.client.wiki.WikiPage;
-import com.nico.client.wiki.WikiText;
-import com.nico.client.wiki.WikiTitleResolver;
 import com.nico.client.wiki.service.HypixelWikiService;
-import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.blaze3d.platform.cursor.CursorTypes;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.screens.ConfirmLinkScreen;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.network.chat.ClickEvent;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.network.chat.Style;
-import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 
 import java.net.URI;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Consumer;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 
 /** Find-in-page, bookmarks, context menus, style toggle, and anchor scrolling. */
 abstract class WikiScreenActions extends WikiScreenNavigation {
