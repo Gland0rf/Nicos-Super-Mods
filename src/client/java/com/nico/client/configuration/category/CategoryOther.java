@@ -1,6 +1,7 @@
 package com.nico.client.configuration.category;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.nico.client.watchConnection.HeartRateFeature;
 import io.github.notenoughupdates.moulconfig.annotations.*;
 import org.lwjgl.glfw.GLFW;
 
