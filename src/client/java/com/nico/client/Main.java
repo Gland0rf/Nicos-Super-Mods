@@ -8,6 +8,7 @@ import com.nico.client.stacking.SecretStackingDetector;
 import com.nico.client.utils.BazaarService;
 import com.nico.client.utils.HypixelApiClient;
 //import com.nico.client.wiki.service.HypixelWikiService; TEMPORARY
+import com.nico.client.watchConnection.HeartRateFeature;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.core.BlockPos;
 
@@ -36,6 +37,8 @@ public final class Main implements ClientModInitializer {
 
         NsmClientCommands.register();
         ClientTickHandler.register();
+
+        HeartRateFeature.initialize(HUD_LAYOUT);
 
         LagMonitorFeature.initialize(() -> NsmConfigManager.getConfig().dungeons.dungeonLagMonitor);
     }

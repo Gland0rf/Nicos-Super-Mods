@@ -52,7 +52,7 @@ public class HudMoveScreen extends Screen {
             return;
         }
 
-        for (HudElement element : layoutManager.getAll()) {
+        for (HudElement element : seenElements) {
             drawElementBox(graphics, font, element, mouseX, mouseY);
         }
     }
@@ -117,7 +117,7 @@ public class HudMoveScreen extends Screen {
         double mouseX = event.x();
         double mouseY = event.y();
 
-        for (HudElement element : layoutManager.getAll()) {
+        for (HudElement element : layoutManager.getSeenElements()) {
             if (element.contains(mouseX, mouseY)) {
                 dragging = element;
                 dragOffsetX = (int) mouseX - element.getX();
@@ -164,7 +164,7 @@ public class HudMoveScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
-        for (HudElement element : layoutManager.getAll()) {
+        for (HudElement element : layoutManager.getSeenElements()) {
             if (element.contains(x, y)) {
                 element.resizeByScroll(scrollY);
                 clampElementToScreen(element);

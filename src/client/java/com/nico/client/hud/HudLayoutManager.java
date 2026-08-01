@@ -17,6 +17,7 @@ public class HudLayoutManager {
     public static final String MINION_OUTPUT = "minion_output";
     public static final String LAG_MONITOR = "lag_monitor";
     public static final String INVENTORY_LAYOUTS_BUTTON = "inventory_layouts_button";
+    public static final String HEART_RATE = "heart_rate";
 
     private static final Gson GSON =
             new GsonBuilder().setPrettyPrinting().create();
@@ -63,6 +64,16 @@ public class HudLayoutManager {
 
         inventoryLayoutsButton.setMeasuredSize(78, 20);
         register(inventoryLayoutsButton);
+
+        HudElement heartRate = new HudElement(
+                HEART_RATE,
+                "Heart Rate",
+                12,
+                164
+        );
+
+        heartRate.setMeasuredSize(72, 10);
+        register(heartRate);
     }
 
     private void register(HudElement element) {

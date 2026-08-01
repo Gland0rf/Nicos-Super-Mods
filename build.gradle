@@ -74,6 +74,30 @@ dependencies {
 	modClientImplementation include("org.notenoughupdates.moulconfig:modern-1.21.11:4.7.2")
 
 	modCompileOnly "maven.modrinth:odin:0.2.1"
+
+	/*
+     * Main JglTF library.
+     */
+	implementation("de.javagl:jgltf-model:2.0.4")
+	include("de.javagl:jgltf-model:2.0.4")
+
+	/*
+     * JglTF model's dependencies.
+     */
+	implementation("de.javagl:jgltf-impl-v1:2.0.4")
+	include("de.javagl:jgltf-impl-v1:2.0.4")
+
+	implementation("de.javagl:jgltf-impl-v2:2.0.4")
+	include("de.javagl:jgltf-impl-v2:2.0.4")
+
+	implementation("com.fasterxml.jackson.core:jackson-databind:2.13.4.2")
+	include("com.fasterxml.jackson.core:jackson-databind:2.13.4.2")
+
+	implementation("com.fasterxml.jackson.core:jackson-core:2.13.1")
+	include("com.fasterxml.jackson.core:jackson-core:2.13.1")
+
+	implementation("com.fasterxml.jackson.core:jackson-annotations:2.13.4")
+	include("com.fasterxml.jackson.core:jackson-annotations:2.13.4")
 }
 
 processResources {
