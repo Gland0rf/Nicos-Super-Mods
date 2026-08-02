@@ -6,6 +6,7 @@ import com.nico.client.wiki.WikiCraftingGrid;
 import com.nico.client.wiki.WikiHtmlContract;
 import com.nico.client.wiki.WikiImage;
 import com.nico.client.wiki.WikiInfobox;
+import com.nico.client.wiki.WikiForgingTree;
 import com.nico.client.wiki.WikiItemSlot;
 import com.nico.client.wiki.WikiPage;
 import com.nico.client.wiki.WikiText;
@@ -16,9 +17,18 @@ import org.jsoup.nodes.Element;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Converts a rendered MediaWiki article into the strict Wiki model. */
 abstract class WikiArticleParser extends WikiWidgetParser {
+    private static final Pattern FORGING_QUANTITY = Pattern.compile(
+            "^\\s*([0-9][0-9,.]*)(?:\\s*\\([^)]*\\))?\\s*"
+    );
+    private static final Pattern FORGING_TOGGLE_LABEL = Pattern.compile(
+            "(?i)\\s*\\[(?:expand|collapse)]\\s*"
+    );
     protected static WikiPage parseRenderedArticle(String title, URI pageUri, String revisionId, String html) {
         Document document = Jsoup.parse(html, WIKI_ARTICLE_BASE);
         Element articleRoot = document.getElementsByClass(WikiHtmlContract.ARTICLE_ROOT).first();
@@ -260,6 +270,15 @@ abstract class WikiArticleParser extends WikiWidgetParser {
             return;
         }
 
+        if ((element.tagName().equals("ul") || element.tagName().equals("ol"))
+                && followsForgingTreeHeading(blocks)) {
+            WikiForgingTree tree = parseForgingTree(element, nextForgingTreeId(blocks));
+            if (!tree.isEmpty()) {
+                blocks.add(new WikiBlock.ForgingTree(tree));
+            }
+            return;
+        }
+
         switch (element.tagName()) {
             case "h2", "h3", "h4", "h5", "h6" -> {
                 int level = Integer.parseInt(element.tagName().substring(1));
@@ -304,6 +323,110 @@ abstract class WikiArticleParser extends WikiWidgetParser {
             }
             default -> appendChildrenAsBlocks(element, blocks, listDepth);
         }
+    }
+
+    protected static boolean followsForgingTreeHeading(List<WikiBlock> blocks) {
+        if (blocks.isEmpty()) {
+            return false;
+        }
+        WikiBlock previous = blocks.get(blocks.size() - 1);
+        return previous instanceof WikiBlock.Heading heading
+                && heading.text().plainText().equalsIgnoreCase("Forging Tree");
+    }
+
+    protected static String nextForgingTreeId(List<WikiBlock> blocks) {
+        int index = 0;
+        for (WikiBlock block : blocks) {
+            if (block instanceof WikiBlock.ForgingTree) {
+                index++;
+            }
+        }
+        return "forging-tree-" + index;
+    }
+
+    protected static WikiForgingTree parseForgingTree(Element list, String id) {
+        List<WikiForgingTree.Node> roots = new ArrayList<>();
+        for (Element child : list.children()) {
+            if (child.tagName().equals("li")) {
+                WikiForgingTree.Node node = parseForgingTreeNode(child, 0);
+                if (node != null) {
+                    roots.add(node);
+                }
+            }
+        }
+        return new WikiForgingTree(id, roots);
+    }
+
+    protected static WikiForgingTree.Node parseForgingTreeNode(Element item, int depth) {
+        Element rowCopy = item.clone();
+        rowCopy.select("ul,ol").remove();
+        rowCopy.select(
+                ".drl-expand,.drl-collapse,.expand,.collapse,"
+                        + "[data-action=expand],[data-action=collapse]"
+        ).remove();
+
+        WikiContent content = normalizeForgingTreeContent(parseContent(rowCopy));
+        List<WikiForgingTree.Node> children = new ArrayList<>();
+        for (Element nestedList : item.select("ul,ol")) {
+            if (nearestAncestorTag(nestedList, "li") != item) {
+                continue;
+            }
+            for (Element nestedItem : nestedList.children()) {
+                if (nestedItem.tagName().equals("li")) {
+                    WikiForgingTree.Node nested = parseForgingTreeNode(nestedItem, depth + 1);
+                    if (nested != null) {
+                        children.add(nested);
+                    }
+                }
+            }
+        }
+
+        if (content.isEmpty() && children.isEmpty()) {
+            return null;
+        }
+
+        String classes = String.join(" ", item.classNames()).toLowerCase(Locale.ROOT);
+        String rowText = rowCopy.text().toLowerCase(Locale.ROOT);
+        boolean expanded = depth == 0
+                || classes.contains("expanded")
+                || "true".equalsIgnoreCase(item.attr("aria-expanded"))
+                || "true".equalsIgnoreCase(item.attr("data-expanded"))
+                || rowText.contains("[collapse]");
+        return new WikiForgingTree.Node(content, children, expanded);
+    }
+
+    protected static WikiContent normalizeForgingTreeContent(WikiContent content) {
+        List<WikiText.Span> spans = new ArrayList<>();
+        boolean quantityNormalized = false;
+
+        for (WikiText.Span span : content.text().spans()) {
+            String text = FORGING_TOGGLE_LABEL.matcher(span.text()).replaceAll(" ");
+            if (!quantityNormalized && !text.isBlank()) {
+                Matcher matcher = FORGING_QUANTITY.matcher(text);
+                if (matcher.find()) {
+                    text = matcher.group(1) + "x " + text.substring(matcher.end());
+                    quantityNormalized = true;
+                }
+            }
+            if (!text.isEmpty()) {
+                spans.add(new WikiText.Span(
+                        text,
+                        span.href(),
+                        span.bold(),
+                        span.italic(),
+                        span.cssClasses(),
+                        span.hoverTitle(),
+                        span.hoverText()
+                ));
+            }
+        }
+
+        return new WikiContent(
+                new WikiText(spans),
+                content.images(),
+                content.itemSlots(),
+                content.craftingGrids()
+        );
     }
 
     protected static void appendMessageBox(Element element, List<WikiBlock> blocks) {

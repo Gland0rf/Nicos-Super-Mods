@@ -2,7 +2,9 @@ package com.nico.client.wiki.screen;
 
 import static com.nico.client.wiki.screen.WikiScreenMetrics.*;
 
+import com.nico.client.wiki.WikiAttribution;
 import com.nico.client.wiki.WikiBrowserStore;
+import com.nico.client.wiki.WikiHttp;
 import com.nico.client.wiki.WikiTitleResolver;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import net.minecraft.ChatFormatting;
@@ -12,6 +14,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 
+import java.net.URI;
 import java.util.List;
 
 /** Draws browser chrome, special pages, and document frames. */
@@ -184,7 +187,171 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
 
         graphics.drawString(font, "Wiki Browser Help", x, y, TEXT, true);
         y += 22;
-        graphics.drawString(font, "Keyboard shortcuts", x, y, LINK, true);
+
+        // Use two columns when enough room is available.
+        if (contentWidth >= 540) {
+            int gap = 20;
+            int leftWidth = (contentWidth - gap) / 2;
+            int rightWidth = contentWidth - leftWidth - gap;
+
+            int shortcutsBottom =
+                    renderShortcutPanel(graphics, x, y, leftWidth, bottom);
+
+            int creditsBottom =
+                    renderCreditsPanel(
+                            graphics,
+                            x + leftWidth + gap,
+                            y,
+                            rightWidth,
+                            bottom
+                    );
+
+            y = Math.max(shortcutsBottom, creditsBottom) + 8;
+        } else {
+            y = renderCreditsPanel(
+                    graphics,
+                    x,
+                    y,
+                    contentWidth,
+                    bottom
+            ) + 8;
+
+            y = renderShortcutPanel(
+                    graphics,
+                    x,
+                    y,
+                    contentWidth,
+                    bottom
+            ) + 8;
+        }
+
+        if (y + 22 <= bottom - 8) {
+            boolean siteStyle = browserStore.websiteStyle();
+            int toggleWidth = Math.min(330, contentWidth);
+
+            boolean toggleHovered = contains(
+                    renderMouseX,
+                    renderMouseY,
+                    x,
+                    y,
+                    toggleWidth,
+                    22
+            );
+
+            graphics.fill(
+                    x,
+                    y,
+                    x + toggleWidth,
+                    y + 22,
+                    toggleHovered ? tocHoverColor() : tableHeadColor()
+            );
+
+            graphics.drawString(
+                    font,
+                    "Website styling: " + (siteStyle ? "ON" : "OFF"),
+                    x + 8,
+                    y + 7,
+                    siteStyle ? LINK : MUTED,
+                    true
+            );
+
+            specialPageHitboxes.add(new SpecialPageHitbox(
+                    x,
+                    y,
+                    toggleWidth,
+                    22,
+                    SpecialAction.TOGGLE_STYLE,
+                    null
+            ));
+
+            y += 34;
+        }
+
+        if (y + 18 > bottom - 8) {
+            return;
+        }
+
+        graphics.drawString(font, "Bookmarks", x, y, LINK, true);
+        y += 18;
+
+        List<WikiBrowserStore.Bookmark> bookmarks =
+                browserStore.bookmarks();
+
+        if (bookmarks.isEmpty()) {
+            graphics.drawString(
+                    font,
+                    "Right-click a Wiki link or press Ctrl+D to add a bookmark.",
+                    x + 4,
+                    y,
+                    MUTED,
+                    false
+            );
+        } else {
+            for (WikiBrowserStore.Bookmark bookmark : bookmarks) {
+                if (y + 18 > bottom - 8) {
+                    break;
+                }
+
+                int rowWidth = Math.min(contentWidth, 420);
+                boolean hovered = contains(
+                        renderMouseX,
+                        renderMouseY,
+                        x,
+                        y,
+                        rowWidth,
+                        18
+                );
+
+                graphics.fill(
+                        x,
+                        y,
+                        x + rowWidth,
+                        y + 18,
+                        hovered ? tocHoverColor() : tocBackgroundColor()
+                );
+
+                graphics.drawString(
+                        font,
+                        "★ " + font.plainSubstrByWidth(
+                                bookmark.title(),
+                                rowWidth - 18
+                        ),
+                        x + 6,
+                        y + 5,
+                        LINK,
+                        false
+                );
+
+                specialPageHitboxes.add(new SpecialPageHitbox(
+                        x,
+                        y,
+                        rowWidth,
+                        18,
+                        SpecialAction.OPEN_BOOKMARK,
+                        bookmark.parsedUri()
+                ));
+
+                y += 20;
+            }
+        }
+    }
+
+    protected int renderShortcutPanel(
+            GuiGraphics graphics,
+            int x,
+            int y,
+            int panelWidth,
+            int bottom
+    ) {
+        graphics.drawString(
+                font,
+                "Keyboard shortcuts",
+                x,
+                y,
+                LINK,
+                true
+        );
+
         y += 16;
 
         String[][] shortcuts = {
@@ -197,42 +364,239 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
                 {"Ctrl+R", "Reload"},
                 {"Alt+Left / Alt+Right", "Back / Forward"},
                 {"Middle click / Ctrl+click", "Open a link in a new tab"},
-                {"Right click", "Open the link menu"}
+                {"Right click", "Open link or image options"}
         };
+
+        int descriptionX = x + Math.min(
+                130,
+                Math.max(84, panelWidth * 42 / 100)
+        );
+
         for (String[] shortcut : shortcuts) {
-            graphics.drawString(font, shortcut[0], x + 4, y, TEXT, false);
-            graphics.drawString(font, shortcut[1], x + 130, y, MUTED, false);
+            if (y + LINE_HEIGHT > bottom - 8) {
+                break;
+            }
+
+            graphics.drawString(
+                    font,
+                    font.plainSubstrByWidth(
+                            shortcut[0],
+                            Math.max(70, descriptionX - x - 6)
+                    ),
+                    x + 4,
+                    y,
+                    TEXT,
+                    false
+            );
+
+            graphics.drawString(
+                    font,
+                    font.plainSubstrByWidth(
+                            shortcut[1],
+                            Math.max(70, x + panelWidth - descriptionX)
+                    ),
+                    descriptionX,
+                    y,
+                    MUTED,
+                    false
+            );
+
             y += 14;
         }
 
-        y += 8;
-        boolean siteStyle = browserStore.websiteStyle();
-        int toggleWidth = Math.min(330, contentWidth);
-        boolean toggleHovered = contains(renderMouseX, renderMouseY, x, y, toggleWidth, 22);
-        graphics.fill(x, y, x + toggleWidth, y + 22, toggleHovered ? tocHoverColor() : tableHeadColor());
-        graphics.drawString(font, "Website styling: " + (siteStyle ? "ON" : "OFF"), x + 8, y + 7,
-                siteStyle ? LINK : MUTED, true);
-        specialPageHitboxes.add(new SpecialPageHitbox(x, y, toggleWidth, 22, SpecialAction.TOGGLE_STYLE, null));
-        y += 34;
+        return y;
+    }
 
-        graphics.drawString(font, "Bookmarks", x, y, LINK, true);
-        y += 18;
-        List<WikiBrowserStore.Bookmark> bookmarks = browserStore.bookmarks();
-        if (bookmarks.isEmpty()) {
-            graphics.drawString(font, "Right-click a Wiki link or press Ctrl+D to add a bookmark.", x + 4, y, MUTED, false);
+    protected int renderCreditsPanel(
+            GuiGraphics graphics,
+            int x,
+            int y,
+            int panelWidth,
+            int bottom
+    ) {
+        graphics.drawString(
+                font,
+                "Content & image credits",
+                x,
+                y,
+                LINK,
+                true
+        );
+
+        y += 16;
+
+        y = drawHelpWrappedLine(
+                graphics,
+                WikiAttribution.CONTENT_CREDIT,
+                x + 4,
+                y,
+                panelWidth - 8,
+                MUTED
+        );
+
+        y = drawHelpWrappedLine(
+                graphics,
+                WikiAttribution.IMAGE_NOTICE,
+                x + 4,
+                y,
+                panelWidth - 8,
+                MUTED
+        );
+
+        y = drawHelpWrappedLine(
+                graphics,
+                WikiAttribution.TRANSFORMATION_NOTICE,
+                x + 4,
+                y,
+                panelWidth - 8,
+                MUTED
+        );
+
+        y += 3;
+
+        int linkX = x + 4;
+
+        int firstLinkWidth = drawHelpLink(
+                graphics,
+                "Wiki license / file terms",
+                WikiAttribution.WIKI_LICENSE_PAGE,
+                linkX,
+                y
+        );
+
+        int secondLinkX = linkX + firstLinkWidth + 14;
+
+        if (secondLinkX + font.width("CC BY-NC-SA 3.0")
+                <= x + panelWidth) {
+            drawHelpLink(
+                    graphics,
+                    "CC BY-NC-SA 3.0",
+                    WikiAttribution.CC_BY_NC_SA_3,
+                    secondLinkX,
+                    y
+            );
+
+            y += 16;
         } else {
-            for (WikiBrowserStore.Bookmark bookmark : bookmarks) {
-                if (y + 18 > bottom - 8) break;
-                int rowWidth = Math.min(contentWidth, 420);
-                boolean hovered = contains(renderMouseX, renderMouseY, x, y, rowWidth, 18);
-                graphics.fill(x, y, x + rowWidth, y + 18, hovered ? tocHoverColor() : tocBackgroundColor());
-                graphics.drawString(font, "★ " + font.plainSubstrByWidth(bookmark.title(), rowWidth - 18),
-                        x + 6, y + 5, LINK, false);
-                specialPageHitboxes.add(new SpecialPageHitbox(
-                        x, y, rowWidth, 18, SpecialAction.OPEN_BOOKMARK, bookmark.parsedUri()));
-                y += 20;
-            }
+            y += 16;
+
+            drawHelpLink(
+                    graphics,
+                    "CC BY-NC-SA 3.0",
+                    WikiAttribution.CC_BY_NC_SA_3,
+                    x + 4,
+                    y
+            );
+
+            y += 16;
         }
+
+        y = drawHelpWrappedLine(
+                graphics,
+                "Hover images for available license and creator metadata; "
+                        + "right-click for the source or attribution text.",
+                x + 4,
+                y,
+                panelWidth - 8,
+                MUTED
+        );
+
+        y = drawHelpWrappedLine(
+                graphics,
+                "HTTP User-Agent: " + WikiHttp.userAgent(),
+                x + 4,
+                y,
+                panelWidth - 8,
+                MUTED
+        );
+
+        if (WikiHttp.hasModPageUrl()) {
+            try {
+                drawHelpLink(
+                        graphics,
+                        "Open mod page",
+                        URI.create(WikiHttp.modPageUrl()),
+                        x + 4,
+                        y
+                );
+
+                y += 16;
+            } catch (IllegalArgumentException ignored) {
+                // Invalid configured mod URL; leave it non-clickable.
+            }
+        } else {
+            y = drawHelpWrappedLine(
+                    graphics,
+                    "No public mod-page URL is configured for the User-Agent.",
+                    x + 4,
+                    y,
+                    panelWidth - 8,
+                    0xFFFFCC55
+            );
+        }
+
+        return Math.min(y, bottom - 8);
+    }
+
+    protected int drawHelpWrappedLine(
+            GuiGraphics graphics,
+            String text,
+            int x,
+            int y,
+            int maxWidth,
+            int color
+    ) {
+        List<FormattedCharSequence> lines = font.split(
+                Component.literal(text),
+                Math.max(80, maxWidth)
+        );
+
+        for (FormattedCharSequence line : lines) {
+            graphics.drawString(font, line, x, y, color, false);
+            y += LINE_HEIGHT;
+        }
+
+        return y;
+    }
+
+    protected int drawHelpLink(
+            GuiGraphics graphics,
+            String label,
+            URI uri,
+            int x,
+            int y
+    ) {
+        int linkWidth = font.width(label);
+
+        boolean hovered = contains(
+                renderMouseX,
+                renderMouseY,
+                x,
+                y - 1,
+                linkWidth,
+                12
+        );
+
+        graphics.drawString(
+                font,
+                Component.literal(label)
+                        .withStyle(ChatFormatting.UNDERLINE),
+                x,
+                y,
+                hovered ? TEXT : LINK,
+                false
+        );
+
+        linkHitboxes.add(new LinkHitbox(
+                x,
+                y - 1,
+                linkWidth,
+                12,
+                uri,
+                OpenDisposition.EXTERNAL
+        ));
+
+        return linkWidth;
     }
 
     protected void renderNewTabPage(GuiGraphics graphics, int top, int bottom) {

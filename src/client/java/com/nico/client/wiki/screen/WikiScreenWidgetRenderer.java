@@ -7,6 +7,7 @@ import com.nico.client.wiki.WikiContent;
 import com.nico.client.wiki.WikiCraftingGrid;
 import com.nico.client.wiki.WikiImage;
 import com.nico.client.wiki.WikiImageTextureCache;
+import com.nico.client.wiki.WikiForgingTree;
 import com.nico.client.wiki.WikiInfobox;
 import com.nico.client.wiki.WikiItemSlot;
 import com.nico.client.wiki.WikiText;
@@ -85,6 +86,156 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
             case TABS -> renderTabs(graphics, entry, y);
             case TAB_BORDER -> renderBorder(graphics, entry, y, BORDER);
             case CRAFTING -> renderCrafting(graphics, entry, y, (WikiCraftingGrid) entry.payload());
+            case FORGING_TREE -> renderForgingTree(graphics, entry, y);
+        }
+    }
+
+    protected void renderForgingTree(GuiGraphics graphics, RenderEntry entry, int y) {
+        if (!(entry.payload() instanceof ForgingTreeLayout layout)) {
+            return;
+        }
+
+        final int indentStep = 16;
+        for (ForgingTreeRow row : layout.rows()) {
+            int rowY = y + row.yOffset();
+            int middleY = rowY + 7;
+
+            boolean[] ancestors = row.ancestorContinues();
+            for (int depth = 0; depth < ancestors.length - 1; depth++) {
+                if (!ancestors[depth]) {
+                    continue;
+                }
+                int lineX = entry.x() + depth * indentStep + 7;
+                graphics.fill(lineX, rowY, lineX + 1, rowY + row.height() + 2, DIVIDER);
+            }
+
+            if (row.depth() > 0) {
+                int parentLineX = entry.x() + (row.depth() - 1) * indentStep + 7;
+                int verticalTop = row.parentMiddleYOffset() >= 0
+                        ? y + row.parentMiddleYOffset()
+                        : rowY;
+                int verticalBottom = row.lastSibling()
+                        ? middleY + 1
+                        : rowY + row.height() + 2;
+                graphics.fill(parentLineX, verticalTop, parentLineX + 1, verticalBottom, DIVIDER);
+                graphics.fill(
+                        parentLineX,
+                        middleY,
+                        entry.x() + row.iconXOffset(),
+                        middleY + 1,
+                        DIVIDER
+                );
+            }
+
+            if (!row.node().content().itemSlots().isEmpty()) {
+                drawForgingTreeIcon(
+                        graphics,
+                        row.node().content().itemSlots().get(0),
+                        entry.x() + row.iconXOffset(),
+                        rowY,
+                        14
+                );
+            }
+
+            int lineY = rowY + 1;
+            for (FormattedCharSequence line : row.lines()) {
+                drawInteractiveLine(
+                        graphics,
+                        line,
+                        entry.x() + row.textXOffset(),
+                        lineY,
+                        TEXT
+                );
+                lineY += LINE_HEIGHT;
+            }
+
+            if (row.node().expandable() && row.depth() > 0) {
+                String label = row.expanded() ? "[Collapse]" : "[Expand]";
+                int toggleX = entry.x() + row.toggleXOffset();
+                boolean hovered = contains(
+                        renderMouseX,
+                        renderMouseY,
+                        toggleX,
+                        rowY,
+                        row.toggleWidth(),
+                        13
+                );
+                graphics.drawString(
+                        font,
+                        Component.literal(label).withStyle(net.minecraft.ChatFormatting.UNDERLINE),
+                        toggleX,
+                        rowY + 1,
+                        hovered ? TEXT : LINK,
+                        false
+                );
+                forgingTreeHitboxes.add(new ForgingTreeHitbox(
+                        toggleX,
+                        rowY,
+                        row.toggleWidth(),
+                        13,
+                        row.stateKey(),
+                        row.expanded()
+                ));
+            }
+        }
+    }
+
+    protected void drawForgingTreeIcon(
+            GuiGraphics graphics,
+            WikiItemSlot slot,
+            int x,
+            int y,
+            int size
+    ) {
+        if (slot == null || slot.isEmpty()) {
+            return;
+        }
+
+        WikiItemSlot.Frame frame = displayedFrame(slot);
+        slotHitboxes.add(new SlotHitbox(x, y, size, size, frame));
+        WikiImage image = frame.image();
+        if (image == null || image.isEmpty()) {
+            return;
+        }
+
+        WikiImageTextureCache.Snapshot snapshot = WikiImageTextureCache.request(image);
+        if (!snapshot.ready()) {
+            return;
+        }
+
+        int drawWidth = size;
+        int drawHeight = Math.max(1, (int) Math.round(
+                (double) drawWidth * snapshot.height() / snapshot.width()
+        ));
+        if (drawHeight > size) {
+            drawHeight = size;
+            drawWidth = Math.max(1, (int) Math.round(
+                    (double) drawHeight * snapshot.width() / snapshot.height()
+            ));
+        }
+
+        int drawX = x + (size - drawWidth) / 2;
+        int drawY = y + (size - drawHeight) / 2;
+        graphics.blit(
+                RenderPipelines.GUI_TEXTURED,
+                snapshot.textureId(),
+                drawX,
+                drawY,
+                0.0F,
+                0.0F,
+                drawWidth,
+                drawHeight,
+                snapshot.width(),
+                snapshot.height(),
+                snapshot.width(),
+                snapshot.height()
+        );
+
+        if (contains(renderMouseX, renderMouseY, x, y, size, size)) {
+            graphics.fill(x, y, x + size, y + 1, LINK);
+            graphics.fill(x, y + size - 1, x + size, y + size, LINK);
+            graphics.fill(x, y, x + 1, y + size, LINK);
+            graphics.fill(x + size - 1, y, x + size, y + size, LINK);
         }
     }
 
@@ -485,6 +636,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
             return false;
         }
 
+        imageHitboxes.add(new ImageHitbox(x, y, maxWidth, maxHeight, image));
         WikiImageTextureCache.Snapshot snapshot = WikiImageTextureCache.request(image);
         if (!snapshot.ready()) {
             String message = snapshot.status() == WikiImageTextureCache.Status.FAILED

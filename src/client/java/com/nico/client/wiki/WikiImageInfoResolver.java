@@ -4,6 +4,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 
 import java.net.URI;
 import java.net.URLDecoder;
@@ -21,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /** Resolves a MediaWiki file title to the original file URL via prop=imageinfo. */
 final class WikiImageInfoResolver {
     private static final String API = "https://hypixelskyblock.minecraft.wiki/api.php";
+    private static final String FILE_PAGE_BASE = "https://hypixelskyblock.minecraft.wiki/w/";
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -36,8 +40,21 @@ final class WikiImageInfoResolver {
 
         String fileTitle = extractFileTitle(image);
         if (fileTitle.isBlank()) {
+            WikiImageCredits credits = new WikiImageCredits(
+                    "",
+                    "",
+                    image.url(),
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    false
+            );
             return CompletableFuture.completedFuture(new ResolvedImage(
-                    image.url(), "", image.declaredWidth(), image.declaredHeight()
+                    image.url(), "", image.declaredWidth(), image.declaredHeight(), credits
             ));
         }
 
@@ -46,9 +63,7 @@ final class WikiImageInfoResolver {
                 : "File:" + fileTitle;
 
         return CACHE.computeIfAbsent(normalizedTitle.toLowerCase(Locale.ROOT), ignored -> query(normalizedTitle)
-                .exceptionally(throwable -> new ResolvedImage(
-                        image.url(), "", image.declaredWidth(), image.declaredHeight()
-                )));
+                .exceptionally(throwable -> fallback(image, normalizedTitle)));
     }
 
     private static CompletableFuture<ResolvedImage> query(String fileTitle) {
@@ -57,12 +72,10 @@ final class WikiImageInfoResolver {
                 + "&format=json"
                 + "&formatversion=2"
                 + "&prop=imageinfo"
-                + "&iiprop=url%7Cmime%7Csize"
+                + "&iiprop=url%7Cmime%7Csize%7Cextmetadata"
                 + "&titles=" + URLEncoder.encode(fileTitle, StandardCharsets.UTF_8);
 
-        HttpRequest request = HttpRequest.newBuilder(URI.create(uri))
-                .timeout(Duration.ofSeconds(20))
-                .header("User-Agent", "NSM-Mod/1.0 Hypixel-SkyBlock-Wiki-Reader")
+        HttpRequest request = WikiHttp.request(URI.create(uri), Duration.ofSeconds(20))
                 .header("Accept", "application/json")
                 .GET()
                 .build();
@@ -74,10 +87,10 @@ final class WikiImageInfoResolver {
                     }
                     return response.body();
                 })
-                .thenApply(WikiImageInfoResolver::parse);
+                .thenApply(body -> parse(body, fileTitle));
     }
 
-    private static ResolvedImage parse(String body) {
+    private static ResolvedImage parse(String body, String requestedTitle) {
         JsonObject root = JsonParser.parseString(body).getAsJsonObject();
         JsonObject query = root.has("query") && root.get("query").isJsonObject()
                 ? root.getAsJsonObject("query")
@@ -106,7 +119,59 @@ final class WikiImageInfoResolver {
             throw new IllegalStateException("imageinfo returned no original URL");
         }
 
-        return new ResolvedImage(url, string(info, "mime"), integer(info, "width"), integer(info, "height"));
+        String fileTitle = string(page, "title");
+        if (fileTitle.isBlank()) {
+            fileTitle = requestedTitle;
+        }
+        String filePageUrl = string(info, "descriptionurl");
+        if (filePageUrl.isBlank()) {
+            filePageUrl = filePageUrl(fileTitle);
+        }
+
+        JsonObject metadata = info.has("extmetadata") && info.get("extmetadata").isJsonObject()
+                ? info.getAsJsonObject("extmetadata")
+                : null;
+
+        WikiImageCredits credits = new WikiImageCredits(
+                fileTitle,
+                filePageUrl,
+                url,
+                metadataText(metadata, "LicenseShortName"),
+                metadataUrl(metadata, "LicenseUrl"),
+                metadataText(metadata, "Artist"),
+                metadataText(metadata, "Credit"),
+                metadataText(metadata, "UsageTerms"),
+                metadataText(metadata, "Attribution"),
+                metadataText(metadata, "Source"),
+                metadata != null
+        );
+
+        return new ResolvedImage(
+                url,
+                string(info, "mime"),
+                integer(info, "width"),
+                integer(info, "height"),
+                credits
+        );
+    }
+
+    private static ResolvedImage fallback(WikiImage image, String fileTitle) {
+        WikiImageCredits credits = new WikiImageCredits(
+                fileTitle,
+                filePageUrl(fileTitle),
+                image.url(),
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                false
+        );
+        return new ResolvedImage(
+                image.url(), "", image.declaredWidth(), image.declaredHeight(), credits
+        );
     }
 
     private static String extractFileTitle(WikiImage image) {
@@ -132,8 +197,16 @@ final class WikiImageInfoResolver {
                 ));
             }
 
-            String lastSegment = path.substring(path.lastIndexOf('/') + 1);
-            return normalizeFileName(URLDecoder.decode(lastSegment, StandardCharsets.UTF_8));
+            String[] segments = path.split("/");
+            for (int index = segments.length - 1; index >= 0; index--) {
+                String segment = URLDecoder.decode(segments[index], StandardCharsets.UTF_8);
+                segment = segment.replaceFirst("(?i)^\\d+px-", "");
+                String normalized = normalizeFileName(segment);
+                if (!normalized.isBlank()) {
+                    return normalized;
+                }
+            }
+            return "";
         } catch (RuntimeException ignored) {
             return "";
         }
@@ -150,7 +223,45 @@ final class WikiImageInfoResolver {
         if (result.regionMatches(true, 0, "Image:", 0, 6)) {
             result = result.substring(6).trim();
         }
+        result = result.replaceFirst("(?i)^\\d+px-", "");
         return result.matches("(?i).+\\.(png|jpe?g|gif|bmp|webp)$") ? result : "";
+    }
+
+    private static String metadataText(JsonObject metadata, String key) {
+        String raw = metadataValue(metadata, key);
+        if (raw.isBlank()) {
+            return "";
+        }
+        return Jsoup.parseBodyFragment(raw).text().replaceAll("\\s+", " ").trim();
+    }
+
+    private static String metadataUrl(JsonObject metadata, String key) {
+        String raw = metadataValue(metadata, key);
+        if (raw.isBlank()) {
+            return "";
+        }
+        Document document = Jsoup.parseBodyFragment(raw);
+        Element anchor = document.selectFirst("a[href]");
+        String candidate = anchor == null ? document.text() : anchor.attr("href");
+        candidate = candidate == null ? "" : candidate.trim();
+        return candidate.startsWith("//") ? "https:" + candidate : candidate;
+    }
+
+    private static String metadataValue(JsonObject metadata, String key) {
+        if (metadata == null || !metadata.has(key) || !metadata.get(key).isJsonObject()) {
+            return "";
+        }
+        return string(metadata.getAsJsonObject(key), "value");
+    }
+
+    private static String filePageUrl(String fileTitle) {
+        if (fileTitle == null || fileTitle.isBlank()) {
+            return "";
+        }
+        String encoded = URLEncoder.encode(fileTitle.replace(' ', '_'), StandardCharsets.UTF_8)
+                .replace("+", "%20")
+                .replace("%2F", "/");
+        return FILE_PAGE_BASE + encoded;
     }
 
     private static String string(JsonObject object, String key) {
@@ -175,16 +286,17 @@ final class WikiImageInfoResolver {
         }
     }
 
-    record ResolvedImage(String url, String mime, int width, int height) {
+    record ResolvedImage(String url, String mime, int width, int height, WikiImageCredits credits) {
         ResolvedImage {
             url = url == null ? "" : url.trim();
             mime = mime == null ? "" : mime.trim().toLowerCase(Locale.ROOT);
             width = Math.max(0, width);
             height = Math.max(0, height);
+            credits = credits == null ? WikiImageCredits.empty() : credits;
         }
 
         static ResolvedImage empty() {
-            return new ResolvedImage("", "", 0, 0);
+            return new ResolvedImage("", "", 0, 0, WikiImageCredits.empty());
         }
     }
 }

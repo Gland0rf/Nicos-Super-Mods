@@ -7,6 +7,7 @@ import com.nico.client.wiki.WikiContent;
 import com.nico.client.wiki.WikiCraftingGrid;
 import com.nico.client.wiki.WikiImage;
 import com.nico.client.wiki.WikiInfobox;
+import com.nico.client.wiki.WikiForgingTree;
 import com.nico.client.wiki.WikiItemSlot;
 import com.nico.client.wiki.WikiText;
 import net.minecraft.ChatFormatting;
@@ -36,6 +37,7 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         tabHitboxes.clear();
         tocHitboxes.clear();
         slotHitboxes.clear();
+        forgingTreeHitboxes.clear();
         nextTabGroup = 0;
         if (page == null) {
             return;
@@ -387,6 +389,9 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         if (block instanceof WikiBlock.Paragraph paragraph) {
             return layoutContent(paragraph.content(), x, y, width, false);
         }
+        if (block instanceof WikiBlock.ForgingTree forgingTree) {
+            return layoutForgingTree(forgingTree.tree(), x, y, width);
+        }
         if (block instanceof WikiBlock.ListItem item) {
             int indent = 12 + Math.min(item.depth(), 5) * 12;
             MutableComponent prefix = Component.literal(item.ordered() ? "1. " : "\u2022 ").withStyle(ChatFormatting.GRAY);
@@ -418,6 +423,151 @@ abstract class WikiScreenLayout extends WikiScreenActions {
             return y + 10;
         }
         return y;
+    }
+
+    protected int layoutForgingTree(
+            WikiForgingTree tree,
+            int x,
+            int y,
+            int width
+    ) {
+        List<ForgingTreeRow> rows = new ArrayList<>();
+        int height = layoutForgingTreeRows(
+                tree,
+                tree.roots(),
+                width,
+                0,
+                "",
+                new boolean[0],
+                -1,
+                0,
+                rows
+        );
+        height = Math.max(18, height);
+        entries.add(new RenderEntry(
+                Kind.FORGING_TREE,
+                x,
+                y,
+                width,
+                height,
+                List.of(),
+                0,
+                new ForgingTreeLayout(rows)
+        ));
+        return y + height + 8;
+    }
+
+    protected int layoutForgingTreeRows(
+            WikiForgingTree tree,
+            List<WikiForgingTree.Node> nodes,
+            int width,
+            int depth,
+            String parentPath,
+            boolean[] ancestorContinues,
+            int parentMiddleYOffset,
+            int yOffset,
+            List<ForgingTreeRow> rows
+    ) {
+        final int indentStep = 16;
+        final int iconSize = 14;
+
+        for (int index = 0; index < nodes.size(); index++) {
+            WikiForgingTree.Node node = nodes.get(index);
+            boolean lastSibling = index == nodes.size() - 1;
+            String path = parentPath.isBlank()
+                    ? Integer.toString(index)
+                    : parentPath + "/" + index;
+            String stateKey = forgingTreeStateKey(tree.id(), path);
+            boolean expanded = node.expandable()
+                    && (depth == 0
+                    || isForgingTreeExpanded(stateKey, node.expandedByDefault()));
+            boolean toggleable = node.expandable() && depth > 0;
+
+            int rowIndent = depth * indentStep;
+            boolean hasIcon = !node.content().itemSlots().isEmpty();
+            int iconXOffset = rowIndent + (depth == 0 ? 0 : 2);
+            int textXOffset = iconXOffset + (hasIcon ? iconSize + 5 : 0);
+
+            MutableComponent component = toComponent(node.content().text());
+            if (depth == 0) {
+                component = component.withStyle(ChatFormatting.BOLD);
+            }
+
+            String toggleLabel = expanded ? "[Collapse]" : "[Expand]";
+            int toggleWidth = toggleable ? font.width(toggleLabel) : 0;
+            int availableWidth = Math.max(40, width - textXOffset);
+            int naturalTextWidth = font.width(component);
+            int toggleXOffset;
+            int textWidth;
+            if (!toggleable) {
+                toggleXOffset = width;
+                textWidth = availableWidth;
+            } else if (naturalTextWidth + toggleWidth + 6 <= availableWidth) {
+                toggleXOffset = textXOffset + naturalTextWidth + 6;
+                textWidth = Math.max(40, naturalTextWidth);
+            } else {
+                toggleXOffset = Math.max(textXOffset + 40, width - toggleWidth);
+                textWidth = Math.max(40, toggleXOffset - textXOffset - 6);
+            }
+
+            List<FormattedCharSequence> lines = font.split(component, textWidth);
+            int rowHeight = Math.max(iconSize, lines.size() * LINE_HEIGHT) + 2;
+
+            int rowStart = yOffset;
+            rows.add(new ForgingTreeRow(
+                    rowStart,
+                    rowHeight,
+                    depth,
+                    parentMiddleYOffset,
+                    stateKey,
+                    node,
+                    expanded,
+                    lastSibling,
+                    ancestorContinues,
+                    lines,
+                    iconXOffset,
+                    textXOffset,
+                    toggleXOffset,
+                    toggleWidth
+            ));
+            yOffset += rowHeight + 2;
+
+            if (expanded) {
+                boolean[] childAncestors = java.util.Arrays.copyOf(
+                        ancestorContinues,
+                        ancestorContinues.length + 1
+                );
+                childAncestors[childAncestors.length - 1] = !lastSibling;
+                yOffset = layoutForgingTreeRows(
+                        tree,
+                        node.children(),
+                        width,
+                        depth + 1,
+                        path,
+                        childAncestors,
+                        rowStart + 7,
+                        yOffset,
+                        rows
+                );
+            }
+        }
+        return yOffset;
+    }
+
+    protected static void appendForgingSearchText(
+            List<WikiForgingTree.Node> nodes,
+            StringBuilder result
+    ) {
+        for (WikiForgingTree.Node node : nodes) {
+            String text = searchableContent(node.content());
+            if (!text.isBlank()) {
+                if (!result.isEmpty()) {
+                    result.append(' ');
+                }
+                result.append(text);
+            }
+            appendForgingSearchText(node.children(), result);
+        }
     }
 
     protected int layoutContent(WikiContent content, int x, int y, int width, boolean compact) {
@@ -636,6 +786,11 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         }
         if (block instanceof WikiBlock.ListItem item) {
             return searchableContent(item.content());
+        }
+        if (block instanceof WikiBlock.ForgingTree forgingTree) {
+            StringBuilder result = new StringBuilder();
+            appendForgingSearchText(forgingTree.tree().roots(), result);
+            return result.toString();
         }
         if (block instanceof WikiBlock.Table table) {
             StringBuilder result = new StringBuilder();

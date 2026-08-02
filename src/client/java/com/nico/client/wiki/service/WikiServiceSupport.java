@@ -3,6 +3,7 @@ package com.nico.client.wiki.service;
 import com.google.gson.JsonObject;
 import com.nico.client.wiki.WikiBlock;
 import com.nico.client.wiki.WikiHtmlContract;
+import com.nico.client.wiki.WikiHttp;
 import com.nico.client.wiki.WikiText;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
@@ -209,6 +210,9 @@ public class WikiServiceSupport {
         if (block instanceof WikiBlock.ListItem item) {
             return item.content().isEmpty();
         }
+        if (block instanceof WikiBlock.ForgingTree forgingTree) {
+            return forgingTree.tree().isEmpty();
+        }
         if (block instanceof WikiBlock.Table table) {
             return table.rows().isEmpty();
         }
@@ -375,10 +379,7 @@ public class WikiServiceSupport {
     }
 
     protected static HttpRequest.Builder requestBuilder(URI uri) {
-        return HttpRequest.newBuilder(uri)
-                .timeout(Duration.ofSeconds(25))
-                .header("User-Agent", "NSM-Mod/1.0 Hypixel-SkyBlock-Wiki-Reader")
-                .header("Accept-Language", "en-US,en;q=0.9");
+        return WikiHttp.request(uri, Duration.ofSeconds(25));
     }
 
     protected static String validateResponse(HttpResponse<String> response) {

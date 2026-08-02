@@ -1,5 +1,8 @@
 package com.nico.client.wiki.screen;
 
+import com.nico.client.wiki.WikiImage;
+import com.nico.client.wiki.WikiImageCredits;
+import com.nico.client.wiki.WikiImageTextureCache;
 import com.nico.client.wiki.WikiItemSlot;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
@@ -51,11 +54,25 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
                 return true;
             }
         }
+        for (ForgingTreeHitbox hitbox : forgingTreeHitboxes) {
+            if (hitbox.contains(mouseX, mouseY)) {
+                return true;
+            }
+        }
         return false;
     }
 
     protected boolean containsTextHover(double mouseX, double mouseY) {
         for (TextHoverHitbox hitbox : textHoverHitboxes) {
+            if (hitbox.contains(mouseX, mouseY)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected boolean containsImage(double mouseX, double mouseY) {
+        for (ImageHitbox hitbox : imageHitboxes) {
             if (hitbox.contains(mouseX, mouseY)) {
                 return true;
             }
@@ -110,6 +127,16 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
             if (!logicalLines.isEmpty()) {
                 renderTooltip(graphics, logicalLines, mouseX, mouseY);
             }
+            return;
+        }
+
+        for (int index = imageHitboxes.size() - 1; index >= 0; index--) {
+            ImageHitbox candidate = imageHitboxes.get(index);
+            if (!candidate.contains(mouseX, mouseY)) {
+                continue;
+            }
+            WikiImageTextureCache.Snapshot snapshot = WikiImageTextureCache.request(candidate.image());
+            renderTooltip(graphics, buildImageTooltipLines(candidate.image(), snapshot), mouseX, mouseY);
             return;
         }
 
@@ -182,6 +209,34 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
                 lineY += 2;
             }
         }
+    }
+
+    protected List<MutableComponent> buildImageTooltipLines(
+            WikiImage image,
+            WikiImageTextureCache.Snapshot snapshot
+    ) {
+        WikiImageCredits credits = snapshot == null
+                ? WikiImageCredits.empty()
+                : snapshot.credits();
+        String fallbackTitle = image == null ? "" : image.displayName();
+
+        List<MutableComponent> result = new ArrayList<>();
+        result.add(Component.literal(credits.displayTitle(fallbackTitle)).withStyle(ChatFormatting.AQUA));
+
+        if (!credits.metadataAvailable()
+                && snapshot != null
+                && snapshot.status() == WikiImageTextureCache.Status.LOADING) {
+            result.add(Component.literal("Loading file license metadata...").withStyle(ChatFormatting.GRAY));
+        } else {
+            result.add(Component.literal("License: " + credits.licenseLabel()).withStyle(ChatFormatting.GRAY));
+        }
+
+        String creator = credits.creatorLabel();
+        if (!creator.isBlank()) {
+            result.add(Component.literal("Creator / credit: " + creator).withStyle(ChatFormatting.GRAY));
+        }
+        result.add(Component.literal("Right-click for source and attribution").withStyle(ChatFormatting.DARK_GRAY));
+        return result;
     }
 
     protected List<MutableComponent> buildTooltipLines(WikiItemSlot.Frame frame) {

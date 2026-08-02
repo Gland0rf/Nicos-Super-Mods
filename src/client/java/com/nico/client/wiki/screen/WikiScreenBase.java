@@ -33,10 +33,9 @@ abstract class WikiScreenBase extends Screen {
     protected static final int INFOBOX_WIDTH = 360;
     protected static final int MIN_INFOBOX_WIDTH = 160;
     /*
-     * Screen dimensions are measured in logical GUI pixels. With common GUI
-     * scales, a physically wide window can therefore still be only 700-800
-     * units wide. Keep the breakpoint low enough for the Wiki-style right
-     * infobox to remain beside a readable article column.
+     * These values are logical GUI pixels, not physical window pixels. At GUI
+     * scale 2-3, a 1536 px window can be only about 640 logical pixels wide.
+     * Keep both columns compact enough that the infobox can still float right.
      */
     protected static final int MIN_ARTICLE_WIDTH = 300;
     protected static final int MAX_PAGE_WIDTH = 1240;
@@ -92,8 +91,10 @@ abstract class WikiScreenBase extends Screen {
     protected final List<TabHitbox> tabHitboxes = new ArrayList<>();
     protected final List<TocHitbox> tocHitboxes = new ArrayList<>();
     protected final List<SlotHitbox> slotHitboxes = new ArrayList<>();
+    protected final List<ForgingTreeHitbox> forgingTreeHitboxes = new ArrayList<>();
     protected final List<LinkHitbox> linkHitboxes = new ArrayList<>();
     protected final List<TextHoverHitbox> textHoverHitboxes = new ArrayList<>();
+    protected final List<ImageHitbox> imageHitboxes = new ArrayList<>();
     protected final List<PageTabHitbox> pageTabHitboxes = new ArrayList<>();
     protected final List<ContextMenuHitbox> contextMenuHitboxes = new ArrayList<>();
     protected final List<SearchSuggestionHitbox> searchSuggestionHitboxes = new ArrayList<>();
@@ -101,6 +102,7 @@ abstract class WikiScreenBase extends Screen {
     protected final List<FindTarget> findTargets = new ArrayList<>();
     protected final List<FindTarget> findMatches = new ArrayList<>();
     protected final Map<Integer, Integer> selectedTabs = new HashMap<>();
+    protected final Map<String, Boolean> forgingTreeExpansion = new HashMap<>();
     protected final List<PageTab> browserTabs = new ArrayList<>();
     protected final WikiBrowserStore browserStore = WikiBrowserStore.get();
 
@@ -123,6 +125,7 @@ abstract class WikiScreenBase extends Screen {
     protected Button backButton;
     protected Button forwardButton;
     protected Button reloadButton;
+    protected Button sourceButton;
     protected EditBox addressBox;
     protected EditBox findBox;
     protected List<WikiTitleResolver.SearchResult> searchSuggestions = List.of();
@@ -169,7 +172,7 @@ abstract class WikiScreenBase extends Screen {
                 .bounds(OUTER_MARGIN + 48, toolbarY, 22, 19).build());
 
         toolbarAddressX = OUTER_MARGIN + 74;
-        toolbarAddressWidth = Math.max(120, width - toolbarAddressX - OUTER_MARGIN - 72);
+        toolbarAddressWidth = Math.max(120, width - toolbarAddressX - OUTER_MARGIN - 104);
         toolbarFindWidth = Math.max(80, toolbarAddressWidth - 72);
         toolbarFindStatusX = toolbarAddressX + toolbarFindWidth + 7;
 
@@ -184,6 +187,9 @@ abstract class WikiScreenBase extends Screen {
         addressBox.setMaxLength(256);
         addressBox.setHint(Component.literal("Search Wiki or enter an item ID").withStyle(ChatFormatting.DARK_GRAY));
         addressBox.setResponder(this::onAddressChanged);
+
+        sourceButton = addRenderableWidget(Button.builder(Component.literal("Src"), button -> openCurrentSource())
+                .bounds(width - OUTER_MARGIN - 98, toolbarY, 30, 19).build());
 
         addRenderableWidget(Button.builder(Component.literal("★"), button -> toggleCurrentBookmark())
                 .bounds(width - OUTER_MARGIN - 66, toolbarY, 30, 19).build());
@@ -341,8 +347,10 @@ abstract class WikiScreenBase extends Screen {
         tabHitboxes.clear();
         tocHitboxes.clear();
         slotHitboxes.clear();
+        forgingTreeHitboxes.clear();
         linkHitboxes.clear();
         textHoverHitboxes.clear();
+        imageHitboxes.clear();
         pageTabHitboxes.clear();
         contextMenuHitboxes.clear();
         searchSuggestionHitboxes.clear();
@@ -351,11 +359,26 @@ abstract class WikiScreenBase extends Screen {
     }
 
 
+    protected String forgingTreeStateKey(String treeId, String nodePath) {
+        String pageKey = page == null || page.pageUri() == null
+                ? visibleTitle
+                : page.pageUri().toString();
+        return pageKey + "|" + treeId + "|" + nodePath;
+    }
+
+    protected boolean isForgingTreeExpanded(
+            String stateKey,
+            boolean expandedByDefault
+    ) {
+        return forgingTreeExpansion.getOrDefault(stateKey, expandedByDefault);
+    }
+
     protected abstract void rebuildLayout();
     protected abstract List<TocItem> buildToc(List<WikiBlock> blocks);
     protected abstract void navigateBack();
     protected abstract void navigateForward();
     protected abstract void toggleCurrentBookmark();
+    protected abstract void openCurrentSource();
     protected abstract void activateBrowserTab(int index);
     protected abstract void scrollToPendingFragment(PageTab tab);
     protected abstract void onAddressChanged(String value);

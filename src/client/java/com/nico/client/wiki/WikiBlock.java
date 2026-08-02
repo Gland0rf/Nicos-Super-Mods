@@ -8,6 +8,7 @@ public sealed interface WikiBlock permits
         WikiBlock.MessageBox,
         WikiBlock.Paragraph,
         WikiBlock.ListItem,
+        WikiBlock.ForgingTree,
         WikiBlock.Table,
         WikiBlock.TabGroup,
         WikiBlock.Crafting,
@@ -43,6 +44,12 @@ public sealed interface WikiBlock permits
         public ListItem {
             depth = Math.max(0, depth);
             content = content == null ? WikiContent.empty() : content;
+        }
+    }
+
+    record ForgingTree(WikiForgingTree tree) implements WikiBlock {
+        public ForgingTree {
+            tree = tree == null ? new WikiForgingTree("forging-tree", List.of()) : tree;
         }
     }
 

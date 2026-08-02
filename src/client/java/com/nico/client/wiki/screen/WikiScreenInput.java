@@ -48,7 +48,10 @@ abstract class WikiScreenInput extends WikiScreenInteractionRenderer {
         if (event.button() == InputConstants.MOUSE_BUTTON_MIDDLE) {
             Optional<LinkTarget> target = linkTargetAt(event.x(), event.y());
             if (target.isPresent()) {
-                openResolvedUri(target.get().uri(), OpenDisposition.NEW_TAB);
+                openResolvedUri(
+                        target.get().uri(),
+                        target.get().isImage() ? OpenDisposition.EXTERNAL : OpenDisposition.NEW_TAB
+                );
                 return true;
             }
         }
@@ -100,6 +103,19 @@ abstract class WikiScreenInput extends WikiScreenInteractionRenderer {
                 return true;
             }
 
+            // Help/license/mod-page links must work on non-article tabs too.
+            for (LinkHitbox hitbox : linkHitboxes) {
+                if (!hitbox.contains(event.x(), event.y())) {
+                    continue;
+                }
+                OpenDisposition disposition = hitbox.disposition();
+                if (disposition != OpenDisposition.EXTERNAL && control) {
+                    disposition = OpenDisposition.NEW_TAB;
+                }
+                openResolvedUri(hitbox.uri(), disposition);
+                return true;
+            }
+
             if (activeBrowserTab().kind == PageKind.ARTICLE && state == LoadState.LOADED) {
                 ScrollbarGeometry geometry = scrollbarGeometry();
                 if (geometry != null && geometry.containsTrack(event.x(), event.y())) {
@@ -113,9 +129,27 @@ abstract class WikiScreenInput extends WikiScreenInteractionRenderer {
                     return true;
                 }
 
-                for (LinkHitbox hitbox : linkHitboxes) {
-                    if (hitbox.contains(event.x(), event.y())) {
-                        openResolvedUri(hitbox.uri(), control ? OpenDisposition.NEW_TAB : OpenDisposition.CURRENT_TAB);
+                for (ForgingTreeHitbox hitbox : forgingTreeHitboxes) {
+                    if (!hitbox.contains(event.x(), event.y())) {
+                        continue;
+                    }
+                    forgingTreeExpansion.put(hitbox.stateKey(), !hitbox.expanded());
+                    int oldScroll = scrollPixels;
+                    rebuildLayout();
+                    scrollPixels = Math.min(oldScroll, maxScrollPixels);
+                    saveScreenToActiveTab();
+                    updateFindMatches(false);
+                    return true;
+                }
+
+                for (int index = imageHitboxes.size() - 1; index >= 0; index--) {
+                    ImageHitbox hitbox = imageHitboxes.get(index);
+                    if (!hitbox.contains(event.x(), event.y())) {
+                        continue;
+                    }
+                    Optional<LinkTarget> target = linkTargetAt(event.x(), event.y());
+                    if (target.isPresent() && target.get().isImage()) {
+                        openResolvedUri(target.get().uri(), OpenDisposition.EXTERNAL);
                         return true;
                     }
                 }

@@ -20,6 +20,10 @@ enum ContextAction {
     OPEN("Open Link"),
     OPEN_NEW_TAB("Open in New Tab"),
     OPEN_EXTERNALLY("Open Externally"),
+    VIEW_IMAGE_CREDITS("View Image Source / Credits"),
+    OPEN_IMAGE_LICENSE("Open Image License Terms"),
+    OPEN_IMAGE_FILE("Open Original Image"),
+    COPY_IMAGE_ATTRIBUTION("Copy Image Attribution"),
     COPY_LINK("Copy Link"),
     ADD_BOOKMARK("Bookmark Link"),
     REMOVE_BOOKMARK("Remove Bookmark");
@@ -40,7 +44,7 @@ enum LoadState { LOADING, LOADED, ERROR }
 enum Kind {
     PAGE_TITLE, MESSAGEBOX, TEXT, H2, H3, HR, TOC_HEADER, TOC_ROW, TABLE, TABLE_ROW,
     INFOBOX_TITLE, INFOBOX_IMAGE, INFOBOX_SLOTS, INFOBOX_TABS, INFOBOX_HEADER, INFOBOX_ROW, INFOBOX_GRID,
-    SLOT_STRIP, IMAGE, TABS, TAB_BORDER, CRAFTING
+    SLOT_STRIP, IMAGE, TABS, TAB_BORDER, CRAFTING, FORGING_TREE
 }
 
 record InfoboxPropertyCell(
@@ -69,6 +73,37 @@ record MessageBoxLayout(
 ) {
     MessageBoxLayout {
         lines = lines == null ? List.of() : List.copyOf(lines);
+    }
+}
+
+record ForgingTreeRow(
+        int yOffset,
+        int height,
+        int depth,
+        int parentMiddleYOffset,
+        String stateKey,
+        WikiForgingTree.Node node,
+        boolean expanded,
+        boolean lastSibling,
+        boolean[] ancestorContinues,
+        List<FormattedCharSequence> lines,
+        int iconXOffset,
+        int textXOffset,
+        int toggleXOffset,
+        int toggleWidth
+) {
+    ForgingTreeRow {
+        stateKey = stateKey == null ? "" : stateKey;
+        ancestorContinues = ancestorContinues == null
+                ? new boolean[0]
+                : ancestorContinues.clone();
+        lines = lines == null ? List.of() : List.copyOf(lines);
+    }
+}
+
+record ForgingTreeLayout(List<ForgingTreeRow> rows) {
+    ForgingTreeLayout {
+        rows = rows == null ? List.of() : List.copyOf(rows);
     }
 }
 
@@ -165,6 +200,19 @@ record SlotHitbox(int x, int y, int width, int height, WikiItemSlot.Frame frame)
     }
 }
 
+record ForgingTreeHitbox(
+        int x,
+        int y,
+        int width,
+        int height,
+        String stateKey,
+        boolean expanded
+) {
+    boolean contains(double mouseX, double mouseY) {
+        return ScreenGeometry.contains(mouseX, mouseY, x, y, width, height);
+    }
+}
+
 record TabButton(int x, int y, int width, int height, int index, String title) { }
 record TabPayload(List<TabButton> buttons, int selected) { }
 
@@ -174,13 +222,27 @@ record TabHitbox(int x, int y, int width, int height, int groupId, int tabIndex)
     }
 }
 
-record LinkHitbox(int x, int y, int width, int height, URI uri) {
+record LinkHitbox(int x, int y, int width, int height, URI uri, OpenDisposition disposition) {
+    LinkHitbox(int x, int y, int width, int height, URI uri) {
+        this(x, y, width, height, uri, OpenDisposition.CURRENT_TAB);
+    }
+
+    LinkHitbox {
+        disposition = disposition == null ? OpenDisposition.CURRENT_TAB : disposition;
+    }
+
     boolean contains(double mouseX, double mouseY) {
         return ScreenGeometry.contains(mouseX, mouseY, x, y, width, height);
     }
 }
 
 record TextHoverHitbox(int x, int y, int width, int height, Component tooltip) {
+    boolean contains(double mouseX, double mouseY) {
+        return ScreenGeometry.contains(mouseX, mouseY, x, y, width, height);
+    }
+}
+
+record ImageHitbox(int x, int y, int width, int height, WikiImage image) {
     boolean contains(double mouseX, double mouseY) {
         return ScreenGeometry.contains(mouseX, mouseY, x, y, width, height);
     }
@@ -209,7 +271,15 @@ record NewTabHitbox(int x, int y, int width, int height) {
     }
 }
 
-record LinkTarget(URI uri, String title) { }
+record LinkTarget(URI uri, String title, WikiImage image) {
+    LinkTarget(URI uri, String title) {
+        this(uri, title, null);
+    }
+
+    boolean isImage() {
+        return image != null && !image.isEmpty();
+    }
+}
 record ContextMenu(int x, int y, LinkTarget target) { }
 
 record ContextMenuHitbox(

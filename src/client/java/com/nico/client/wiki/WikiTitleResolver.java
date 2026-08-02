@@ -466,10 +466,7 @@ public final class WikiTitleResolver {
     }
 
     private static HttpRequest.Builder requestBuilder(URI uri) {
-        return HttpRequest.newBuilder(uri)
-                .timeout(Duration.ofSeconds(20))
-                .header("User-Agent", "NSM-Mod/1.0 Hypixel-SkyBlock-Wiki-Reader")
-                .header("Accept-Language", "en-US,en;q=0.9");
+        return WikiHttp.request(uri, Duration.ofSeconds(20));
     }
 
     private static String validateResponse(HttpResponse<String> response) {

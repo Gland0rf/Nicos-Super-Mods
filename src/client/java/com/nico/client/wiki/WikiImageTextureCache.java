@@ -84,16 +84,24 @@ public final class WikiImageTextureCache {
 
     public enum Status { EMPTY, LOADING, READY, FAILED }
 
-    public record Snapshot(Status status, Identifier textureId, int width, int height, String error) {
+    public record Snapshot(
+            Status status,
+            Identifier textureId,
+            int width,
+            int height,
+            String error,
+            WikiImageCredits credits
+    ) {
         public Snapshot {
             status = status == null ? Status.EMPTY : status;
             width = Math.max(0, width);
             height = Math.max(0, height);
             error = error == null ? "" : error;
+            credits = credits == null ? WikiImageCredits.empty() : credits;
         }
 
         public static Snapshot empty() {
-            return new Snapshot(Status.EMPTY, null, 0, 0, "");
+            return new Snapshot(Status.EMPTY, null, 0, 0, "", WikiImageCredits.empty());
         }
 
         public boolean ready() {
@@ -109,6 +117,7 @@ public final class WikiImageTextureCache {
         private volatile int width;
         private volatile int height;
         private volatile String error = "";
+        private volatile WikiImageCredits credits = WikiImageCredits.empty();
         private volatile long failedAt;
 
         private Entry(String key, WikiImage source) {
@@ -128,6 +137,9 @@ public final class WikiImageTextureCache {
             error = "";
 
             WikiImageInfoResolver.resolve(source).whenComplete((resolved, resolveFailure) -> {
+                if (resolved != null) {
+                    credits = resolved.credits();
+                }
                 if (resolveFailure != null || resolved == null || resolved.url().isBlank()) {
                     fail(resolveFailure == null ? "Could not resolve original wiki image URL" : resolveFailure.getMessage());
                     return;
@@ -139,10 +151,8 @@ public final class WikiImageTextureCache {
         private void download(WikiImageInfoResolver.ResolvedImage resolved) {
             HttpRequest request;
             try {
-                request = HttpRequest.newBuilder(URI.create(resolved.url()))
-                        .timeout(Duration.ofSeconds(20))
-                        .header("User-Agent", "NSM-Mod/1.0 Hypixel-SkyBlock-Wiki-Reader")
-                        .header("Referer", "https://hypixelskyblock.minecraft.wiki/")
+                request = WikiHttp.request(URI.create(resolved.url()), Duration.ofSeconds(20))
+                        .header("Referer", WikiAttribution.WIKI_HOME.toString())
                         .header("Accept", "image/png,image/jpeg,image/gif,image/bmp;q=0.9,*/*;q=0.1")
                         .GET()
                         .build();
@@ -262,7 +272,7 @@ public final class WikiImageTextureCache {
         }
 
         private Snapshot snapshot() {
-            return new Snapshot(status, identifier, width, height, error);
+            return new Snapshot(status, identifier, width, height, error, credits);
         }
 
         private void releaseTexture() {
