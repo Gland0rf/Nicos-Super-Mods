@@ -1,6 +1,7 @@
 package com.nico.client.wiki;
 
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 
@@ -8,14 +9,14 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Extracts the stable Hypixel item ID from the ItemStack.
- *
- * Modern Hypixel item data may expose the ID directly inside minecraft:custom_data,
- * while older stacks stored it inside ExtraAttributes. Both are read without trying
- * to strip or maintain a list of reforges.
- */
+/** Extracts a stable Hypixel item identity from an ItemStack. */
 public final class SkyblockItemResolver {
+    private static final List<String> EXTRA_ATTRIBUTE_KEYS = List.of(
+            "ExtraAttributes",
+            "extra_attributes",
+            "extraAttributes"
+    );
+
     private SkyblockItemResolver() { }
 
     public static ItemIdentity resolveIdentity(ItemStack stack) {
@@ -29,51 +30,86 @@ public final class SkyblockItemResolver {
     }
 
     private static String readInternalId(ItemStack stack) {
-        // Minecraft 26.1 / modern item components.
+        /*
+         * Minecraft 1.21.11 stores the old item NBT payload in
+         * minecraft:custom_data. Hypixel's stable ID is normally located at
+         * ExtraAttributes.id, although some packet/item converters expose it
+         * directly as custom_data.id.
+         */
         try {
             CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
             if (customData != null) {
-                String id = readIdFromCustomDataRoot(customData.copyTag());
+                String id = readId(customData.copyTag());
                 if (!id.isBlank()) {
                     return id;
                 }
             }
         } catch (RuntimeException | LinkageError ignored) {
-            // Keep the reflection compatibility path below for older mappings/stacks.
+            // Keep the compatibility paths below for transformed mappings.
         }
 
-        String legacy = readIdFromCustomDataRoot(tryLegacyTag(stack));
+        String legacy = readIdFromUnknownTag(tryLegacyTag(stack));
         if (!legacy.isBlank()) {
             return legacy;
         }
-
-        return readIdFromCustomDataRoot(tryCustomDataReflectively(stack));
+        return readIdFromUnknownTag(tryCustomDataReflectively(stack));
     }
 
-    private static String readIdFromCustomDataRoot(Object rootTag) {
-        Object root = unwrapOptional(rootTag);
+    private static String readId(CompoundTag root) {
         if (root == null) {
             return "";
         }
 
-        // Current component representation: {id:"ASPECT_OF_THE_END", ...}
-        String directId = readString(root, "id");
+        String direct = root.getString("id").orElse("").trim();
+        if (!direct.isBlank()) {
+            return direct;
+        }
+
+        for (String key : EXTRA_ATTRIBUTE_KEYS) {
+            Optional<CompoundTag> extra = root.getCompound(key);
+            if (extra.isPresent()) {
+                String id = extra.get().getString("id").orElse("").trim();
+                if (!id.isBlank()) {
+                    return id;
+                }
+            }
+        }
+        return "";
+    }
+
+    private static String readIdFromUnknownTag(Object rootTag) {
+        Object root = unwrapOptional(rootTag);
+        if (root instanceof CompoundTag compoundTag) {
+            return readId(compoundTag);
+        }
+        if (root == null) {
+            return "";
+        }
+
+        String directId = readStringReflectively(root, "id");
         if (!directId.isBlank()) {
             return directId;
         }
 
-        // Legacy representation: {ExtraAttributes:{id:"ASPECT_OF_THE_END", ...}}
-        Object extraAttributes = invokeKeyMethod(
-                root,
-                List.of("getCompound", "getCompoundOrEmpty"),
-                "ExtraAttributes"
-        );
-
-        extraAttributes = unwrapOptional(extraAttributes);
-        return extraAttributes == null ? "" : readString(extraAttributes, "id");
+        for (String key : EXTRA_ATTRIBUTE_KEYS) {
+            Object extraAttributes = invokeKeyMethod(
+                    root,
+                    List.of("getCompound", "getCompoundOrEmpty"),
+                    key
+            );
+            extraAttributes = unwrapOptional(extraAttributes);
+            if (extraAttributes == null) {
+                continue;
+            }
+            String id = readStringReflectively(extraAttributes, "id");
+            if (!id.isBlank()) {
+                return id;
+            }
+        }
+        return "";
     }
 
-    private static String readString(Object compound, String key) {
+    private static String readStringReflectively(Object compound, String key) {
         Object value = invokeKeyMethod(compound, List.of("getString", "getStringOr"), key);
         value = unwrapOptional(value);
         return value instanceof String string ? string.trim() : "";
@@ -83,7 +119,7 @@ public final class SkyblockItemResolver {
         try {
             Method method = stack.getClass().getMethod("getTag");
             return unwrapOptional(method.invoke(stack));
-        } catch (ReflectiveOperationException ignored) {
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
             return null;
         }
     }
@@ -110,13 +146,12 @@ public final class SkyblockItemResolver {
                     if (result != null) {
                         return result;
                     }
-                } catch (ReflectiveOperationException ignored) {
-                    // Try the next mapping name.
+                } catch (ReflectiveOperationException | RuntimeException ignored) {
+                    // No more mapping ways.
                 }
             }
-
             return customData;
-        } catch (ReflectiveOperationException ignored) {
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
             return null;
         }
     }
@@ -126,7 +161,6 @@ public final class SkyblockItemResolver {
             if (!method.getName().equals("get") || method.getParameterCount() != 1) {
                 continue;
             }
-
             Class<?> parameter = method.getParameterTypes()[0];
             if (parameter.isInstance(componentType)
                     || parameter.isAssignableFrom(componentType.getClass())) {
@@ -149,13 +183,12 @@ public final class SkyblockItemResolver {
                     if (method.getParameterCount() == 1) {
                         return method.invoke(target, key);
                     }
-
                     if (method.getParameterCount() == 2
                             && method.getParameterTypes()[1] == String.class) {
                         return method.invoke(target, key, "");
                     }
-                } catch (ReflectiveOperationException ignored) {
-                    // Try another overload or mapping name.
+                } catch (ReflectiveOperationException | RuntimeException ignored) {
+                    // No more mappings
                 }
             }
         }

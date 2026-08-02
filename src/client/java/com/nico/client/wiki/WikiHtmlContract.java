@@ -1,13 +1,19 @@
 package com.nico.client.wiki;
 
 /**
- * Exact HTML classes currently emitted by the community Hypixel SkyBlock Wiki.
+ * Exact HTML classes currently emitted by the independent Hypixel SkyBlock Wiki.
  * The parser deliberately fails closed instead of scoring or guessing arbitrary elements.
  */
 public final class WikiHtmlContract {
     private WikiHtmlContract() { }
 
     public static final String ARTICLE_ROOT = "mw-parser-output";
+
+    public static final String MESSAGEBOX_NARROW_WRAPPER = "messagebox-narrow-wrapper";
+    public static final String MESSAGEBOX = "messagebox";
+    public static final String MESSAGEBOX_MAIN = "messagebox-main";
+    public static final String MESSAGEBOX_IMAGE = "messagebox-image";
+    public static final String MESSAGEBOX_TEXT = "messagebox-text";
 
     public static final String INFOBOX = "infobox";
     public static final String INFOBOX_TITLE = "infobox-title";

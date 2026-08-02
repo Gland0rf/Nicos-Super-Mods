@@ -5,6 +5,7 @@ import java.util.Objects;
 
 public sealed interface WikiBlock permits
         WikiBlock.Heading,
+        WikiBlock.MessageBox,
         WikiBlock.Paragraph,
         WikiBlock.ListItem,
         WikiBlock.Table,
@@ -18,6 +19,17 @@ public sealed interface WikiBlock permits
             level = Math.max(2, Math.min(6, level));
             text = text == null ? WikiText.empty() : text;
             anchor = Objects.requireNonNullElse(anchor, "").trim();
+        }
+    }
+
+    record MessageBox(WikiContent content, Tone tone) implements WikiBlock {
+        public MessageBox {
+            content = content == null ? WikiContent.empty() : content;
+            tone = tone == null ? Tone.DEFAULT : tone;
+        }
+
+        public enum Tone {
+            DEFAULT, GREEN, RED, BLUE, YELLOW, ORANGE, PURPLE, GRAY
         }
     }
 

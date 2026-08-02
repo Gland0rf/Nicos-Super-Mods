@@ -2,45 +2,21 @@ package com.nico.client.wiki.screen;
 
 import com.nico.client.wiki.WikiBlock;
 import com.nico.client.wiki.WikiBrowserStore;
-import com.nico.client.wiki.WikiContent;
-import com.nico.client.wiki.WikiCraftingGrid;
-import com.nico.client.wiki.WikiImage;
-import com.nico.client.wiki.WikiImageTextureCache;
-import com.nico.client.wiki.WikiInfobox;
-import com.nico.client.wiki.WikiItemSlot;
 import com.nico.client.wiki.WikiPage;
-import com.nico.client.wiki.WikiText;
 import com.nico.client.wiki.WikiTitleResolver;
 import com.nico.client.wiki.service.HypixelWikiService;
-import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.screens.ConfirmLinkScreen;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.network.chat.Style;
-import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 
-import java.net.URI;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.function.Consumer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
@@ -54,8 +30,15 @@ abstract class WikiScreenBase extends Screen {
     protected static final long ANIMATION_PERIOD_MILLIS = 3_000L;
     protected static final int PAGE_PADDING = 16;
     protected static final int COLUMN_GAP = 14;
-    protected static final int INFOBOX_WIDTH = 240;
-    protected static final int MIN_ARTICLE_WIDTH = 500;
+    protected static final int INFOBOX_WIDTH = 360;
+    protected static final int MIN_INFOBOX_WIDTH = 160;
+    /*
+     * Screen dimensions are measured in logical GUI pixels. With common GUI
+     * scales, a physically wide window can therefore still be only 700-800
+     * units wide. Keep the breakpoint low enough for the Wiki-style right
+     * infobox to remain beside a readable article column.
+     */
+    protected static final int MIN_ARTICLE_WIDTH = 300;
     protected static final int MAX_PAGE_WIDTH = 1240;
     protected static final int LINE_HEIGHT = 12;
     protected static final int SCROLL_STEP = 28;
@@ -85,6 +68,14 @@ abstract class WikiScreenBase extends Screen {
     protected static final int TAB_ACTIVE = 0xFF3B98C2;
     protected static final int TOC_BACKGROUND = 0xFF2E2F3D;
     protected static final int TOC_HOVER = 0xFF3A3B4D;
+    protected static final int MESSAGEBOX_BACKGROUND = 0xFF1A2220;
+    protected static final int MESSAGEBOX_GREEN = 0xFF218B28;
+    protected static final int MESSAGEBOX_RED = 0xFFB03A3A;
+    protected static final int MESSAGEBOX_BLUE = 0xFF3489B0;
+    protected static final int MESSAGEBOX_YELLOW = 0xFFC59A2E;
+    protected static final int MESSAGEBOX_ORANGE = 0xFFCA6F2A;
+    protected static final int MESSAGEBOX_PURPLE = 0xFF8D55B8;
+    protected static final int MESSAGEBOX_GRAY = 0xFF667084;
     protected static final int TOOLTIP_BACKGROUND = 0xF0081326;
     protected static final int TOOLTIP_BORDER_OUTER = 0xFF000000;
     protected static final int TOOLTIP_BORDER_INNER = 0xFF2C7FD3;
@@ -102,6 +93,7 @@ abstract class WikiScreenBase extends Screen {
     protected final List<TocHitbox> tocHitboxes = new ArrayList<>();
     protected final List<SlotHitbox> slotHitboxes = new ArrayList<>();
     protected final List<LinkHitbox> linkHitboxes = new ArrayList<>();
+    protected final List<TextHoverHitbox> textHoverHitboxes = new ArrayList<>();
     protected final List<PageTabHitbox> pageTabHitboxes = new ArrayList<>();
     protected final List<ContextMenuHitbox> contextMenuHitboxes = new ArrayList<>();
     protected final List<SearchSuggestionHitbox> searchSuggestionHitboxes = new ArrayList<>();
@@ -350,6 +342,7 @@ abstract class WikiScreenBase extends Screen {
         tocHitboxes.clear();
         slotHitboxes.clear();
         linkHitboxes.clear();
+        textHoverHitboxes.clear();
         pageTabHitboxes.clear();
         contextMenuHitboxes.clear();
         searchSuggestionHitboxes.clear();

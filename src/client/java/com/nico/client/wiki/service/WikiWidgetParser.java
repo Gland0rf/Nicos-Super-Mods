@@ -36,7 +36,7 @@ abstract class WikiWidgetParser extends WikiContentParser{
         }
         if (rows.isEmpty()) {
             if (DEBUG) {
-                System.err.println("[Wiki] Ignoring table.wikitable without direct table rows");
+                System.err.println("[NSM Wiki] Ignoring table.wikitable without direct table rows");
             }
             return null;
         }

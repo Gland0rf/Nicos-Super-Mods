@@ -13,6 +13,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
@@ -20,6 +21,7 @@ import net.minecraft.world.item.ItemStack;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /** Builds the immutable render-entry list from the Wiki model. */
 abstract class WikiScreenLayout extends WikiScreenActions {
@@ -42,14 +44,24 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         pageWidth = Math.min(MAX_PAGE_WIDTH, Math.max(280, width - OUTER_MARGIN * 2));
         pageLeft = (width - pageWidth) / 2;
 
-        int desiredInfoboxWidth = Math.min(INFOBOX_WIDTH, Math.max(205, pageWidth * 29 / 100));
-        int candidateArticleWidth = pageWidth - PAGE_PADDING * 2 - desiredInfoboxWidth - COLUMN_GAP;
-        boolean wide = !page.infobox().isEmpty()
-                && candidateArticleWidth >= MIN_ARTICLE_WIDTH
-                && !containsWideTable(page.blocks());
+        int fullContentWidth = pageWidth - PAGE_PADDING * 2;
+        int desiredInfoboxWidth = Math.min(
+                INFOBOX_WIDTH,
+                Math.max(MIN_INFOBOX_WIDTH, fullContentWidth * 28 / 100)
+        );
+        int candidateArticleWidth = fullContentWidth - desiredInfoboxWidth - COLUMN_GAP;
 
-        int articleX = pageLeft + PAGE_PADDING;
-        int articleWidth = pageWidth - PAGE_PADDING * 2;
+        /*
+         * The website keeps the infobox floated on the right even when the
+         * article contains a wide table. A table should shrink to the article
+         * column; it must not force the entire infobox above the page.
+         */
+        boolean wide = !page.infobox().isEmpty()
+                && candidateArticleWidth >= MIN_ARTICLE_WIDTH;
+
+        int contentX = pageLeft + PAGE_PADDING;
+        int articleX = contentX;
+        int articleWidth = fullContentWidth;
         int infoboxX = articleX;
         int infoboxWidth = articleWidth;
         if (wide) {
@@ -58,11 +70,27 @@ abstract class WikiScreenLayout extends WikiScreenActions {
             infoboxX = articleX + articleWidth + COLUMN_GAP;
         }
 
-        int articleY = 12;
-        articleY = layoutPageTitle(articleX, articleY, articleWidth);
+        /*
+         * The live Wiki places the page title and leading notice/message boxes
+         * above both columns. The article text and floating infobox only split
+         * after those full-width elements.
+         */
+        int articleY = layoutPageTitle(contentX, 12, fullContentWidth);
+        int firstColumnBlock = 0;
+        while (firstColumnBlock < page.blocks().size()
+                && page.blocks().get(firstColumnBlock) instanceof WikiBlock.MessageBox) {
+            articleY = layoutBlock(
+                    page.blocks().get(firstColumnBlock),
+                    contentX,
+                    articleY,
+                    fullContentWidth
+            );
+            firstColumnBlock++;
+        }
+
         int infoboxBottom = articleY;
         if (wide) {
-            infoboxBottom = layoutInfobox(infoboxX, 12, infoboxWidth);
+            infoboxBottom = layoutInfobox(infoboxX, articleY, infoboxWidth);
         } else if (!page.infobox().isEmpty()) {
             articleY = layoutInfobox(articleX, articleY, articleWidth) + 12;
             infoboxBottom = articleY;
@@ -72,7 +100,8 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         boolean tocInserted = false;
         int headingIndex = 0;
 
-        for (WikiBlock block : page.blocks()) {
+        for (int blockIndex = firstColumnBlock; blockIndex < page.blocks().size(); blockIndex++) {
+            WikiBlock block = page.blocks().get(blockIndex);
             if (block instanceof WikiBlock.Heading) {
                 if (!tocInserted && tocItems.size() >= 2) {
                     articleY = layoutToc(tocItems, articleX, articleY, articleWidth);
@@ -115,12 +144,9 @@ abstract class WikiScreenLayout extends WikiScreenActions {
     protected int layoutPageTitle(int x, int y, int width) {
         MutableComponent title = Component.literal(page.title()).withStyle(ChatFormatting.WHITE, ChatFormatting.BOLD);
         List<FormattedCharSequence> titleLines = font.split(title, width);
-        MutableComponent source = Component.literal("From " + page.sourceName()).withStyle(ChatFormatting.GRAY);
-        int h = titleLines.size() * 13 + 22;
-        entries.add(new RenderEntry(Kind.PAGE_TITLE, x, y, width, h, List.of(
-                new Cell(0, 0, width, titleLines),
-                new Cell(0, titleLines.size() * 13 + 2, width, List.of(source.getVisualOrderText()))
-        ), 0, null));
+        int h = Math.max(18, titleLines.size() * 13 + 5);
+        entries.add(new RenderEntry(Kind.PAGE_TITLE, x, y, width, h,
+                List.of(new Cell(0, 0, width, titleLines)), 0, null));
         return y + h + 9;
     }
 
@@ -212,7 +238,9 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         findTargets.add(new FindTarget(title, x, y, width, titleHeight));
         y += titleHeight;
 
-        for (WikiInfobox.Entry entry : page.infobox().entries()) {
+        List<WikiInfobox.Entry> infoboxEntries = page.infobox().entries();
+        for (int entryIndex = 0; entryIndex < infoboxEntries.size(); entryIndex++) {
+            WikiInfobox.Entry entry = infoboxEntries.get(entryIndex);
             if (entry instanceof WikiInfobox.Image image) {
                 int captionHeight = image.caption().isBlank() ? 0 : LINE_HEIGHT + 7;
                 int h = imageBoxHeight(image.image(), width - 16, 48, 118) + captionHeight + 12;
@@ -235,6 +263,64 @@ abstract class WikiScreenLayout extends WikiScreenActions {
                 findTargets.add(new FindTarget(header.text().plainText(), x, y, width, h));
                 y += h;
             } else if (entry instanceof WikiInfobox.Row row) {
+                int groupColumns = Math.max(1, row.groupColumns());
+                if (groupColumns > 1) {
+                    List<WikiInfobox.Row> group = new ArrayList<>();
+                    int scan = entryIndex;
+                    while (scan < infoboxEntries.size() && group.size() < groupColumns) {
+                        WikiInfobox.Entry candidate = infoboxEntries.get(scan);
+                        if (!(candidate instanceof WikiInfobox.Row candidateRow)
+                                || candidateRow.groupColumns() != groupColumns) {
+                            break;
+                        }
+                        group.add(candidateRow);
+                        scan++;
+                    }
+
+                    if (!group.isEmpty()) {
+                        int cellWidth = Math.max(1, width / groupColumns);
+                        List<InfoboxPropertyCell> cells = new ArrayList<>();
+                        int contentHeight = 0;
+                        StringBuilder searchable = new StringBuilder();
+                        for (int index = 0; index < group.size(); index++) {
+                            WikiInfobox.Row property = group.get(index);
+                            int actualWidth = index == groupColumns - 1
+                                    ? width - index * cellWidth
+                                    : cellWidth;
+                            List<FormattedCharSequence> labelLines = font.split(
+                                    toComponent(property.label()).withStyle(ChatFormatting.BOLD),
+                                    Math.max(20, actualWidth - 10)
+                            );
+                            List<FormattedCharSequence> valueLines = font.split(
+                                    toComponent(property.value().text()),
+                                    Math.max(20, actualWidth - 10)
+                            );
+                            int cellContentHeight = labelLines.size() * LINE_HEIGHT
+                                    + valueLines.size() * LINE_HEIGHT
+                                    + (valueLines.isEmpty() ? 0 : 4);
+                            contentHeight = Math.max(contentHeight, cellContentHeight);
+                            cells.add(new InfoboxPropertyCell(
+                                    index * cellWidth,
+                                    actualWidth,
+                                    labelLines,
+                                    valueLines
+                            ));
+                            if (!searchable.isEmpty()) searchable.append(' ');
+                            searchable.append(property.label().plainText()).append(' ')
+                                    .append(searchableContent(property.value()));
+                        }
+                        int h = Math.max(34, contentHeight + 10);
+                        entries.add(new RenderEntry(
+                                Kind.INFOBOX_GRID, x, y, width, h, List.of(), 0,
+                                new InfoboxGridLayout(cells)
+                        ));
+                        findTargets.add(new FindTarget(searchable.toString().trim(), x, y, width, h));
+                        y += h;
+                        entryIndex += group.size() - 1;
+                        continue;
+                    }
+                }
+
                 int labelWidth = Math.min(90, Math.max(68, width / 3));
                 List<FormattedCharSequence> label = font.split(toComponent(row.label()), labelWidth - 8);
                 List<FormattedCharSequence> value = font.split(toComponent(row.value().text()), width - labelWidth - 10);
@@ -275,6 +361,28 @@ abstract class WikiScreenLayout extends WikiScreenActions {
             entries.add(new RenderEntry(heading.level() == 2 ? Kind.H2 : Kind.H3, x, y + 4, width, h,
                     List.of(new Cell(heading.level() > 2 ? 6 : 0, 0, width - 6, lines)), 0, null));
             return y + h + 10;
+        }
+        if (block instanceof WikiBlock.MessageBox messageBox) {
+            WikiContent content = messageBox.content();
+            WikiImage icon = content.images().isEmpty() ? WikiImage.empty() : content.images().get(0);
+            int iconWidth = icon.isEmpty() ? 0 : Math.min(48, preferredImageWidth(icon, 48, 48));
+            int iconHeight = icon.isEmpty() ? 0 : imageBoxHeight(icon, iconWidth, 32, 48);
+            int textOffset = iconWidth == 0 ? 10 : iconWidth + 18;
+            int textWidth = Math.max(40, width - textOffset - 10);
+            List<FormattedCharSequence> lines = font.split(toComponent(content.text()), textWidth);
+            int textHeight = Math.max(LINE_HEIGHT, lines.size() * LINE_HEIGHT);
+            int height = Math.max(42, Math.max(textHeight, iconHeight) + 16);
+            entries.add(new RenderEntry(
+                    Kind.MESSAGEBOX,
+                    x,
+                    y,
+                    width,
+                    height,
+                    List.of(),
+                    0,
+                    new MessageBoxLayout(messageBox, lines, iconWidth, iconHeight)
+            ));
+            return y + height + 9;
         }
         if (block instanceof WikiBlock.Paragraph paragraph) {
             return layoutContent(paragraph.content(), x, y, width, false);
@@ -520,6 +628,9 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         if (block instanceof WikiBlock.Heading heading) {
             return heading.text().plainText();
         }
+        if (block instanceof WikiBlock.MessageBox messageBox) {
+            return searchableContent(messageBox.content());
+        }
         if (block instanceof WikiBlock.Paragraph paragraph) {
             return searchableContent(paragraph.content());
         }
@@ -640,11 +751,77 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         return y + h + 9;
     }
 
+    protected static ChatFormatting spanFormatting(WikiText.Span span) {
+        if (span.isLink()) {
+            return ChatFormatting.AQUA;
+        }
+
+        String classes = span.cssClasses().toLowerCase(Locale.ROOT);
+        if (containsCssMarker(classes, "very-special")
+                || containsCssMarker(classes, "special")
+                || containsCssMarker(classes, "negative")
+                || containsCssMarker(classes, "error")
+                || containsCssMarker(classes, "no")) {
+            return ChatFormatting.RED;
+        }
+        if (containsCssMarker(classes, "mythic")) {
+            return ChatFormatting.LIGHT_PURPLE;
+        }
+        if (containsCssMarker(classes, "legendary")
+                || containsCssMarker(classes, "orange")) {
+            return ChatFormatting.GOLD;
+        }
+        if (containsCssMarker(classes, "epic")
+                || containsCssMarker(classes, "purple")) {
+            return ChatFormatting.DARK_PURPLE;
+        }
+        if (containsCssMarker(classes, "uncommon")
+                || containsCssMarker(classes, "positive")
+                || containsCssMarker(classes, "success")
+                || containsCssMarker(classes, "yes")
+                || containsCssMarker(classes, "green")) {
+            return ChatFormatting.GREEN;
+        }
+        if (containsCssMarker(classes, "divine")
+                || containsCssMarker(classes, "aqua")
+                || containsCssMarker(classes, "cyan")) {
+            return ChatFormatting.AQUA;
+        }
+        if (containsCssMarker(classes, "rare")
+                || containsCssMarker(classes, "blue")) {
+            return ChatFormatting.BLUE;
+        }
+        if (containsCssMarker(classes, "muted")
+                || containsCssMarker(classes, "gray")
+                || containsCssMarker(classes, "grey")) {
+            return ChatFormatting.GRAY;
+        }
+        if (containsCssMarker(classes, "warning")
+                || containsCssMarker(classes, "yellow")) {
+            return ChatFormatting.YELLOW;
+        }
+        return ChatFormatting.WHITE;
+    }
+
+    private static boolean containsCssMarker(String classes, String marker) {
+        if (classes == null || classes.isBlank() || marker == null || marker.isBlank()) {
+            return false;
+        }
+        for (String token : classes.split("\\s+")) {
+            if (token.equals(marker)
+                    || token.endsWith("-" + marker)
+                    || token.startsWith(marker + "-")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     protected MutableComponent toComponent(WikiText text) {
         MutableComponent result = Component.empty();
         for (WikiText.Span span : text.spans()) {
             MutableComponent part = Component.literal(span.text());
-            part.withStyle(span.isLink() ? ChatFormatting.AQUA : ChatFormatting.WHITE);
+            part.withStyle(spanFormatting(span));
             if (span.bold()) {
                 part.withStyle(ChatFormatting.BOLD);
             }
@@ -658,6 +835,21 @@ abstract class WikiScreenLayout extends WikiScreenActions {
                             .withClickEvent(new ClickEvent.OpenUrl(uri))
                             .withUnderlined(true));
                 }
+            }
+            if (span.isHoverable()) {
+                MutableComponent tooltip = Component.empty();
+                if (!span.hoverTitle().isBlank()) {
+                    tooltip.append(WikiScreenInteractionRenderer.parseLegacyFormatting(
+                            span.hoverTitle(), ChatFormatting.AQUA));
+                }
+                if (!span.hoverText().isBlank()) {
+                    if (!span.hoverTitle().isBlank()) {
+                        tooltip.append(Component.literal("\n"));
+                    }
+                    tooltip.append(WikiScreenInteractionRenderer.parseLegacyFormatting(
+                            span.hoverText(), ChatFormatting.GRAY));
+                }
+                part.withStyle(style -> style.withHoverEvent(new HoverEvent.ShowText(tooltip)));
             }
             result.append(part);
         }

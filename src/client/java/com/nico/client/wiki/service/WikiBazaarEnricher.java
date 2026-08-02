@@ -58,16 +58,16 @@ public final class WikiBazaarEnricher {
             BazaarService.BazaarSnapshot snapshot = bazaarService.getSnapshot();
             Map<String, BazaarService.BazaarProduct> products = snapshot.getProducts();
             if (products == null || products.isEmpty()) {
-                System.err.println("[Wiki Bazaar] Bazaar snapshot contained no products");
+                System.err.println("[NSM Wiki] Bazaar snapshot contained no products");
                 return page;
             }
 
             String normalizedProductId = requestedProductId.trim().toUpperCase(Locale.ROOT);
             BazaarService.BazaarProduct resolvedProduct = findProduct(products, normalizedProductId);
             if (resolvedProduct == null) {
-                System.err.println("[Wiki Bazaar] Product not found: " + normalizedProductId);
+                System.err.println("[NSM Wiki] Product not found: " + normalizedProductId);
             } else {
-                System.out.println("[Wiki Bazaar] Loaded " + normalizedProductId
+                System.out.println("[NSM Wiki] Loaded " + normalizedProductId
                         + " buy=" + resolvedProduct.getInstantBuyPrice()
                         + " sell=" + resolvedProduct.getInstantSellPrice());
             }
@@ -88,7 +88,7 @@ public final class WikiBazaarEnricher {
             );
         } catch (IOException | RuntimeException exception) {
             // Bazaar data is optional. A Wiki page should remain usable when the API is unavailable.
-            System.err.println("[Wiki Bazaar] Could not enrich prices: " + exception.getMessage());
+            System.err.println("[NSM Wiki] Could not enrich prices: " + exception.getMessage());
             exception.printStackTrace(System.err);
             return page;
         }

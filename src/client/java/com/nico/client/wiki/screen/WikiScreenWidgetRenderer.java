@@ -3,7 +3,6 @@ package com.nico.client.wiki.screen;
 import static com.nico.client.wiki.screen.WikiScreenMetrics.*;
 
 import com.nico.client.wiki.WikiBlock;
-import com.nico.client.wiki.WikiBrowserStore;
 import com.nico.client.wiki.WikiContent;
 import com.nico.client.wiki.WikiCraftingGrid;
 import com.nico.client.wiki.WikiImage;
@@ -15,6 +14,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
@@ -35,6 +36,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
                 drawCells(graphics, entry, y, TEXT);
                 graphics.fill(entry.x(), y + entry.height() - 1, entry.x() + entry.width(), y + entry.height(), DIVIDER);
             }
+            case MESSAGEBOX -> renderMessageBox(graphics, entry, y);
             case TEXT -> drawCells(graphics, entry, y, TEXT);
             case H2, H3 -> {
                 drawCells(graphics, entry, y, TEXT);
@@ -61,22 +63,70 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
             case INFOBOX_TITLE -> {
                 graphics.fill(entry.x(), y, entry.x() + entry.width(), y + entry.height(), BLUE);
                 graphics.fill(entry.x(), y, entry.x() + entry.width(), y + 3, entry.aux());
-                drawCells(graphics, entry, y, TEXT);
+                drawCenteredCells(graphics, entry, y, TEXT);
+                renderBorder(graphics, entry, y, BORDER);
             }
             case INFOBOX_IMAGE -> renderInfoboxImage(graphics, entry, y);
-            case INFOBOX_SLOTS -> renderSlotStrip(graphics, entry, y,
-                    ((WikiInfobox.SlotStrip) entry.payload()).slots());
+            case INFOBOX_SLOTS -> {
+                renderSlotStrip(graphics, entry, y,
+                        ((WikiInfobox.SlotStrip) entry.payload()).slots());
+                renderBorder(graphics, entry, y, BORDER);
+            }
             case INFOBOX_TABS -> renderInfoboxTabs(graphics, entry, y);
             case INFOBOX_HEADER -> {
                 graphics.fill(entry.x(), y, entry.x() + entry.width(), y + entry.height(), BLUE_DARK);
-                drawCells(graphics, entry, y, TEXT);
+                drawCenteredCells(graphics, entry, y, TEXT);
+                renderBorder(graphics, entry, y, BORDER);
             }
             case INFOBOX_ROW -> renderInfoboxRow(graphics, entry, y);
+            case INFOBOX_GRID -> renderInfoboxGrid(graphics, entry, y);
             case SLOT_STRIP -> renderSlotStrip(graphics, entry, y, castSlots(entry.payload()));
             case IMAGE -> renderWikiImageEntry(graphics, entry, y);
             case TABS -> renderTabs(graphics, entry, y);
             case TAB_BORDER -> renderBorder(graphics, entry, y, BORDER);
             case CRAFTING -> renderCrafting(graphics, entry, y, (WikiCraftingGrid) entry.payload());
+        }
+    }
+
+    protected void renderMessageBox(GuiGraphics graphics, RenderEntry entry, int y) {
+        if (!(entry.payload() instanceof MessageBoxLayout layout)) {
+            return;
+        }
+
+        int accent = switch (layout.box().tone()) {
+            case GREEN -> MESSAGEBOX_GREEN;
+            case RED -> MESSAGEBOX_RED;
+            case BLUE -> MESSAGEBOX_BLUE;
+            case YELLOW -> MESSAGEBOX_YELLOW;
+            case ORANGE -> MESSAGEBOX_ORANGE;
+            case PURPLE -> MESSAGEBOX_PURPLE;
+            case GRAY -> MESSAGEBOX_GRAY;
+            case DEFAULT -> BORDER;
+        };
+
+        graphics.fill(entry.x(), y, entry.x() + entry.width(), y + entry.height(), MESSAGEBOX_BACKGROUND);
+        graphics.fill(entry.x(), y, entry.x() + 4, y + entry.height(), accent);
+        renderBorder(graphics, entry, y, accent);
+
+        WikiContent content = layout.box().content();
+        int textX = entry.x() + 10;
+        if (layout.iconWidth() > 0 && !content.images().isEmpty()) {
+            int iconY = y + Math.max(6, (entry.height() - layout.iconHeight()) / 2);
+            drawRemoteImage(
+                    graphics,
+                    content.images().get(0),
+                    entry.x() + 10,
+                    iconY,
+                    layout.iconWidth(),
+                    layout.iconHeight()
+            );
+            textX += layout.iconWidth() + 8;
+        }
+
+        int textY = y + Math.max(7, (entry.height() - layout.lines().size() * LINE_HEIGHT) / 2);
+        for (FormattedCharSequence line : layout.lines()) {
+            drawInteractiveLine(graphics, line, textX, textY, TEXT);
+            textY += LINE_HEIGHT;
         }
     }
 
@@ -294,6 +344,7 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
             graphics.drawCenteredString(font, font.plainSubstrByWidth(tabs.labels().get(i), right - x - 6),
                     (x + right) / 2, y + 6, TEXT);
         }
+        renderBorder(graphics, entry, y, BORDER);
     }
 
     protected void renderInfoboxRow(GuiGraphics graphics, RenderEntry entry, int y) {
@@ -301,8 +352,41 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         graphics.fill(entry.x(), y, entry.x() + split, y + entry.height(), TABLE_ROW);
         graphics.fill(entry.x() + split, y, entry.x() + entry.width(), y + entry.height(), PAGE);
         graphics.fill(entry.x() + split, y, entry.x() + split + 1, y + entry.height(), BORDER);
+        graphics.fill(entry.x(), y, entry.x() + 1, y + entry.height(), BORDER);
+        graphics.fill(entry.x() + entry.width() - 1, y, entry.x() + entry.width(), y + entry.height(), BORDER);
         graphics.fill(entry.x(), y + entry.height() - 1, entry.x() + entry.width(), y + entry.height(), BORDER);
         drawCells(graphics, entry, y, TEXT);
+    }
+
+    protected void renderInfoboxGrid(GuiGraphics graphics, RenderEntry entry, int y) {
+        if (!(entry.payload() instanceof InfoboxGridLayout layout)) {
+            return;
+        }
+        graphics.fill(entry.x(), y, entry.x() + entry.width(), y + entry.height(), PAGE);
+        for (InfoboxPropertyCell cell : layout.cells()) {
+            int cellX = entry.x() + cell.xOffset();
+            if (cell.xOffset() > 0) {
+                graphics.fill(cellX, y, cellX + 1, y + entry.height(), BORDER);
+            }
+            int totalHeight = cell.labelLines().size() * LINE_HEIGHT
+                    + cell.valueLines().size() * LINE_HEIGHT
+                    + (cell.valueLines().isEmpty() ? 0 : 4);
+            int lineY = y + Math.max(5, (entry.height() - totalHeight) / 2);
+            for (FormattedCharSequence line : cell.labelLines()) {
+                int lineX = cellX + Math.max(4, (cell.width() - font.width(line)) / 2);
+                drawInteractiveLine(graphics, line, lineX, lineY, TEXT);
+                lineY += LINE_HEIGHT;
+            }
+            if (!cell.valueLines().isEmpty()) {
+                lineY += 4;
+            }
+            for (FormattedCharSequence line : cell.valueLines()) {
+                int lineX = cellX + Math.max(4, (cell.width() - font.width(line)) / 2);
+                drawInteractiveLine(graphics, line, lineX, lineY, TEXT);
+                lineY += LINE_HEIGHT;
+            }
+        }
+        renderBorder(graphics, entry, y, BORDER);
     }
 
     protected void renderSlotStrip(GuiGraphics graphics, RenderEntry entry, int y, List<WikiItemSlot> slots) {
@@ -489,6 +573,18 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         graphics.fill(entry.x() + entry.width() - 1, y, entry.x() + entry.width(), y + entry.height(), color);
     }
 
+    protected void drawCenteredCells(GuiGraphics graphics, RenderEntry entry, int y, int color) {
+        for (Cell cell : entry.cells()) {
+            int lineY = y + cell.yOffset();
+            for (FormattedCharSequence line : cell.lines()) {
+                int lineX = entry.x() + cell.xOffset()
+                        + Math.max(0, (cell.width() - font.width(line)) / 2);
+                drawInteractiveLine(graphics, line, lineX, lineY, color);
+                lineY += LINE_HEIGHT;
+            }
+        }
+    }
+
     protected void drawCells(GuiGraphics graphics, RenderEntry entry, int y, int color) {
         for (Cell cell : entry.cells()) {
             int lineY = y + cell.yOffset();
@@ -509,36 +605,62 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         graphics.drawString(font, line, x, y, color, true);
 
         final int[] cursorX = {x};
-        final int[] segmentStart = {x};
+        final int[] linkSegmentStart = {x};
+        final int[] hoverSegmentStart = {x};
         final URI[] activeUri = {null};
+        final Component[] activeTooltip = {null};
 
         line.accept((index, style, codePoint) -> {
             URI uri = clickUri(style);
             if (!Objects.equals(uri, activeUri[0])) {
-                if (activeUri[0] != null && cursorX[0] > segmentStart[0]) {
+                if (activeUri[0] != null && cursorX[0] > linkSegmentStart[0]) {
                     linkHitboxes.add(new LinkHitbox(
-                            segmentStart[0],
+                            linkSegmentStart[0],
                             y,
-                            cursorX[0] - segmentStart[0],
+                            cursorX[0] - linkSegmentStart[0],
                             LINE_HEIGHT,
                             activeUri[0]
                     ));
                 }
                 activeUri[0] = uri;
-                segmentStart[0] = cursorX[0];
+                linkSegmentStart[0] = cursorX[0];
+            }
+
+            Component tooltip = hoverText(style);
+            if (!Objects.equals(tooltip, activeTooltip[0])) {
+                if (activeTooltip[0] != null && cursorX[0] > hoverSegmentStart[0]) {
+                    textHoverHitboxes.add(new TextHoverHitbox(
+                            hoverSegmentStart[0],
+                            y,
+                            cursorX[0] - hoverSegmentStart[0],
+                            LINE_HEIGHT,
+                            activeTooltip[0]
+                    ));
+                }
+                activeTooltip[0] = tooltip;
+                hoverSegmentStart[0] = cursorX[0];
             }
 
             cursorX[0] += Math.max(0, font.width(FormattedCharSequence.codepoint(codePoint, style)));
             return true;
         });
 
-        if (activeUri[0] != null && cursorX[0] > segmentStart[0]) {
+        if (activeUri[0] != null && cursorX[0] > linkSegmentStart[0]) {
             linkHitboxes.add(new LinkHitbox(
-                    segmentStart[0],
+                    linkSegmentStart[0],
                     y,
-                    cursorX[0] - segmentStart[0],
+                    cursorX[0] - linkSegmentStart[0],
                     LINE_HEIGHT,
                     activeUri[0]
+            ));
+        }
+        if (activeTooltip[0] != null && cursorX[0] > hoverSegmentStart[0]) {
+            textHoverHitboxes.add(new TextHoverHitbox(
+                    hoverSegmentStart[0],
+                    y,
+                    cursorX[0] - hoverSegmentStart[0],
+                    LINE_HEIGHT,
+                    activeTooltip[0]
             ));
         }
     }
@@ -549,6 +671,14 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         }
         ClickEvent event = style.getClickEvent();
         return event instanceof ClickEvent.OpenUrl openUrl ? openUrl.uri() : null;
+    }
+
+    protected static Component hoverText(Style style) {
+        if (style == null) {
+            return null;
+        }
+        HoverEvent event = style.getHoverEvent();
+        return event instanceof HoverEvent.ShowText showText ? showText.value() : null;
     }
 
     protected static List<WikiItemSlot> castSlots(Object value) {

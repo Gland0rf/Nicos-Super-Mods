@@ -49,12 +49,20 @@ public class WikiServiceSupport {
         Element clone = element.clone();
         removeIgnoredElements(clone);
         List<MutableSpan> spans = new ArrayList<>();
-        appendNodeText(clone, spans, "", false, false, "");
+        appendNodeText(clone, spans, "", false, false, "", "", "");
         trimSpans(spans);
         List<WikiText.Span> result = new ArrayList<>();
         for (MutableSpan span : spans) {
             if (!span.text.isEmpty()) {
-                result.add(new WikiText.Span(span.text, span.href, span.bold, span.italic, span.cssClasses));
+                result.add(new WikiText.Span(
+                        span.text,
+                        span.href,
+                        span.bold,
+                        span.italic,
+                        span.cssClasses,
+                        span.hoverTitle,
+                        span.hoverText
+                ));
             }
         }
         return new WikiText(result);
@@ -66,10 +74,12 @@ public class WikiServiceSupport {
             String href,
             boolean bold,
             boolean italic,
-            String cssClasses
+            String cssClasses,
+            String hoverTitle,
+            String hoverText
     ) {
         if (node instanceof TextNode textNode) {
-            appendText(spans, textNode.getWholeText(), href, bold, italic, cssClasses);
+            appendText(spans, textNode.getWholeText(), href, bold, italic, cssClasses, hoverTitle, hoverText);
             return;
         }
         if (!(node instanceof Element element)) {
@@ -81,18 +91,35 @@ public class WikiServiceSupport {
             return;
         }
         if (tag.equals("br")) {
-            appendText(spans, " ", href, bold, italic, cssClasses);
+            appendText(spans, " ", href, bold, italic, cssClasses, hoverTitle, hoverText);
             return;
         }
+
         String nextHref = tag.equals("a") ? absoluteUrl(element, "href") : href;
         boolean nextBold = bold || tag.equals("b") || tag.equals("strong");
         boolean nextItalic = italic || tag.equals("i") || tag.equals("em");
         String nextClasses = mergeClassStrings(cssClasses, String.join(" ", element.classNames()));
+
+        String mineTipTitle = normalizeMineTipAttribute(element.attr("data-minetip-title"));
+        String mineTipText = normalizeMineTipAttribute(element.attr("data-minetip-text"));
+        String browserTitle = normalizePlainHoverAttribute(element.attr("title"));
+        String nextHoverTitle = firstNonBlank(mineTipTitle, hoverTitle);
+        String nextHoverText = firstNonBlank(mineTipText, browserTitle, hoverText);
+
         for (Node child : element.childNodes()) {
-            appendNodeText(child, spans, nextHref, nextBold, nextItalic, nextClasses);
+            appendNodeText(
+                    child,
+                    spans,
+                    nextHref,
+                    nextBold,
+                    nextItalic,
+                    nextClasses,
+                    nextHoverTitle,
+                    nextHoverText
+            );
         }
         if (tag.equals("p") || tag.equals("li") || tag.equals("dd") || tag.equals("dt") || tag.equals("div")) {
-            appendText(spans, " ", href, bold, italic, cssClasses);
+            appendText(spans, " ", href, bold, italic, cssClasses, hoverTitle, hoverText);
         }
     }
 
@@ -102,7 +129,9 @@ public class WikiServiceSupport {
             String href,
             boolean bold,
             boolean italic,
-            String cssClasses
+            String cssClasses,
+            String hoverTitle,
+            String hoverText
     ) {
         if (raw == null || raw.isEmpty()) {
             return;
@@ -118,12 +147,40 @@ public class WikiServiceSupport {
         }
         if (!spans.isEmpty()) {
             MutableSpan previous = spans.get(spans.size() - 1);
-            if (previous.sameFormat(href, bold, italic, cssClasses)) {
+            if (previous.sameFormat(href, bold, italic, cssClasses, hoverTitle, hoverText)) {
                 previous.text += text;
                 return;
             }
         }
-        spans.add(new MutableSpan(text, href, bold, italic, cssClasses));
+        spans.add(new MutableSpan(text, href, bold, italic, cssClasses, hoverTitle, hoverText));
+    }
+
+    protected static String normalizeMineTipAttribute(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String escapedSlash = "\u0000NSM_WIKI_SLASH\u0000";
+        return org.jsoup.parser.Parser.unescapeEntities(value, false)
+                .replace("<br />", "\n")
+                .replace("<br/>", "\n")
+                .replace("<br>", "\n")
+                .replace("\\n", "\n")
+                .replace("\\/", escapedSlash)
+                .replace("//", "\n\n")
+                .replace("/", "\n")
+                .replace(escapedSlash, "/")
+                .replaceAll("[\\t\\x0B\\f\\r ]+", " ")
+                .replaceAll(" *\\n *", "\n")
+                .trim();
+    }
+
+    protected static String normalizePlainHoverAttribute(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        return org.jsoup.parser.Parser.unescapeEntities(value, false)
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     protected static void trimSpans(List<MutableSpan> spans) {
@@ -142,6 +199,9 @@ public class WikiServiceSupport {
     protected static boolean isEmptyBlock(WikiBlock block) {
         if (block instanceof WikiBlock.Heading heading) {
             return heading.text().isBlank();
+        }
+        if (block instanceof WikiBlock.MessageBox messageBox) {
+            return messageBox.content().isEmpty();
         }
         if (block instanceof WikiBlock.Paragraph paragraph) {
             return paragraph.content().isEmpty();
@@ -347,7 +407,7 @@ public class WikiServiceSupport {
     }
 
     protected static void logContractElements(Element root) {
-        System.out.println("[Wiki] article root classes=" + root.classNames());
+        System.out.println("[NSM Wiki] article root classes=" + root.classNames());
         for (String className : List.of(
                 WikiHtmlContract.INFOBOX,
                 WikiHtmlContract.CRAFTING_TABLE,
@@ -355,7 +415,7 @@ public class WikiServiceSupport {
                 WikiHtmlContract.WIKITABLE,
                 WikiHtmlContract.INVENTORY_SLOT
         )) {
-            System.out.println("[Wiki] ." + className + " count=" + root.getElementsByClass(className).size());
+            System.out.println("[NSM Wiki] ." + className + " count=" + root.getElementsByClass(className).size());
         }
     }
 
@@ -365,20 +425,41 @@ public class WikiServiceSupport {
         private final boolean bold;
         private final boolean italic;
         private final String cssClasses;
+        private final String hoverTitle;
+        private final String hoverText;
 
-        private MutableSpan(String text, String href, boolean bold, boolean italic, String cssClasses) {
+        private MutableSpan(
+                String text,
+                String href,
+                boolean bold,
+                boolean italic,
+                String cssClasses,
+                String hoverTitle,
+                String hoverText
+        ) {
             this.text = text;
             this.href = href == null ? "" : href;
             this.bold = bold;
             this.italic = italic;
             this.cssClasses = cssClasses == null ? "" : cssClasses;
+            this.hoverTitle = hoverTitle == null ? "" : hoverTitle;
+            this.hoverText = hoverText == null ? "" : hoverText;
         }
 
-        private boolean sameFormat(String otherHref, boolean otherBold, boolean otherItalic, String otherClasses) {
+        private boolean sameFormat(
+                String otherHref,
+                boolean otherBold,
+                boolean otherItalic,
+                String otherClasses,
+                String otherHoverTitle,
+                String otherHoverText
+        ) {
             return href.equals(otherHref == null ? "" : otherHref)
                     && bold == otherBold
                     && italic == otherItalic
-                    && cssClasses.equals(otherClasses == null ? "" : otherClasses);
+                    && cssClasses.equals(otherClasses == null ? "" : otherClasses)
+                    && hoverTitle.equals(otherHoverTitle == null ? "" : otherHoverTitle)
+                    && hoverText.equals(otherHoverText == null ? "" : otherHoverText);
         }
     }
 }

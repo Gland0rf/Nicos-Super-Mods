@@ -258,7 +258,7 @@ public final class WikiImageTextureCache {
             error = message == null || message.isBlank() ? "Unknown image error" : message;
             failedAt = System.currentTimeMillis();
             status = Status.FAILED;
-            System.err.println("[Wiki image] " + error + " | " + source.url());
+            System.err.println("[NSM Wiki Image] " + error + " | " + source.url());
         }
 
         private Snapshot snapshot() {

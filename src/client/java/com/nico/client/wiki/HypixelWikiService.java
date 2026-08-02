@@ -7,10 +7,6 @@ import java.net.URI;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Compatibility facade. New code may import
- * com.nico.client.wiki.service.HypixelWikiService directly.
- */
 public final class HypixelWikiService {
     private HypixelWikiService() { }
 

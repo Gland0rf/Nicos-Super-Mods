@@ -54,6 +54,15 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
         return false;
     }
 
+    protected boolean containsTextHover(double mouseX, double mouseY) {
+        for (TextHoverHitbox hitbox : textHoverHitboxes) {
+            if (hitbox.contains(mouseX, mouseY)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     protected boolean containsPageTab(double mouseX, double mouseY) {
         for (PageTabHitbox hitbox : pageTabHitboxes) {
             if (hitbox.contains(mouseX, mouseY)) {
@@ -91,26 +100,41 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
     }
 
     protected void renderHoveredSlotTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
-        SlotHitbox hovered = null;
         for (int index = slotHitboxes.size() - 1; index >= 0; index--) {
             SlotHitbox candidate = slotHitboxes.get(index);
-            if (candidate.contains(mouseX, mouseY)) {
-                hovered = candidate;
-                break;
+            if (!candidate.contains(mouseX, mouseY)) {
+                continue;
             }
-        }
-        if (hovered == null) {
+
+            List<MutableComponent> logicalLines = buildTooltipLines(candidate.frame());
+            if (!logicalLines.isEmpty()) {
+                renderTooltip(graphics, logicalLines, mouseX, mouseY);
+            }
             return;
         }
 
-        WikiItemSlot.Frame frame = hovered.frame();
-        List<MutableComponent> logicalLines = buildTooltipLines(frame);
-        if (logicalLines.isEmpty()) {
+        for (int index = textHoverHitboxes.size() - 1; index >= 0; index--) {
+            TextHoverHitbox candidate = textHoverHitboxes.get(index);
+            if (!candidate.contains(mouseX, mouseY)) {
+                continue;
+            }
+            renderTooltip(graphics, List.of(candidate.tooltip()), mouseX, mouseY);
+            return;
+        }
+    }
+
+    protected void renderTooltip(
+            GuiGraphics graphics,
+            List<? extends Component> logicalLines,
+            int mouseX,
+            int mouseY
+    ) {
+        if (logicalLines == null || logicalLines.isEmpty()) {
             return;
         }
 
         List<FormattedCharSequence> renderedLines = new ArrayList<>();
-        for (MutableComponent line : logicalLines) {
+        for (Component line : logicalLines) {
             renderedLines.addAll(font.split(line, TOOLTIP_MAX_WIDTH));
         }
         if (renderedLines.isEmpty()) {

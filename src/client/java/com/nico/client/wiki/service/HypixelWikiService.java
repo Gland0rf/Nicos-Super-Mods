@@ -38,7 +38,7 @@ public final class HypixelWikiService extends WikiArticleParser {
     public static void setBazaarService(BazaarService service) {
         bazaarService = service;
         CACHE.clear();
-        System.out.println("[Wiki] Bazaar service configured: " + (service != null));
+        System.out.println("[NSM Wiki] Bazaar service configured: " + (service != null));
     }
 
     public static boolean isBazaarServiceConfigured() {

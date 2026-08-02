@@ -117,7 +117,7 @@ public final class WikiBrowserStore {
                 }
             }
         } catch (IOException | RuntimeException exception) {
-            System.err.println("[Wiki browser] Could not read settings: " + exception.getMessage());
+            System.err.println("[NSM Wiki Browser] Could not read settings: " + exception.getMessage());
         }
     }
 
@@ -148,7 +148,7 @@ public final class WikiBrowserStore {
                 Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException exception) {
-            System.err.println("[Wiki browser] Could not save settings: " + exception.getMessage());
+            System.err.println("[NSM Wiki Browser] Could not save settings: " + exception.getMessage());
         }
     }
 

@@ -1,9 +1,7 @@
 package com.nico.client.wiki.screen;
 
-import com.nico.client.wiki.WikiContent;
-import com.nico.client.wiki.WikiItemSlot;
-import com.nico.client.wiki.WikiPage;
-import com.nico.client.wiki.WikiTitleResolver;
+import com.nico.client.wiki.*;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 
 import java.net.URI;
@@ -40,9 +38,38 @@ enum ContextAction {
 enum LoadState { LOADING, LOADED, ERROR }
 
 enum Kind {
-    PAGE_TITLE, TEXT, H2, H3, HR, TOC_HEADER, TOC_ROW, TABLE, TABLE_ROW,
-    INFOBOX_TITLE, INFOBOX_IMAGE, INFOBOX_SLOTS, INFOBOX_TABS, INFOBOX_HEADER, INFOBOX_ROW,
+    PAGE_TITLE, MESSAGEBOX, TEXT, H2, H3, HR, TOC_HEADER, TOC_ROW, TABLE, TABLE_ROW,
+    INFOBOX_TITLE, INFOBOX_IMAGE, INFOBOX_SLOTS, INFOBOX_TABS, INFOBOX_HEADER, INFOBOX_ROW, INFOBOX_GRID,
     SLOT_STRIP, IMAGE, TABS, TAB_BORDER, CRAFTING
+}
+
+record InfoboxPropertyCell(
+        int xOffset,
+        int width,
+        List<FormattedCharSequence> labelLines,
+        List<FormattedCharSequence> valueLines
+) {
+    InfoboxPropertyCell {
+        labelLines = labelLines == null ? List.of() : List.copyOf(labelLines);
+        valueLines = valueLines == null ? List.of() : List.copyOf(valueLines);
+    }
+}
+
+record InfoboxGridLayout(List<InfoboxPropertyCell> cells) {
+    InfoboxGridLayout {
+        cells = cells == null ? List.of() : List.copyOf(cells);
+    }
+}
+
+record MessageBoxLayout(
+        WikiBlock.MessageBox box,
+        List<FormattedCharSequence> lines,
+        int iconWidth,
+        int iconHeight
+) {
+    MessageBoxLayout {
+        lines = lines == null ? List.of() : List.copyOf(lines);
+    }
 }
 
 record TableCellLayout(
@@ -148,6 +175,12 @@ record TabHitbox(int x, int y, int width, int height, int groupId, int tabIndex)
 }
 
 record LinkHitbox(int x, int y, int width, int height, URI uri) {
+    boolean contains(double mouseX, double mouseY) {
+        return ScreenGeometry.contains(mouseX, mouseY, x, y, width, height);
+    }
+}
+
+record TextHoverHitbox(int x, int y, int width, int height, Component tooltip) {
     boolean contains(double mouseX, double mouseY) {
         return ScreenGeometry.contains(mouseX, mouseY, x, y, width, height);
     }

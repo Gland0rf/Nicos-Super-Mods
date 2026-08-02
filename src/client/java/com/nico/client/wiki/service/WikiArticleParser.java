@@ -61,7 +61,7 @@ abstract class WikiArticleParser extends WikiWidgetParser {
 
         WikiInfobox result = new WikiInfobox(title, entries);
         if (result.isEmpty() && DEBUG) {
-            System.err.println("[Wiki] Ignoring an unsupported .infobox structure on this page");
+            System.err.println("[NSM Wiki] Ignoring an unsupported .infobox structure on this page");
         }
         return result;
     }
@@ -90,10 +90,7 @@ abstract class WikiArticleParser extends WikiWidgetParser {
                 continue;
             }
             if (child.hasClass(WikiHtmlContract.INFOBOX_ROW_CONTAINER)) {
-                WikiInfobox.Row row = parseInfoboxRow(child);
-                if (row != null) {
-                    entries.add(row);
-                }
+                entries.addAll(parseInfoboxRows(child));
                 continue;
             }
             walkInfobox(child, entries);
@@ -136,19 +133,28 @@ abstract class WikiArticleParser extends WikiWidgetParser {
         return new WikiInfobox.PanelTabs(labels, active);
     }
 
-    protected static WikiInfobox.Row parseInfoboxRow(Element rowElement) {
-        Element labelElement = rowElement.getElementsByClass(WikiHtmlContract.INFOBOX_ROW_LABEL).first();
-        Element valueElement = rowElement.getElementsByClass(WikiHtmlContract.INFOBOX_ROW_VALUE).first();
-        if (labelElement == null || valueElement == null) {
-            return null;
+    protected static List<WikiInfobox.Row> parseInfoboxRows(Element rowContainer) {
+        org.jsoup.select.Elements labels = rowContainer.getElementsByClass(
+                WikiHtmlContract.INFOBOX_ROW_LABEL
+        );
+        org.jsoup.select.Elements values = rowContainer.getElementsByClass(
+                WikiHtmlContract.INFOBOX_ROW_VALUE
+        );
+        int count = Math.min(labels.size(), values.size());
+        if (count <= 0) {
+            return List.of();
         }
-        WikiText label = parseStyledText(labelElement);
-        WikiContent value = parseContent(valueElement);
-        if (label.isBlank() && value.isEmpty()) {
-            return null;
+
+        int columns = parsePositiveInt(rowContainer.attr("data-columns"), 1);
+        List<WikiInfobox.Row> result = new ArrayList<>(count);
+        for (int index = 0; index < count; index++) {
+            WikiText label = parseStyledText(labels.get(index));
+            WikiContent value = parseContent(values.get(index));
+            if (!label.isBlank() || !value.isEmpty()) {
+                result.add(new WikiInfobox.Row(label, value, columns));
+            }
         }
-        int columns = parsePositiveInt(rowElement.attr("data-columns"), 1);
-        return new WikiInfobox.Row(label, value, columns);
+        return List.copyOf(result);
     }
 
     protected static List<WikiBlock> parsePanelBlocks(Element panel) {
@@ -173,6 +179,18 @@ abstract class WikiArticleParser extends WikiWidgetParser {
 
     protected static void appendElementAsBlocks(Element element, List<WikiBlock> blocks, int listDepth) {
         if (isIgnoredElement(element)) {
+            return;
+        }
+
+        if (element.hasClass(WikiHtmlContract.MESSAGEBOX_NARROW_WRAPPER)) {
+            Element box = element.getElementsByClass(WikiHtmlContract.MESSAGEBOX).first();
+            if (box != null) {
+                appendMessageBox(box, blocks);
+            }
+            return;
+        }
+        if (element.hasClass(WikiHtmlContract.MESSAGEBOX)) {
+            appendMessageBox(element, blocks);
             return;
         }
 
@@ -286,6 +304,34 @@ abstract class WikiArticleParser extends WikiWidgetParser {
             }
             default -> appendChildrenAsBlocks(element, blocks, listDepth);
         }
+    }
+
+    protected static void appendMessageBox(Element element, List<WikiBlock> blocks) {
+        WikiContent content = parseContent(element);
+        if (content.isEmpty()) {
+            return;
+        }
+
+        String classes = String.join(" ", element.classNames()).toLowerCase(java.util.Locale.ROOT);
+        WikiBlock.MessageBox.Tone tone;
+        if (classes.contains("boxcol-green")) {
+            tone = WikiBlock.MessageBox.Tone.GREEN;
+        } else if (classes.contains("boxcol-red")) {
+            tone = WikiBlock.MessageBox.Tone.RED;
+        } else if (classes.contains("boxcol-blue")) {
+            tone = WikiBlock.MessageBox.Tone.BLUE;
+        } else if (classes.contains("boxcol-yellow")) {
+            tone = WikiBlock.MessageBox.Tone.YELLOW;
+        } else if (classes.contains("boxcol-orange")) {
+            tone = WikiBlock.MessageBox.Tone.ORANGE;
+        } else if (classes.contains("boxcol-purple")) {
+            tone = WikiBlock.MessageBox.Tone.PURPLE;
+        } else if (classes.contains("boxcol-gray") || classes.contains("boxcol-grey")) {
+            tone = WikiBlock.MessageBox.Tone.GRAY;
+        } else {
+            tone = WikiBlock.MessageBox.Tone.DEFAULT;
+        }
+        blocks.add(new WikiBlock.MessageBox(content, tone));
     }
 
     protected static void appendList(Element list, List<WikiBlock> blocks, boolean ordered, int depth) {

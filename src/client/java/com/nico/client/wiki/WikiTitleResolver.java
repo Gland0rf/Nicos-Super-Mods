@@ -37,9 +37,13 @@ public final class WikiTitleResolver {
     private WikiTitleResolver() { }
 
     public static CompletableFuture<ResolvedWikiTitle> resolve(SkyblockItemResolver.ItemIdentity identity) {
-        CompletableFuture<Void> registry = identity.hasInternalId()
-                ? ensureRegistryLoaded().exceptionally(throwable -> null)
-                : CompletableFuture.completedFuture(null);
+        /*
+         * Load the registry even when the packet did not expose ExtraAttributes.
+         * This gives a safe fallback: match the unmodified registry name as a
+         * suffix of the visible name (for example "Warped Aspect of the Void"
+         * -> "Aspect of the Void") instead of maintaining a fragile reforge list.
+         */
+        CompletableFuture<Void> registry = ensureRegistryLoaded().exceptionally(throwable -> null);
 
         return registry.thenCompose(ignored -> {
             LinkedHashSet<String> candidates = new LinkedHashSet<>();
@@ -49,16 +53,120 @@ public final class WikiTitleResolver {
                     candidates.add(registryName);
                 }
             }
+
+            String canonicalDisplayName = registrySuffixMatch(identity.displayName());
+            if (!canonicalDisplayName.isBlank()) {
+                candidates.add(canonicalDisplayName);
+            }
             if (!identity.displayName().isBlank()) {
                 candidates.add(identity.displayName());
             }
             if (candidates.isEmpty()) {
                 return CompletableFuture.failedFuture(new WikiResolutionException("No item identity was available"));
             }
-            return resolveCandidate(candidates.stream().toList(), 0);
+
+            java.util.List<String> ordered = candidates.stream().toList();
+            return resolveCandidate(ordered, 0)
+                    .exceptionallyCompose(ignoredFailure -> resolveSearchedCandidate(ordered));
         });
     }
 
+
+
+    private static String registrySuffixMatch(String displayName) {
+        String visible = normalizeSearchText(displayName);
+        if (visible.isBlank() || ITEM_NAMES.isEmpty()) {
+            return "";
+        }
+
+        String bestName = "";
+        int bestLength = -1;
+        for (String registryName : ITEM_NAMES.values()) {
+            String normalized = normalizeSearchText(registryName);
+            if (normalized.isBlank()) {
+                continue;
+            }
+
+            boolean exact = visible.equals(normalized);
+            boolean suffix = visible.endsWith(" " + normalized);
+            if ((exact || suffix) && normalized.length() > bestLength) {
+                bestName = registryName;
+                bestLength = normalized.length();
+            }
+        }
+        return bestName;
+    }
+
+    private static CompletableFuture<ResolvedWikiTitle> resolveSearchedCandidate(java.util.List<String> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return CompletableFuture.failedFuture(new WikiResolutionException("No Wiki page matched the item"));
+        }
+
+        return searchCandidate(candidates, 0, null, Integer.MIN_VALUE).thenCompose(best -> {
+            if (best == null || best.score() < 1_200) {
+                return CompletableFuture.failedFuture(new WikiResolutionException("No Wiki page matched the item"));
+            }
+            return CompletableFuture.completedFuture(new ResolvedWikiTitle(
+                    best.result().title(),
+                    best.result().pageUri()
+            ));
+        });
+    }
+
+    private static CompletableFuture<ScoredSearchResult> searchCandidate(
+            java.util.List<String> candidates,
+            int index,
+            ScoredSearchResult best,
+            int bestScore
+    ) {
+        if (index >= candidates.size()) {
+            return CompletableFuture.completedFuture(best);
+        }
+
+        String candidate = candidates.get(index);
+        return searchWikiTitles(candidate, 6)
+                .exceptionally(ignored -> java.util.List.of())
+                .thenCompose(results -> {
+                    ScoredSearchResult nextBest = best;
+                    int nextScore = bestScore;
+                    for (SearchResult result : results) {
+                        int score = symmetricSearchScore(candidate, result.title());
+                        if (score > nextScore) {
+                            nextScore = score;
+                            nextBest = new ScoredSearchResult(result, score);
+                        }
+                    }
+                    return searchCandidate(candidates, index + 1, nextBest, nextScore);
+                });
+    }
+
+    private static int symmetricSearchScore(String query, String title) {
+        String left = normalizeSearchText(query);
+        String right = normalizeSearchText(title);
+        if (left.equals(right)) {
+            return 10_000;
+        }
+
+        int score = searchScore(query, title);
+        if (left.endsWith(" " + right) || right.endsWith(" " + left)) {
+            score += 5_000;
+        } else if (left.contains(right) || right.contains(left)) {
+            score += 2_500;
+        }
+
+        java.util.Set<String> leftWords = new java.util.LinkedHashSet<>(java.util.Arrays.asList(left.split(" ")));
+        java.util.Set<String> rightWords = new java.util.LinkedHashSet<>(java.util.Arrays.asList(right.split(" ")));
+        leftWords.removeIf(String::isBlank);
+        rightWords.removeIf(String::isBlank);
+        int shared = 0;
+        for (String word : leftWords) {
+            if (rightWords.contains(word)) {
+                shared++;
+            }
+        }
+        score += shared * 350;
+        return score;
+    }
 
     /** Resolves either a Wiki title/search phrase or a Hypixel internal item ID. */
     public static CompletableFuture<ResolvedWikiTitle> resolveQuery(String rawQuery) {
@@ -104,6 +212,24 @@ public final class WikiTitleResolver {
             itemIdCandidate = CompletableFuture.completedFuture(java.util.List.of());
         }
 
+        return itemIdCandidate.thenCombine(searchWikiTitles(query, limit), (ids, wikiResults) -> {
+            java.util.ArrayList<SearchResult> all = new java.util.ArrayList<>(ids);
+            all.addAll(wikiResults);
+            return rankAndLimit(query, all, limit);
+        });
+    }
+
+    /** Raw Wiki search without item-ID resolution; avoids recursive fallback resolution. */
+    private static CompletableFuture<java.util.List<SearchResult>> searchWikiTitles(
+            String rawQuery,
+            int requestedLimit
+    ) {
+        String query = rawQuery == null ? "" : rawQuery.trim();
+        if (query.isBlank()) {
+            return CompletableFuture.completedFuture(java.util.List.of());
+        }
+        int limit = Math.max(1, Math.min(12, requestedLimit));
+
         CompletableFuture<java.util.List<SearchResult>> exactTitle = resolveExact(query)
                 .thenApply(result -> result == null
                         ? java.util.List.<SearchResult>of()
@@ -138,38 +264,51 @@ public final class WikiTitleResolver {
                 .thenApply(root -> parseSearchResults(root, "search"))
                 .exceptionally(ignored -> java.util.List.<SearchResult>of());
 
-        return exactTitle.thenCombine(itemIdCandidate, (exact, ids) -> {
-            java.util.ArrayList<SearchResult> all = new java.util.ArrayList<>();
-            all.addAll(exact);
-            all.addAll(ids);
-            return all;
-        }).thenCombine(prefix, (all, prefixes) -> {
+        return exactTitle.thenCombine(prefix, (exact, prefixes) -> {
+            java.util.ArrayList<SearchResult> all = new java.util.ArrayList<>(exact);
             all.addAll(prefixes);
             return all;
         }).thenCombine(full, (all, fullResults) -> {
             all.addAll(fullResults);
-
-            java.util.LinkedHashMap<String, SearchResult> unique = new java.util.LinkedHashMap<>();
-            all.stream()
-                    .sorted(java.util.Comparator
-                            .comparingInt((SearchResult result) -> searchScore(query, result.title()))
-                            .reversed()
-                            .thenComparing(SearchResult::title, String.CASE_INSENSITIVE_ORDER))
-                    .forEach(result -> unique.putIfAbsent(
-                            result.title().toLowerCase(Locale.ROOT),
-                            result
-                    ));
-
-            return unique.values().stream().limit(limit).toList();
+            return rankAndLimit(query, all, limit);
         });
+    }
+
+    private static java.util.List<SearchResult> rankAndLimit(
+            String query,
+            java.util.List<SearchResult> results,
+            int limit
+    ) {
+        java.util.LinkedHashMap<String, SearchResult> unique = new java.util.LinkedHashMap<>();
+        results.stream()
+                .sorted(java.util.Comparator
+                        .comparingInt((SearchResult result) -> searchScore(query, result.title()))
+                        .reversed()
+                        .thenComparing(SearchResult::title, String.CASE_INSENSITIVE_ORDER))
+                .forEach(result -> unique.putIfAbsent(
+                        result.title().toLowerCase(Locale.ROOT),
+                        result
+                ));
+        return unique.values().stream().limit(limit).toList();
     }
 
     private static String normalizeItemIdQuery(String query) {
         if (query == null) {
             return "";
         }
-        String normalized = query.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
-        return normalized.matches("[A-Z0-9_]{3,}") && normalized.contains("_")
+        String trimmed = query.trim();
+        if (trimmed.isBlank()) {
+            return "";
+        }
+
+        /*
+         * Do not turn every ordinary multi-word page title into an item ID.
+         * Only explicitly ID-shaped input (ASPECT_OF_THE_END, DIAMOND, etc.)
+         * takes the registry path.
+         */
+        String normalized = trimmed.toUpperCase(Locale.ROOT).replace(' ', '_');
+        boolean explicitlyUppercase = trimmed.equals(trimmed.toUpperCase(Locale.ROOT));
+        return explicitlyUppercase && normalized.matches("[A-Z0-9_]{3,}")
                 ? normalized
                 : "";
     }
@@ -203,7 +342,7 @@ public final class WikiTitleResolver {
                 : value.toLowerCase(Locale.ROOT)
                 .replace('_', ' ')
                 .replaceAll("[^\\p{L}\\p{N}]+", " ")
-                .replaceAll("\s+", " ")
+                .replaceAll("\\s+", " ")
                 .trim();
     }
 
@@ -357,7 +496,7 @@ public final class WikiTitleResolver {
     }
 
     private static URI buildArticleUri(String title) {
-        return URI.create(WIKI_ARTICLE_BASE + encode(title).replace("+", "%20"));
+        return URI.create(WIKI_ARTICLE_BASE + encode(title).replace("+", "%20").replace("%2F", "/"));
     }
 
     private static String encode(String value) {
@@ -399,6 +538,8 @@ public final class WikiTitleResolver {
             return fallback;
         }
     }
+
+    private record ScoredSearchResult(SearchResult result, int score) { }
 
     public record SearchResult(String title, URI pageUri) { }
 

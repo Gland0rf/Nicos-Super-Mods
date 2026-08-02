@@ -30,7 +30,7 @@ abstract class WikiContentParser extends WikiServiceSupport {
      * Those alternatives are emitted as coordinated animated frames inside
      * each inventory slot. Empty frames are significant: dropping them turns
      * the alternatives into the union of every recipe, which is what caused
-     * plus-shaped and horizontal Hemoglass recipes to overlap.
+     * recipes to overlap.
      */
     protected static List<WikiCraftingGrid> tryParseCraftingGrids(Element root) {
         Element input = ownedDescendantWithClass(

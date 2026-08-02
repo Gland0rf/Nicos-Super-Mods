@@ -17,7 +17,7 @@ public record WikiText(List<Span> spans) {
         if (text == null || text.isBlank()) {
             return empty();
         }
-        return new WikiText(List.of(new Span(text, "", false, false, "")));
+        return new WikiText(List.of(new Span(text, "", false, false, "", "", "")));
     }
 
     public boolean isBlank() {
@@ -63,7 +63,9 @@ public record WikiText(List<Span> spans) {
                             previous.href(),
                             previous.bold(),
                             previous.italic(),
-                            previous.cssClasses()
+                            previous.cssClasses(),
+                            previous.hoverTitle(),
+                            previous.hoverText()
                     ));
                     continue;
                 }
@@ -73,15 +75,34 @@ public record WikiText(List<Span> spans) {
         return List.copyOf(result);
     }
 
-    public record Span(String text, String href, boolean bold, boolean italic, String cssClasses) {
+    public record Span(
+            String text,
+            String href,
+            boolean bold,
+            boolean italic,
+            String cssClasses,
+            String hoverTitle,
+            String hoverText
+    ) {
         public Span {
             text = Objects.requireNonNullElse(text, "");
             href = Objects.requireNonNullElse(href, "").trim();
             cssClasses = Objects.requireNonNullElse(cssClasses, "").trim();
+            hoverTitle = Objects.requireNonNullElse(hoverTitle, "").trim();
+            hoverText = Objects.requireNonNullElse(hoverText, "").trim();
+        }
+
+        /** Backwards-compatible constructor for existing call sites. */
+        public Span(String text, String href, boolean bold, boolean italic, String cssClasses) {
+            this(text, href, bold, italic, cssClasses, "", "");
         }
 
         public boolean isLink() {
             return !href.isBlank();
+        }
+
+        public boolean isHoverable() {
+            return !hoverTitle.isBlank() || !hoverText.isBlank();
         }
 
         private boolean sameFormatting(Span other) {
@@ -89,7 +110,9 @@ public record WikiText(List<Span> spans) {
                     && href.equals(other.href)
                     && bold == other.bold
                     && italic == other.italic
-                    && cssClasses.equals(other.cssClasses);
+                    && cssClasses.equals(other.cssClasses)
+                    && hoverTitle.equals(other.hoverTitle)
+                    && hoverText.equals(other.hoverText);
         }
     }
 }

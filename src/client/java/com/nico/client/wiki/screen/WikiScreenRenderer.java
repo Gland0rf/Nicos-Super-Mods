@@ -53,6 +53,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
                 || containsTab(mouseX, mouseY)
                 || containsLinkedSlot(mouseX, mouseY)
                 || containsLink(mouseX, mouseY)
+                || containsTextHover(mouseX, mouseY)
                 || containsPageTab(mouseX, mouseY)
                 || containsContextMenu(mouseX, mouseY)
                 || containsSearchSuggestion(mouseX, mouseY)
@@ -444,6 +445,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
     protected abstract boolean containsTab(double mouseX, double mouseY);
     protected abstract boolean containsLinkedSlot(double mouseX, double mouseY);
     protected abstract boolean containsLink(double mouseX, double mouseY);
+    protected abstract boolean containsTextHover(double mouseX, double mouseY);
     protected abstract boolean containsPageTab(double mouseX, double mouseY);
     protected abstract boolean containsContextMenu(double mouseX, double mouseY);
     protected abstract boolean containsSearchSuggestion(double mouseX, double mouseY);
