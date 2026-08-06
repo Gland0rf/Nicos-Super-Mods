@@ -1,0 +1,28 @@
+This mod contains MoulConfig.
+
+Component: MoulConfig
+Version: 1.21.11:4.7.2
+Maven coordinate: org.notenoughupdates.moulconfig:modern-1.21.11:4.7.2
+Source repository:
+https://github.com/NotEnoughUpdates/MoulConfig
+
+Source revision:
+bd7b9aa
+
+License:
+GNU Lesser General Public License, version 3 or later
+SPDX-License-Identifier: LGPL-3.0-or-later
+
+Copyright:
+Copyright (C) NotEnoughUpdates contributors
+Additional copyright notices are preserved in the corresponding
+MoulConfig source distribution.
+
+Modifications made to MoulConfig:
+None.
+
+Corresponding source:
+https://github.com/NotEnoughUpdates/MoulConfig/archive/bd7b9aa.tar.gz
+
+Instructions for rebuilding this mod with a modified compatible
+MoulConfig are provided in REBUILDING.md.

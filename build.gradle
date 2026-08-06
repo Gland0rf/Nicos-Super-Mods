@@ -1,6 +1,7 @@
 plugins {
 	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
 	id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
+	id 'com.gradleup.shadow' version "${shadow_version}"
 	id 'maven-publish'
 }
 
@@ -55,6 +56,11 @@ sourceSets {
 	}
 }
 
+configurations {
+	shadowModImpl
+	modImplementation.extendsFrom(shadowModImpl)
+}
+
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 
@@ -71,7 +77,7 @@ dependencies {
 
 	modClientImplementation "maven.modrinth:modmenu:${project.modmenu_version}"
 
-	modClientImplementation include("org.notenoughupdates.moulconfig:modern-1.21.11:4.7.2")
+	shadowModImpl "org.notenoughupdates.moulconfig:modern-1.21.11:4.7.2"
 
 	modCompileOnly "maven.modrinth:odin:0.2.1"
 }
@@ -93,6 +99,37 @@ processResources {
 tasks.withType(JavaCompile).configureEach {
 	it.options.release = 21
 	options.encoding = "UTF-8"
+}
+
+tasks.named('shadowJar') {
+	archiveClassifier.set('dev-shadow')
+
+	configurations = [project.configurations.shadowModImpl]
+
+	from(sourceSets.client.output)
+
+	relocate(
+			'io.github.notenoughupdates.moulconfig',
+			'com.nico.nsm.internal.moulconfig'
+	)
+
+	from('third_party/moulconfig') {
+		into 'META-INF/licenses/moulconfig'
+	}
+
+	from('LICENSE') {
+		rename {
+			"${it}_${project.archives_base_name}"
+		}
+	}
+}
+
+tasks.named('remapJar') {
+	dependsOn tasks.named('shadowJar')
+
+	inputFile.set(
+			tasks.named('shadowJar').flatMap { it.archiveFile }
+	)
 }
 
 kotlin {

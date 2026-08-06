@@ -4,7 +4,7 @@ import com.nico.client.configuration.category.CategoryDungeons;
 import com.nico.client.configuration.category.CategoryIsland;
 import com.nico.client.configuration.category.CategoryOther;
 import io.github.notenoughupdates.moulconfig.Config;
-import io.github.notenoughupdates.moulconfig.annotations.*;
+import io.github.notenoughupdates.moulconfig.annotations.Category;
 import io.github.notenoughupdates.moulconfig.common.text.StructuredText;
 
 public class NsmConfig extends Config {
