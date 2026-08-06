@@ -1,5 +1,6 @@
-package com.nico.client;
+package com.nico.client.init;
 
+import com.nico.client.Main;
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.hud.HudLayoutManager;
 import com.nico.client.hud.HudMoveCommand;

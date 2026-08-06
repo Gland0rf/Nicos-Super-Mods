@@ -1,7 +1,6 @@
 package com.nico.client.stacking;
 
 import com.nico.OdinRoomBridge;
-import com.nico.client.configuration.NsmConfig;
 import com.nico.client.secretTimer.SecretRoomTimerClient;
 import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
 import net.minecraft.client.Minecraft;

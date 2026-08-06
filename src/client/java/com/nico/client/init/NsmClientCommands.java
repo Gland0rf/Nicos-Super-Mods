@@ -1,4 +1,4 @@
-package com.nico.client;
+package com.nico.client.init;
 
 import com.nico.OdinRoomBridge;
 import com.nico.client.configuration.NsmConfigManager;

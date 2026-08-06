@@ -1,32 +1,4 @@
-package com.nico.client;
-
-import com.nico.OdinRoomBridge;
-import com.nico.client.configuration.NsmConfig;
-import com.nico.client.configuration.NsmConfigManager;
-import com.nico.client.goldor.GoldorTerminalHighlighter;
-import com.nico.client.hud.HudLayoutManager;
-import com.nico.client.hud.HudMoveCommand;
-import com.nico.client.minions.MinionRoiClient;
-import com.nico.client.minions.base.MinionDataRegistry;
-import com.nico.client.secretTimer.SecretPacketHooks;
-import com.nico.client.secretTimer.SecretRoomTimerClient;
-import com.nico.client.stacking.RoomStackingDetector;
-import com.nico.client.utils.BazaarService;
-import com.nico.client.utils.HypixelApiClient;
-import com.nico.client.utils.SecretEventBridge;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonPlayer;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.player.Player;
-
-import java.io.IOException;
-import java.util.*;
+package com.nico.client.stacking;
 
 public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 	/**

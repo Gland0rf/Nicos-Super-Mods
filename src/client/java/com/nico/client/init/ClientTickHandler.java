@@ -1,7 +1,6 @@
-package com.nico.client;
+package com.nico.client.init;
 
 import com.nico.client.configuration.NsmConfig;
-import com.nico.client.goldor.GoldorTerminalHighlighter;
 import com.nico.client.stacking.RoomStackingDetector;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 

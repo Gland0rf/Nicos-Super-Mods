@@ -1,8 +1,7 @@
 package com.nico.client.stacking;
 
 import com.nico.OdinRoomBridge;
-import com.nico.client.NsmClientCommands;
-import com.nico.client.SecretStackTrackerClient;
+import com.nico.client.init.NsmClientCommands;
 import com.nico.client.configuration.NsmConfig;
 import com.nico.client.secretTimer.SecretRoomTimerClient;
 import com.nico.client.utils.LocationUtils;

@@ -1,0 +1,12 @@
+package com.nico.client.modcheck.scan;
+
+public enum FindingStatus {
+    VERIFIED_OFFICIAL_RELEASE,
+    UNKNOWN_MOD,
+    UNKNOWN_JAR,
+    OFFICIAL_PROJECT_HASH_MISMATCH,
+    VERIFIED_HASH_METADATA_MISMATCH,
+    REGISTRY_UNAVAILABLE,
+    SCAN_ERROR,
+    SYMBOLIC_LINK
+}

@@ -15,6 +15,9 @@
 	"icon": "assets/nsm/NSM_Logo.png",
 	"environment": "*",
 	"entrypoints": {
+		"preLaunch": [
+			"com.nico.client.MainPreLaunch"
+		],
 		"main": [
 			"com.nico.NicosSuperMods"
 		],

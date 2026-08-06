@@ -32,3 +32,14 @@ Room stacking concept:
    5. This applies for EVERY room and EVERY player!
 If the score goes above 100, alert the player.
 
+
+At minimum:
+
+State that your mod contains MoulConfig.
+Include the LGPLv3 and GPLv3 license texts with your distribution.
+Preserve MoulConfig’s copyright notices.
+Identify the exact MoulConfig version and its source repository.
+Make the corresponding MoulConfig source available.
+Do not prohibit reverse engineering needed to debug modifications to MoulConfig.
+Provide users a practical way to rebuild/relink your mod with a modified compatible MoulConfig.
+
