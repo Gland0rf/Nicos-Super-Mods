@@ -1,6 +1,5 @@
 package com.nico.client.configuration.category;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import io.github.notenoughupdates.moulconfig.annotations.*;
 import org.lwjgl.glfw.GLFW;
 
@@ -19,6 +18,13 @@ public class CategoryOther {
     )
     @Accordion
     public IntegratedWiki wiki = new IntegratedWiki();
+
+    @ConfigOption(
+            name = "ModCheck",
+            desc = "Configure the installed mod integrity checker."
+    )
+    @Accordion
+    public ModCheck modCheck = new ModCheck();
 
     public static class IntegratedWiki {
         @ConfigOption(
@@ -64,6 +70,29 @@ public class CategoryOther {
         )
         @ConfigEditorBoolean
         public boolean matchStackCounts = false;
+    }
+
+    public static class ModCheck {
+        @ConfigOption(
+                name = "Enable ModCheck",
+                desc = "Enables scanning installed mod JARs against the signed trust registry."
+        )
+        @ConfigEditorBoolean
+        public boolean enabled = true;
+
+        @ConfigOption(
+                name = "Show Warning Screen",
+                desc = "Automatically opens the warning screen when critical or unknown files are found."
+        )
+        @ConfigEditorBoolean
+        public boolean showWarningScreen = true;
+
+        @ConfigOption(
+                name = "Warn About Unknown Mods",
+                desc = "Shows warnings for exact mod files that are not present in the trust registry."
+        )
+        @ConfigEditorBoolean
+        public boolean warnAboutUnknownMods = true;
     }
 
 }

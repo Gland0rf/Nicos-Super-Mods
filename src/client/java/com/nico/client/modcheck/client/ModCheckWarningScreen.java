@@ -2,6 +2,7 @@ package com.nico.client.modcheck.client;
 
 import com.nico.client.modcheck.ModCheckRuntime;
 import com.nico.client.modcheck.config.IgnoredUnknownMods;
+import com.nico.client.modcheck.config.ModCheckSettings;
 import com.nico.client.modcheck.scan.FindingSeverity;
 import com.nico.client.modcheck.scan.FindingStatus;
 import com.nico.client.modcheck.scan.ScanFinding;
@@ -70,7 +71,7 @@ public final class ModCheckWarningScreen extends Screen {
                         button -> {
                             ModCheckRuntime.acknowledge();
 
-                            if (this.minecraft != null) {
+                            if (this.minecraft != null && shouldOpenModCheck(report)) {
                                 this.minecraft.setScreen(parent);
                             }
                         }
@@ -378,5 +379,36 @@ public final class ModCheckWarningScreen extends Screen {
             return value;
         }
         return value.substring(0, Math.max(0, maximumLength - 3)) + "...";
+    }
+
+    private static boolean shouldOpenModCheck(ScanReport report) {
+        ModCheckSettings settings =
+                ModCheckRuntime.settings();
+
+        if (
+                !settings.enabled()
+                        || !settings.showWarningScreen()
+        ) {
+            return false;
+        }
+
+        return report.findings()
+                .stream()
+                .anyMatch(finding -> {
+                    if (finding.severity() == FindingSeverity.CRITICAL) {
+                        return true;
+                    }
+
+                    if (finding.severity() != FindingSeverity.WARNING) {
+                        return false;
+                    }
+
+                    boolean unknown = finding.status()
+                                == FindingStatus.UNKNOWN_MOD
+                                || finding.status()
+                                == FindingStatus.UNKNOWN_JAR;
+
+                    return !unknown || settings.warnAboutUnknownMods();
+                });
     }
 }

@@ -2,6 +2,8 @@ package com.nico.client.configuration;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.nico.client.modcheck.ModCheckRuntime;
+import com.nico.client.modcheck.config.ModCheckSettings;
 import io.github.notenoughupdates.moulconfig.gui.GuiContext;
 import io.github.notenoughupdates.moulconfig.gui.GuiElementComponent;
 import io.github.notenoughupdates.moulconfig.gui.MoulConfigEditor;
@@ -50,6 +52,12 @@ public final class NsmConfigManager {
 
         NsmConfig.INSTANCE = config;
 
+        ModCheckRuntime.setSettings(
+                ModCheckSettings.from(
+                        config.other.modCheck
+                )
+        );
+
         processor = new MoulConfigProcessor<>(config);
         BuiltinMoulConfigGuis.addProcessors(processor);
 
@@ -93,6 +101,14 @@ public final class NsmConfigManager {
     public static void save() {
         File file = getConfigFile();
         file.getParentFile().mkdirs();
+
+        NsmConfig currentConfig = getConfig();
+
+        ModCheckRuntime.setSettings(
+                ModCheckSettings.from(
+                        currentConfig.other.modCheck
+                )
+        );
 
         try (FileWriter writer = new FileWriter(file)) {
             GSON.toJson(getConfig(), writer);

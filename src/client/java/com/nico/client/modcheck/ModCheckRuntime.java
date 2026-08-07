@@ -1,8 +1,11 @@
 package com.nico.client.modcheck;
 
+import com.nico.client.modcheck.config.ModCheckSettings;
 import com.nico.client.modcheck.scan.ScanReport;
 
 public final class ModCheckRuntime {
+    private static volatile ModCheckSettings settings = ModCheckSettings.defaults();
+
     private static volatile ScanReport report;
     private static volatile boolean acknowledged;
 
@@ -23,5 +26,13 @@ public final class ModCheckRuntime {
 
     public static void acknowledge() {
         acknowledged = true;
+    }
+
+    public static void setSettings(ModCheckSettings newSettings) {
+        settings = newSettings != null ? newSettings : ModCheckSettings.defaults();
+    }
+
+    public static ModCheckSettings settings() {
+        return settings;
     }
 }

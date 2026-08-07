@@ -108,6 +108,16 @@ tasks.named('shadowJar') {
 
 	from(sourceSets.client.output)
 
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+	filesMatching('META-INF/services/**') {
+		duplicatesStrategy = DuplicatesStrategy.INCLUDE
+	}
+	
+	mergeServiceFiles()
+
+	exclude 'moulconfig.accesswidener'
+
 	relocate(
 			'io.github.notenoughupdates.moulconfig',
 			'com.nico.nsm.internal.moulconfig'
