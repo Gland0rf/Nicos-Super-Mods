@@ -72,7 +72,7 @@ public class OdinRoomBridge {
         return false;
     }
 
-    private static boolean doorTouchesScanRoom(Door door, Room room) {
+    public static boolean doorTouchesScanRoom(Door door, Room room) {
         int doorX = door.getPos().getX();
         int doorZ = door.getPos().getZ();
 
@@ -91,7 +91,7 @@ public class OdinRoomBridge {
     }
 
 
-    private static boolean getDoorLocked(Door door, Player player) {
+    public static boolean getDoorLocked(Door door, Player player) {
         try {
             Object posObject = door.getClass()
                     .getMethod("getPos")
@@ -116,7 +116,49 @@ public class OdinRoomBridge {
         }
     }
 
-    private static boolean fairyRoomHasClosedWitherDoor(Player player) {
+    public static Room getRoomAcrossDoor(Door door, Room currentRoom) {
+        int doorX = door.getPos().getX();
+        int doorZ = door.getPos().getZ();
+
+        for (var component : currentRoom.getRoomComponents()) {
+            int roomX = component.getX();
+            int roomZ = component.getZ();
+
+            int dx = doorX - roomX;
+            int dz = doorZ - roomZ;
+
+            if (!((Math.abs(dx) == 16 && dz == 0)
+                    || (Math.abs(dz) == 16 && dx == 0))) {
+                continue;
+            }
+
+            int otherX = doorX + dx;
+            int otherZ = doorZ + dz;
+
+            Vec2 otherCenter = ScanUtils.INSTANCE.getRoomCenter(
+                    otherX,
+                    otherZ
+            );
+
+            return ScanUtils.INSTANCE.scanRoom(otherCenter);
+        }
+
+        return null;
+    }
+
+    public static boolean doorLeadsToRoomType(
+            Door door,
+            Room currentRoom,
+            RoomType type
+    ) {
+        Room other = getRoomAcrossDoor(door, currentRoom);
+
+        return other != null
+                && other.getData() != null
+                && other.getData().getType() == type;
+    }
+
+    public static boolean fairyRoomHasClosedWitherDoor(Player player) {
         try {
             for (Door door : MapScanner.INSTANCE.getDoors()) {
                 if (door.getType() != Door.Type.WITHER) continue;
@@ -148,7 +190,7 @@ public class OdinRoomBridge {
         return false;
     }
 
-    private static boolean doorTouchesFairyRoom(Door door) {
+    public static boolean doorTouchesFairyRoom(Door door) {
         try {
 
             for (var tileObject : door.getRooms()) {
@@ -163,6 +205,23 @@ public class OdinRoomBridge {
                 RoomType type = data.getType();
 
                 if (String.valueOf(type).equals("FAIRY")) {
+                    return true;
+                }
+            }
+        } catch (Throwable throwable) {
+            throwable.printStackTrace();
+        }
+
+        return false;
+    }
+
+    public static boolean doorTouchesBloodRoom(Door door) {
+        try {
+            for (var tileObject : door.getRooms()) {
+                MapRoom owner = tileObject.getOwner();
+                if (owner == null || owner.getData() == null) continue;
+
+                if (owner.getData().getType() == RoomType.BLOOD) {
                     return true;
                 }
             }

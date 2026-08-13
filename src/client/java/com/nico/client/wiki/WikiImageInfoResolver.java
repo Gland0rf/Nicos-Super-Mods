@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Resolves a MediaWiki file title to the original file URL via prop=imageinfo. */
+/** Resolves a MediaWiki file title, original URL, and file-specific credits. */
 final class WikiImageInfoResolver {
     private static final String API = "https://hypixelskyblock.minecraft.wiki/api.php";
     private static final String FILE_PAGE_BASE = "https://hypixelskyblock.minecraft.wiki/w/";
@@ -175,14 +175,26 @@ final class WikiImageInfoResolver {
     }
 
     private static String extractFileTitle(WikiImage image) {
-        for (String candidate : new String[]{image.altText(), image.title()}) {
+        /*
+         * Prefer the URL over alt/title. MediaWiki alt text is often a human
+         * label (and can even refer to a different animated frame), while the
+         * thumbnail URL contains the canonical file name needed by imageinfo.
+         */
+        String fromUrl = extractFileTitleFromUrl(image.url());
+        if (!fromUrl.isBlank()) {
+            return fromUrl;
+        }
+
+        for (String candidate : new String[]{image.title(), image.altText()}) {
             String normalized = normalizeFileName(candidate);
             if (!normalized.isBlank()) {
                 return normalized;
             }
         }
+        return "";
+    }
 
-        String url = image.url();
+    private static String extractFileTitleFromUrl(String url) {
         if (url == null || url.isBlank()) {
             return "";
         }
@@ -197,10 +209,31 @@ final class WikiImageInfoResolver {
                 ));
             }
 
-            String[] segments = path.split("/");
-            for (int index = segments.length - 1; index >= 0; index--) {
-                String segment = URLDecoder.decode(segments[index], StandardCharsets.UTF_8);
-                segment = segment.replaceFirst("(?i)^\\d+px-", "");
+            String[] rawSegments = path.split("/");
+
+            /*
+             * MediaWiki thumbnail URLs normally look like:
+             *   .../thumb/a/ab/File.png/80px-File.png
+             * The directory immediately before the sized thumbnail is the
+             * canonical original filename.
+             */
+            for (String rawSegment : rawSegments) {
+                if (!rawSegment.equalsIgnoreCase("thumb")) {
+                    continue;
+                }
+                if (rawSegments.length >= 2) {
+                    String beforeThumbnail = URLDecoder.decode(
+                            rawSegments[rawSegments.length - 2], StandardCharsets.UTF_8
+                    );
+                    String normalized = normalizeFileName(beforeThumbnail);
+                    if (!normalized.isBlank()) {
+                        return normalized;
+                    }
+                }
+            }
+
+            for (int index = rawSegments.length - 1; index >= 0; index--) {
+                String segment = URLDecoder.decode(rawSegments[index], StandardCharsets.UTF_8);
                 String normalized = normalizeFileName(segment);
                 if (!normalized.isBlank()) {
                     return normalized;
@@ -223,7 +256,15 @@ final class WikiImageInfoResolver {
         if (result.regionMatches(true, 0, "Image:", 0, 6)) {
             result = result.substring(6).trim();
         }
-        result = result.replaceFirst("(?i)^\\d+px-", "");
+
+        // Strip MediaWiki thumbnail size prefixes such as 40px- or 1.5x-.
+        result = result.replaceFirst("(?i)^\\d+(?:\\.\\d+)?(?:px|x)-", "");
+
+        // Some thumbnail endpoints append .webp to the original extension.
+        if (result.matches("(?i).+\\.(png|jpe?g|gif|bmp)\\.webp$")) {
+            result = result.substring(0, result.length() - ".webp".length());
+        }
+
         return result.matches("(?i).+\\.(png|jpe?g|gif|bmp|webp)$") ? result : "";
     }
 

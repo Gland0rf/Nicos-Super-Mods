@@ -1,6 +1,10 @@
 package com.nico.client;
 
 import com.nico.OdinRoomBridge;
+import com.nico.client.bloodrush.BloodRoutes;
+import com.nico.client.bloodrush.RouteCommands;
+import com.nico.client.bloodrush.RouteContext;
+import com.nico.client.bloodrush.RouteEditor;
 import com.nico.client.configuration.NsmConfigManager;
 import com.odtheking.odin.utils.skyblock.dungeon.DungeonPlayer;
 import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
@@ -16,10 +20,13 @@ import java.util.Set;
 
 public final class NsmClientCommands {
 
-    private NsmClientCommands() {
-    }
+    private static RouteEditor routeEditor;
+
+    private NsmClientCommands() { }
 
     public static void register() {
+        routeEditor = BloodRoutes.initialize(new RouteContext());
+
         ClientCommandRegistrationCallback.EVENT.register(
                 (dispatcher, registryAccess) -> {
                     registerRoomsCommand(dispatcher);
@@ -52,6 +59,7 @@ public final class NsmClientCommands {
         dispatcher.register(
                 ClientCommandManager.literal("nsm")
                         .executes(context -> openConfigScreen())
+                        .then(RouteCommands.node(routeEditor))
         );
     }
 
@@ -159,6 +167,10 @@ public final class NsmClientCommands {
         }
 
         return names;
+    }
+
+    public static RouteEditor getRouteEditor() {
+        return routeEditor;
     }
 
     private static void sendMessage(Component message) {

@@ -69,6 +69,26 @@ abstract class WikiArticleParser extends WikiWidgetParser {
         List<WikiInfobox.Entry> entries = new ArrayList<>();
         walkInfobox(root, entries);
 
+        /*
+         * Some infobox revisions omit the wrapper class but still contain the
+         * primary item render. Recover the first non-slot, non-row image so the
+         * large artwork shown by the website is not lost.
+         */
+        boolean hasPrimaryImage = entries.stream().anyMatch(entry -> entry instanceof WikiInfobox.Image);
+        if (!hasPrimaryImage) {
+            for (Element candidate : root.select("img")) {
+                if (nearestAncestorWithClass(candidate, WikiHtmlContract.INVENTORY_SLOT) != null
+                        || nearestAncestorWithClass(candidate, WikiHtmlContract.INFOBOX_ROW_CONTAINER) != null) {
+                    continue;
+                }
+                WikiImage image = parseImage(candidate);
+                if (!image.isEmpty()) {
+                    entries.add(0, new WikiInfobox.Image(image, WikiText.empty()));
+                    break;
+                }
+            }
+        }
+
         WikiInfobox result = new WikiInfobox(title, entries);
         if (result.isEmpty() && DEBUG) {
             System.err.println("[NSM Wiki] Ignoring an unsupported .infobox structure on this page");
@@ -81,7 +101,13 @@ abstract class WikiArticleParser extends WikiWidgetParser {
             if (child.hasClass(WikiHtmlContract.INFOBOX_TITLE)) {
                 continue;
             }
-            if (child.hasClass(WikiHtmlContract.INFOBOX_IMAGE_CONTAINER)) {
+            /*
+             * The live Wiki has used both an .infobox-image-container wrapper
+             * and a direct .infobox-image element. Accept both contracts so
+             * the large item render stays above the small inventory slot.
+             */
+            if (child.hasClass(WikiHtmlContract.INFOBOX_IMAGE_CONTAINER)
+                    || child.hasClass(WikiHtmlContract.INFOBOX_IMAGE)) {
                 parseInfoboxImageContainer(child, entries);
                 continue;
             }
@@ -108,7 +134,19 @@ abstract class WikiArticleParser extends WikiWidgetParser {
     }
 
     protected static void parseInfoboxImageContainer(Element container, List<WikiInfobox.Entry> entries) {
-        Element imageElement = container.getElementsByClass(WikiHtmlContract.INFOBOX_IMAGE).first();
+        Element imageElement = container.hasClass(WikiHtmlContract.INFOBOX_IMAGE)
+                ? container
+                : container.getElementsByClass(WikiHtmlContract.INFOBOX_IMAGE).first();
+        if (imageElement == null && container.hasClass(WikiHtmlContract.INFOBOX_IMAGE_CONTAINER)) {
+            // Fallback for small markup changes: the primary image is the first
+            // non-inventory image owned by the image container.
+            for (Element candidate : container.select("img")) {
+                if (nearestAncestorWithClass(candidate, WikiHtmlContract.INVENTORY_SLOT) == null) {
+                    imageElement = candidate;
+                    break;
+                }
+            }
+        }
         if (imageElement != null) {
             Element imageTag = imageElement.tagName().equals("img") ? imageElement : imageElement.selectFirst("img");
             WikiImage image = imageTag == null ? WikiImage.empty() : parseImage(imageTag);
@@ -160,11 +198,102 @@ abstract class WikiArticleParser extends WikiWidgetParser {
         for (int index = 0; index < count; index++) {
             WikiText label = parseStyledText(labels.get(index));
             WikiContent value = parseContent(values.get(index));
+            if (label.plainText().equalsIgnoreCase("Gemstones")) {
+                value = decorateGemstoneSlots(value);
+            }
             if (!label.isBlank() || !value.isEmpty()) {
                 result.add(new WikiInfobox.Row(label, value, columns));
             }
         }
         return List.copyOf(result);
+    }
+
+    /**
+     * The live Wiki renders gemstone-slot private-use glyphs with its custom
+     * webfont. Minecraft does not have that font, so a raw glyph is ambiguous
+     * (or even appears as a tofu/unknown symbol). Keep the original link, but
+     * expose the slot as an understandable diamond + name and make it hoverable.
+     */
+    protected static WikiContent decorateGemstoneSlots(WikiContent content) {
+        if (content == null || content.text().isBlank()) {
+            return content;
+        }
+
+        List<WikiText.Span> decorated = new ArrayList<>();
+        for (WikiText.Span span : content.text().spans()) {
+            String text = span.text();
+            int segmentStart = 0;
+            for (int index = 0; index < text.length(); index++) {
+                String slotName = gemstoneSlotName(text.charAt(index));
+                if (slotName.isBlank()) {
+                    continue;
+                }
+
+                if (index > segmentStart) {
+                    decorated.add(copySpan(span, text.substring(segmentStart, index), "", ""));
+                }
+
+                decorated.add(copySpan(
+                        span,
+                        "◆ " + slotName,
+                        slotName + " Gemstone Slot",
+                        "Accepts " + slotName + " Gemstones."
+                ));
+                segmentStart = index + 1;
+            }
+
+            if (segmentStart < text.length()) {
+                decorated.add(copySpan(span, text.substring(segmentStart), "", ""));
+            } else if (text.isEmpty()) {
+                decorated.add(span);
+            }
+        }
+
+        if (decorated.isEmpty()) {
+            return content;
+        }
+        return new WikiContent(
+                new WikiText(decorated),
+                content.images(),
+                content.itemSlots(),
+                content.craftingGrids()
+        );
+    }
+
+    private static WikiText.Span copySpan(
+            WikiText.Span source,
+            String text,
+            String overrideHoverTitle,
+            String overrideHoverText
+    ) {
+        return new WikiText.Span(
+                text,
+                source.href(),
+                source.bold(),
+                source.italic(),
+                source.cssClasses(),
+                overrideHoverTitle.isBlank() ? source.hoverTitle() : overrideHoverTitle,
+                overrideHoverText.isBlank() ? source.hoverText() : overrideHoverText,
+                source.inlineImage()
+        );
+    }
+
+    private static String gemstoneSlotName(char glyph) {
+        return switch (glyph) {
+            case '\uE010' -> "Ruby";
+            case '\uE008' -> "Amethyst";
+            case '\uE053' -> "Jade";
+            case '\uE003' -> "Sapphire";
+            case '\uE015' -> "Amber";
+            case '\uE01C' -> "Topaz";
+            case '\uE00D' -> "Jasper";
+            case '\uE027' -> "Opal";
+            case '\uE007' -> "Onyx";
+            case '\uE00C' -> "Aquamarine";
+            case '\uE054' -> "Citrine";
+            case '\uE051' -> "Peridot";
+            default -> "";
+        };
     }
 
     protected static List<WikiBlock> parsePanelBlocks(Element panel) {
@@ -416,7 +545,8 @@ abstract class WikiArticleParser extends WikiWidgetParser {
                         span.italic(),
                         span.cssClasses(),
                         span.hoverTitle(),
-                        span.hoverText()
+                        span.hoverText(),
+                        span.inlineImage()
                 ));
             }
         }
@@ -430,7 +560,34 @@ abstract class WikiArticleParser extends WikiWidgetParser {
     }
 
     protected static void appendMessageBox(Element element, List<WikiBlock> blocks) {
-        WikiContent content = parseContent(element);
+        /*
+         * Message-box artwork (for example the recently-updated clock) is a
+         * dedicated left-side icon on the Wiki. Parsing the whole box as prose
+         * can misclassify that small image as an inline glyph and make it
+         * disappear. Parse the text and icon separately instead.
+         */
+        Element textElement = element.getElementsByClass(WikiHtmlContract.MESSAGEBOX_TEXT).first();
+        WikiContent parsedText = parseContent(textElement == null ? element : textElement);
+
+        List<WikiImage> images = new ArrayList<>(parsedText.images());
+        Element imageContainer = element.getElementsByClass(WikiHtmlContract.MESSAGEBOX_IMAGE).first();
+        if (imageContainer != null) {
+            Element imageTag = imageContainer.tagName().equals("img")
+                    ? imageContainer
+                    : imageContainer.selectFirst("img");
+            WikiImage icon = imageTag == null ? WikiImage.empty() : parseImage(imageTag);
+            if (!icon.isEmpty()) {
+                images.removeIf(existing -> existing.url().equals(icon.url()));
+                images.add(0, icon);
+            }
+        }
+
+        WikiContent content = new WikiContent(
+                parsedText.text(),
+                images,
+                parsedText.itemSlots(),
+                parsedText.craftingGrids()
+        );
         if (content.isEmpty()) {
             return;
         }

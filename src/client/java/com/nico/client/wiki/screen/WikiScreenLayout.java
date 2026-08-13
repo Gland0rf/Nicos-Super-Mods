@@ -23,9 +23,15 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Builds the immutable render-entry list from the Wiki model. */
 abstract class WikiScreenLayout extends WikiScreenActions {
+    private static final Pattern INLINE_TOKEN_PATTERN = Pattern.compile("\\n|[\\t\\x0B\\f\\r ]+|\\S+");
+    private static final int INLINE_IMAGE_HEIGHT = LINE_HEIGHT;
+    private static final int INLINE_IMAGE_MAX_WIDTH = LINE_HEIGHT + 3;
+
     protected WikiScreenLayout(Screen parent, ItemStack itemStack) {
         super(parent, itemStack);
     }
@@ -572,11 +578,19 @@ abstract class WikiScreenLayout extends WikiScreenActions {
 
     protected int layoutContent(WikiContent content, int x, int y, int width, boolean compact) {
         if (!content.text().isBlank()) {
-            List<FormattedCharSequence> lines = font.split(toComponent(content.text()), width);
-            int h = Math.max(LINE_HEIGHT, lines.size() * LINE_HEIGHT);
-            entries.add(new RenderEntry(Kind.TEXT, x, y, width, h,
-                    List.of(new Cell(0, 0, width, lines)), 0, null));
-            y += h + (compact ? 3 : 7);
+            if (hasInlineImages(content.text())) {
+                InlineTextLayout inlineText = layoutInlineText(content.text(), width);
+                int h = inlineText.height();
+                entries.add(new RenderEntry(Kind.TEXT, x, y, width, h,
+                        List.of(), 0, inlineText));
+                y += h + (compact ? 3 : 7);
+            } else {
+                List<FormattedCharSequence> lines = font.split(toComponent(content.text()), width);
+                int h = Math.max(LINE_HEIGHT, lines.size() * LINE_HEIGHT);
+                entries.add(new RenderEntry(Kind.TEXT, x, y, width, h,
+                        List.of(new Cell(0, 0, width, lines)), 0, null));
+                y += h + (compact ? 3 : 7);
+            }
         }
         if (!content.itemSlots().isEmpty()) {
             int h = Math.max(27, ((content.itemSlots().size() + 8) / 9) * 23 + 4);
@@ -669,8 +683,16 @@ abstract class WikiScreenLayout extends WikiScreenActions {
                 int rowSpan = Math.max(1, Math.min(source.rowSpan(), rowCount - rowIndex));
                 int cellWidth = sum(widths, searchColumn, searchColumn + columnSpan);
                 int innerWidth = Math.max(20, cellWidth - 14);
-                List<FormattedCharSequence> lines = font.split(toComponent(source.content().text()), innerWidth);
-                int contentHeight = tableCellContentHeight(source.content(), innerWidth, lines.size());
+                InlineTextLayout inlineText = hasInlineImages(source.content().text())
+                        ? layoutInlineText(source.content().text(), innerWidth)
+                        : null;
+                List<FormattedCharSequence> lines = inlineText == null
+                        ? font.split(toComponent(source.content().text()), innerWidth)
+                        : List.of();
+                int textHeight = inlineText == null
+                        ? lines.size() * LINE_HEIGHT
+                        : inlineText.height();
+                int contentHeight = tableCellContentHeight(source.content(), innerWidth, textHeight);
 
                 placedCells.add(new TableCellLayout(
                         rowIndex,
@@ -679,6 +701,7 @@ abstract class WikiScreenLayout extends WikiScreenActions {
                         columnSpan,
                         source.header(),
                         lines,
+                        inlineText,
                         source.content(),
                         contentHeight
                 ));
@@ -731,6 +754,7 @@ abstract class WikiScreenLayout extends WikiScreenActions {
                     rowTops[cell.row() + cell.rowSpan()] - rowTops[cell.row()],
                     cell.header(),
                     cell.lines(),
+                    cell.inlineText(),
                     cell.content()
             ));
         }
@@ -749,9 +773,9 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         return y + totalHeight + 9;
     }
 
-    protected int tableCellContentHeight(WikiContent content, int width, int textLineCount) {
-        int height = textLineCount * LINE_HEIGHT;
-        boolean hasPrevious = textLineCount > 0;
+    protected int tableCellContentHeight(WikiContent content, int width, int textHeight) {
+        int height = Math.max(0, textHeight);
+        boolean hasPrevious = textHeight > 0;
 
         if (!content.itemSlots().isEmpty()) {
             int step = compactSlotStep(width);
@@ -862,6 +886,167 @@ abstract class WikiScreenLayout extends WikiScreenActions {
             }
         }
         return result.toString();
+    }
+
+    protected static boolean hasInlineImages(WikiText text) {
+        if (text == null) {
+            return false;
+        }
+        for (WikiText.Span span : text.spans()) {
+            if (span.hasInlineImage()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Minecraft's normal Font#split can only lay out glyphs, so image spans
+     * need a tiny rich-text layout of their own. Text still uses normal
+     * Minecraft Components/styles; images simply reserve their actual place
+     * in the line and are drawn by the widget renderer.
+     */
+    protected InlineTextLayout layoutInlineText(WikiText text, int maxWidth) {
+        int width = Math.max(20, maxWidth);
+        List<InlineRun> runs = new ArrayList<>();
+        int cursorX = 0;
+        int cursorY = 0;
+
+        for (WikiText.Span span : text.spans()) {
+            if (span.hasInlineImage()) {
+                WikiImage image = span.inlineImage();
+                int imageHeight = INLINE_IMAGE_HEIGHT;
+                int imageWidth = image.declaredWidth() > 0 && image.declaredHeight() > 0
+                        ? Math.max(1, (int) Math.round(
+                        (double) imageHeight * image.declaredWidth() / image.declaredHeight()))
+                        : imageHeight;
+                imageWidth = Math.min(INLINE_IMAGE_MAX_WIDTH, imageWidth);
+
+                if (cursorX > 0 && cursorX + imageWidth > width) {
+                    cursorX = 0;
+                    cursorY += LINE_HEIGHT;
+                }
+
+                runs.add(new InlineRun(
+                        cursorX,
+                        cursorY,
+                        imageWidth,
+                        imageHeight,
+                        null,
+                        image,
+                        span.isLink() ? resolveHref(span.href()) : null,
+                        spanTooltip(span)
+                ));
+                cursorX += imageWidth;
+                continue;
+            }
+
+            Matcher matcher = INLINE_TOKEN_PATTERN.matcher(span.text());
+            while (matcher.find()) {
+                String token = matcher.group();
+                if (token.equals("\n")) {
+                    cursorX = 0;
+                    cursorY += LINE_HEIGHT;
+                    continue;
+                }
+                boolean whitespace = token.isBlank();
+                if (whitespace) {
+                    token = " ";
+                    if (cursorX == 0) {
+                        continue;
+                    }
+                }
+
+                MutableComponent component = componentForSpan(span, token);
+                FormattedCharSequence visual = component.getVisualOrderText();
+                int tokenWidth = font.width(visual);
+
+                if (whitespace && cursorX + tokenWidth > width) {
+                    cursorX = 0;
+                    cursorY += LINE_HEIGHT;
+                    continue;
+                }
+
+                if (!whitespace && cursorX > 0 && cursorX + tokenWidth > width) {
+                    cursorX = 0;
+                    cursorY += LINE_HEIGHT;
+                }
+
+                if (!whitespace && tokenWidth > width) {
+                    List<FormattedCharSequence> pieces = font.split(component, width);
+                    for (int pieceIndex = 0; pieceIndex < pieces.size(); pieceIndex++) {
+                        FormattedCharSequence piece = pieces.get(pieceIndex);
+                        if (cursorX > 0) {
+                            cursorX = 0;
+                            cursorY += LINE_HEIGHT;
+                        }
+                        int pieceWidth = font.width(piece);
+                        runs.add(new InlineRun(
+                                0, cursorY, pieceWidth, LINE_HEIGHT, piece,
+                                WikiImage.empty(), null, null
+                        ));
+                        cursorX = pieceWidth;
+                        if (pieceIndex + 1 < pieces.size()) {
+                            cursorX = 0;
+                            cursorY += LINE_HEIGHT;
+                        }
+                    }
+                    continue;
+                }
+
+                runs.add(new InlineRun(
+                        cursorX, cursorY, tokenWidth, LINE_HEIGHT, visual,
+                        WikiImage.empty(), null, null
+                ));
+                cursorX += tokenWidth;
+            }
+        }
+
+        int height = cursorY + LINE_HEIGHT;
+        return new InlineTextLayout(runs, height);
+    }
+
+    protected MutableComponent componentForSpan(WikiText.Span span, String visibleText) {
+        MutableComponent part = Component.literal(visibleText);
+        part.withStyle(spanFormatting(span));
+        if (span.bold()) {
+            part.withStyle(ChatFormatting.BOLD);
+        }
+        if (span.italic()) {
+            part.withStyle(ChatFormatting.ITALIC);
+        }
+        if (span.isLink()) {
+            URI uri = resolveHref(span.href());
+            if (uri != null) {
+                part.withStyle(style -> style
+                        .withClickEvent(new ClickEvent.OpenUrl(uri))
+                        .withUnderlined(true));
+            }
+        }
+        Component tooltip = spanTooltip(span);
+        if (tooltip != null) {
+            part.withStyle(style -> style.withHoverEvent(new HoverEvent.ShowText(tooltip)));
+        }
+        return part;
+    }
+
+    protected Component spanTooltip(WikiText.Span span) {
+        if (span == null || !span.isHoverable()) {
+            return null;
+        }
+        MutableComponent tooltip = Component.empty();
+        if (!span.hoverTitle().isBlank()) {
+            tooltip.append(WikiScreenInteractionRenderer.parseLegacyFormatting(
+                    span.hoverTitle(), ChatFormatting.AQUA));
+        }
+        if (!span.hoverText().isBlank()) {
+            if (!span.hoverTitle().isBlank()) {
+                tooltip.append(Component.literal("\n"));
+            }
+            tooltip.append(WikiScreenInteractionRenderer.parseLegacyFormatting(
+                    span.hoverText(), ChatFormatting.GRAY));
+        }
+        return tooltip;
     }
 
     protected int layoutTabs(WikiBlock.TabGroup group, int x, int y, int width) {
@@ -975,38 +1160,10 @@ abstract class WikiScreenLayout extends WikiScreenActions {
     protected MutableComponent toComponent(WikiText text) {
         MutableComponent result = Component.empty();
         for (WikiText.Span span : text.spans()) {
-            MutableComponent part = Component.literal(span.text());
-            part.withStyle(spanFormatting(span));
-            if (span.bold()) {
-                part.withStyle(ChatFormatting.BOLD);
+            if (span.hasInlineImage()) {
+                continue;
             }
-            if (span.italic()) {
-                part.withStyle(ChatFormatting.ITALIC);
-            }
-            if (span.isLink()) {
-                URI uri = resolveHref(span.href());
-                if (uri != null) {
-                    part.withStyle(style -> style
-                            .withClickEvent(new ClickEvent.OpenUrl(uri))
-                            .withUnderlined(true));
-                }
-            }
-            if (span.isHoverable()) {
-                MutableComponent tooltip = Component.empty();
-                if (!span.hoverTitle().isBlank()) {
-                    tooltip.append(WikiScreenInteractionRenderer.parseLegacyFormatting(
-                            span.hoverTitle(), ChatFormatting.AQUA));
-                }
-                if (!span.hoverText().isBlank()) {
-                    if (!span.hoverTitle().isBlank()) {
-                        tooltip.append(Component.literal("\n"));
-                    }
-                    tooltip.append(WikiScreenInteractionRenderer.parseLegacyFormatting(
-                            span.hoverText(), ChatFormatting.GRAY));
-                }
-                part.withStyle(style -> style.withHoverEvent(new HoverEvent.ShowText(tooltip)));
-            }
-            result.append(part);
+            result.append(componentForSpan(span, span.text()));
         }
         return result;
     }

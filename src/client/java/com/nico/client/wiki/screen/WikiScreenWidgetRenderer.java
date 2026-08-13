@@ -38,7 +38,13 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
                 graphics.fill(entry.x(), y + entry.height() - 1, entry.x() + entry.width(), y + entry.height(), DIVIDER);
             }
             case MESSAGEBOX -> renderMessageBox(graphics, entry, y);
-            case TEXT -> drawCells(graphics, entry, y, TEXT);
+            case TEXT -> {
+                if (entry.payload() instanceof InlineTextLayout inlineText) {
+                    renderInlineText(graphics, inlineText, entry.x(), y);
+                } else {
+                    drawCells(graphics, entry, y, TEXT);
+                }
+            }
             case H2, H3 -> {
                 drawCells(graphics, entry, y, TEXT);
                 graphics.fill(entry.x(), y + entry.height() - 2, entry.x() + entry.width(), y + entry.height() - 1,
@@ -281,6 +287,47 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         }
     }
 
+    protected void renderInlineText(
+            GuiGraphics graphics,
+            InlineTextLayout layout,
+            int x,
+            int y
+    ) {
+        if (layout == null) {
+            return;
+        }
+
+        for (InlineRun run : layout.runs()) {
+            int runX = x + run.xOffset();
+            int runY = y + run.yOffset();
+            if (run.isImage()) {
+                drawRemoteImage(
+                        graphics,
+                        run.image(),
+                        runX,
+                        runY,
+                        Math.max(1, run.width()),
+                        Math.max(1, run.height())
+                );
+                if (run.uri() != null) {
+                    linkHitboxes.add(new LinkHitbox(
+                            runX, runY, run.width(), run.height(), run.uri()
+                    ));
+                }
+                if (run.tooltip() != null) {
+                    textHoverHitboxes.add(new TextHoverHitbox(
+                            runX, runY, run.width(), run.height(), run.tooltip()
+                    ));
+                }
+                continue;
+            }
+
+            if (run.text() != null) {
+                drawInteractiveLine(graphics, run.text(), runX, runY, TEXT);
+            }
+        }
+    }
+
     protected void renderTable(GuiGraphics graphics, RenderEntry entry, int y) {
         if (!(entry.payload() instanceof TableLayout table)) {
             return;
@@ -313,13 +360,19 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
             int contentX = cellX + 5;
             int contentY = cellY + 4;
             int innerWidth = Math.max(12, cell.width() - 10);
-            for (FormattedCharSequence line : cell.lines()) {
-                drawInteractiveLine(graphics, line, contentX, contentY, TEXT);
-                contentY += LINE_HEIGHT;
+            if (cell.inlineText() != null) {
+                renderInlineText(graphics, cell.inlineText(), contentX, contentY);
+                contentY += cell.inlineText().height();
+            } else {
+                for (FormattedCharSequence line : cell.lines()) {
+                    drawInteractiveLine(graphics, line, contentX, contentY, TEXT);
+                    contentY += LINE_HEIGHT;
+                }
             }
 
             WikiContent richContent = cell.content();
-            if (!cell.lines().isEmpty()
+            boolean hasText = cell.inlineText() != null || !cell.lines().isEmpty();
+            if (hasText
                     && (!richContent.itemSlots().isEmpty()
                     || !richContent.craftingGrids().isEmpty()
                     || !richContent.images().isEmpty())) {
