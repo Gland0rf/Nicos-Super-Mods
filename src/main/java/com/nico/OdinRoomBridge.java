@@ -1,38 +1,32 @@
 package com.nico;
 
-import com.odtheking.odin.features.impl.dungeon.map.Door;
-import com.odtheking.odin.features.impl.dungeon.map.MapRoom;
-import com.odtheking.odin.features.impl.dungeon.map.MapScanner;
-import com.odtheking.odin.utils.skyblock.dungeon.ScanUtils;
-import com.odtheking.odin.utils.skyblock.dungeon.tiles.Room;
-import com.odtheking.odin.utils.Vec2;
-import com.odtheking.odin.utils.skyblock.dungeon.tiles.RoomData;
-import com.odtheking.odin.utils.skyblock.dungeon.tiles.RoomType;
+import com.odtheking.odin.features.impl.dungeon.map.DungeonScan;
+import com.odtheking.odin.features.impl.dungeon.map.tile.DungeonDoor;
+import com.odtheking.odin.features.impl.dungeon.map.tile.DungeonRoom;
+import com.odtheking.odin.utils.IVec2;
+import com.odtheking.odin.features.impl.dungeon.map.tile.RoomData;
+import com.odtheking.odin.features.impl.dungeon.map.tile.RoomType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Blocks;
 
 public class OdinRoomBridge {
 
-    public static Room getRoomForPlayer(Player player) {
-        Vec2 roomCenter = ScanUtils.INSTANCE.getRoomCenter(
-                (int) player.getX(),
-                (int) player.getZ()
-        );
+    public static DungeonRoom getRoomForPlayer(Player player) {
+        int tileX = (player.getBlockX() + 201) >> 5;
+        int tileZ = (player.getBlockZ() + 201) >> 5;
 
-        for (Room room : ScanUtils.INSTANCE.getPassedRooms()) {
-            boolean inside = room.getRoomComponents().stream()
-                    .anyMatch(component -> component.getVec2().equals(roomCenter));
-
-            if (inside)
-                return room;
+        if (tileX < 0 || tileX > 5 || tileZ < 0 || tileZ > 5) {
+            return null;
         }
 
-        return ScanUtils.INSTANCE.scanRoom(roomCenter);
+        return DungeonScan.INSTANCE
+                .getTiles()[tileX + tileZ * 6]
+                .getRoom();
     }
 
     public static String getRoomNameForPlayer(Player player) {
-        Room room = getRoomForPlayer(player);
+        DungeonRoom room = getRoomForPlayer(player);
 
         if (room == null || room.getData() == null) {
             return "Unknown";
@@ -42,22 +36,18 @@ public class OdinRoomBridge {
     }
 
     public static boolean hasLockedWitherDoorForPlayer(Player player) {
-        Room scanRoom = getRoomForPlayer(player);
+        DungeonRoom scanRoom = getRoomForPlayer(player);
 
         if (scanRoom == null || scanRoom.getData() == null) {
             return false;
         }
 
         try {
-            if (player.level() != null) {
-                MapScanner.INSTANCE.scan(player.level());
-            }
-
             if (currentRoomConnectsToFairy(scanRoom) && fairyRoomHasClosedWitherDoor(player)) {
                 return true;
             }
 
-            for (Door door : MapScanner.INSTANCE.getDoors()) {
+            for (DungeonDoor door : DungeonScan.INSTANCE.getDoors().values()) {
                 if (door.getType() != Door.Type.WITHER) continue;
                 if (!getDoorLocked(door, player)) continue;
 
@@ -72,7 +62,7 @@ public class OdinRoomBridge {
         return false;
     }
 
-    private static boolean doorTouchesScanRoom(Door door, Room room) {
+    private static boolean doorTouchesScanRoom(DungeonDoor door, DungeonRoom room) {
         int doorX = door.getPos().getX();
         int doorZ = door.getPos().getZ();
 
