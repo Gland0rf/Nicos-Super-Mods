@@ -1,5 +1,5 @@
 plugins {
-	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
 	id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
 	id 'maven-publish'
 }
@@ -58,22 +58,20 @@ sourceSets {
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 
-	mappings loom.officialMojangMappings()
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	implementation "org.jetbrains.kotlin:kotlin-stdlib:${project.kotlin_stdlib_version}"
+	implementation "net.fabricmc:fabric-language-kotlin:${project.fabric_language_kotlin_version}"
 
-	implementation "org.jetbrains.kotlin:kotlin-stdlib:2.4.0"
-	modImplementation "net.fabricmc:fabric-language-kotlin:1.13.12+kotlin.2.4.0"
+	implementation "org.jsoup:jsoup:${project.jsoup_version}"
+	include "org.jsoup:jsoup:${project.jsoup_version}"
 
-	implementation "org.jsoup:jsoup:1.18.3"
-	include "org.jsoup:jsoup:1.18.3"
+	clientImplementation "maven.modrinth:modmenu:${project.modmenu_version}"
 
-	modClientImplementation "maven.modrinth:modmenu:${project.modmenu_version}"
+	clientImplementation include("org.notenoughupdates.moulconfig:${project.moulconfig_version}")
 
-	modClientImplementation include("org.notenoughupdates.moulconfig:modern-1.21.11:4.7.2")
-
-	modCompileOnly "maven.modrinth:odin:0.2.1"
+	compileOnly "maven.modrinth:odin:${project.odin_version}"
 }
 
 processResources {
@@ -91,19 +89,19 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 21
+	it.options.release = 25
 	options.encoding = "UTF-8"
 }
 
 kotlin {
-	jvmToolchain(21)
+	jvmToolchain(25)
 }
 
 java {
 	withSourcesJar()
 
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
 }
 
 jar {
