@@ -128,7 +128,7 @@ public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 		if (!DungeonUtils.INSTANCE.getInDungeons()) return;
 		if (DungeonUtils.INSTANCE.getInBoss()) return;
 
-		String roomName = OdinRoomBridge.getRoomNameForPlayer(mc.player);
+		String roomName = RoomBridge.getRoomNameForPlayer(mc.player);
 
 		if (roomName == null || roomName.equals("Unknown")) return;
 
@@ -149,22 +149,17 @@ public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 
 		if (mc.level == null || mc.player == null) return;
 
-		if (!FabricLoader.getInstance().isModLoaded("odin")) {
-			mc.player.sendSystemMessage(Component.literal("§cOdin is not loaded."));
-			return;
-		}
-
-		Set<String> teammateNames = getOdinDungeonTeammateNames();
+		Set<String> teammateNames = getDungeonTeammateNames();
 
 		mc.player.sendSystemMessage(Component.literal("§a--- Secret Stack Tracker Room Debug ---"));
-		mc.player.sendSystemMessage(Component.literal("§7Odin teammates found: §e" + teammateNames.size()));
+		mc.player.sendSystemMessage(Component.literal("§7Teammates found: §e" + teammateNames.size()));
 
 		for (Player player : mc.level.players()) {
 			String playerName = player.getName().getString();
 
 			if (!teammateNames.contains(playerName)) continue;
 
-			String roomName = OdinRoomBridge.getRoomNameForPlayer(player);
+			String roomName = RoomBridge.getRoomNameForPlayer(player);
 
 			int x = player.blockPosition().getX();
 			int y = player.blockPosition().getY();
@@ -178,7 +173,7 @@ public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 		}
 	}
 
-	public static Set<String> getOdinDungeonTeammateNames() {
+	public static Set<String> getDungeonTeammateNames() {
 		Set<String> names = new HashSet<>();
 
 		try {
@@ -196,8 +191,8 @@ public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 		return names;
 	}
 
-	public static void onOdinSecretPickup(BlockPos secretPos) {
-		SecretRoomTimerClient.onOdinSecretPickup(secretPos);
+	public static void onSecretPickup(BlockPos secretPos) {
+		SecretRoomTimerClient.onSecretPickup(secretPos);
 
 		Minecraft mc = Minecraft.getInstance();
 
@@ -205,7 +200,7 @@ public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 		if (!DungeonUtils.INSTANCE.getInDungeons()) return;
 		if (DungeonUtils.INSTANCE.getInBoss()) return;
 
-		String roomName = OdinRoomBridge.getRoomNameForPlayer(mc.player);
+		String roomName = RoomBridge.getRoomNameForPlayer(mc.player);
 
 		if (roomName == null || roomName.equals("Unknown")) return;
 
