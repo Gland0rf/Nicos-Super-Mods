@@ -2,7 +2,7 @@ package com.nico.client.hud;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
@@ -23,12 +23,12 @@ public class HudMoveScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float tickDelta) {
-        super.render(graphics, mouseX, mouseY, tickDelta);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float tickDelta) {
+        super.extractRenderState(graphics, mouseX, mouseY, tickDelta);
 
         Font font = Minecraft.getInstance().font;
 
-        graphics.drawString(
+        graphics.text(
                 font,
                 "Drag GUI elements. Press ESC to save and exit.",
                 10,
@@ -40,7 +40,7 @@ public class HudMoveScreen extends Screen {
         Collection<HudElement> seenElements = layoutManager.getSeenElements();
 
         if (seenElements.isEmpty()) {
-            graphics.drawString(
+            graphics.text(
                     font,
                     "You can only move GUI elements you have already seen.",
                     10,
@@ -57,7 +57,7 @@ public class HudMoveScreen extends Screen {
         }
     }
 
-    private void drawElementBox(GuiGraphics graphics, Font font, HudElement element, int mouseX, int mouseY) {
+    private void drawElementBox(GuiGraphicsExtractor graphics, Font font, HudElement element, int mouseX, int mouseY) {
         int x = element.getX();
         int y = element.getY();
         int width = element.getWidth();
@@ -69,9 +69,9 @@ public class HudMoveScreen extends Screen {
         int backgroundColor = hovered ? 0xAA2A2A2A : 0x88202020;
 
         graphics.fill(x, y, x + width, y + height, backgroundColor);
-        graphics.renderOutline(x, y, width, height, borderColor);
+        graphics.outline(x, y, width, height, borderColor);
 
-        graphics.drawString(
+        graphics.text(
                 font,
                 element.getDisplayName(),
                 x + 6,
@@ -80,7 +80,7 @@ public class HudMoveScreen extends Screen {
                 true
         );
 
-        graphics.drawString(
+        graphics.text(
                 font,
                 "x=" + x + " y=" + y,
                 x + 6,
@@ -89,7 +89,7 @@ public class HudMoveScreen extends Screen {
                 true
         );
 
-        graphics.drawString(
+        graphics.text(
                 font,
                 "scale=" + String.format(Locale.US, "%.2fx", element.getScale()),
                 x + 6,
@@ -98,7 +98,7 @@ public class HudMoveScreen extends Screen {
                 true
         );
 
-        graphics.drawString(
+        graphics.text(
                 font,
                 width + "x" + height,
                 x + 6,

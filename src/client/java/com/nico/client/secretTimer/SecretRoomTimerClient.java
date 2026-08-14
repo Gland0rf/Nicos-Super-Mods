@@ -3,11 +3,11 @@ package com.nico.client.secretTimer;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-import com.nico.OdinRoomBridge;
 import com.nico.client.configuration.NsmConfig;
 import com.nico.client.configuration.category.CategoryDungeons;
+import com.nico.client.dungeon.DungeonScanner;
+import com.nico.client.dungeon.DungeonState;
 import com.nico.client.utils.LocationUtils;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -92,24 +92,18 @@ public final class SecretRoomTimerClient {
         onRoomSecretCounterUpdate(roomName, foundSecrets, totalSecrets);
     }
 
-    public static void onOdinSecretPickup(BlockPos secretPos) {
-        System.out.println("[NSM] Stage 1");
-
+    public static void onSecretPickup(BlockPos secretPos) {
         Minecraft mc = Minecraft.getInstance();
 
         if (!mc.isSameThread()) {
             BlockPos immutablePos = secretPos == null ? null : secretPos.immutable();
-            mc.execute(() -> onOdinSecretPickup(immutablePos));
+            mc.execute(() -> onSecretPickup(immutablePos));
             return;
         }
 
         if (!enabled()) return;
 
-        System.out.println("[NSM] Stage 2");
-
         if (!isDungeonRoomContext(mc, true)) return;
-
-        System.out.println("[NSM] Stage 3");
 
         String roomName = getCurrentRoomName(mc);
         if (roomName == null) return;
@@ -123,8 +117,6 @@ public final class SecretRoomTimerClient {
             return;
         }
 
-        System.out.println("[NSM] Stage 4");
-
         long now = System.currentTimeMillis();
 
         if (secretPos != null) {
@@ -135,18 +127,10 @@ public final class SecretRoomTimerClient {
 
             long posLong = secretPos.asLong();
 
-            System.out.println("[NSM] Stage 5 room=" + roomName
-                    + " secretPos=" + secretPos
-                    + " posLong=" + posLong
-                    + " seenCount=" + seenPositions.size()
-                    + " alreadySeen=" + seenPositions.contains(posLong));
-
             if (!seenPositions.add(secretPos.asLong())) {
                 return;
             }
         }
-
-        System.out.println("[NSM] Stage 6");
 
         boolean matchedEarlierCounterIncrement = consumePendingCounterIncrement(roomName, now);
 
@@ -271,12 +255,14 @@ public final class SecretRoomTimerClient {
     }
 
     private static void tryFinish(String roomName, Attempt attempt) {
+        int knownFound = knownFoundByRoom.getOrDefault(roomName, -1);
+
         if (attempt.finished) return;
         if (attempt.invalidated) return;
         if (attempt.totalSecrets <= 0) return;
         if (attempt.selfSecrets < attempt.totalSecrets) return;
 
-        int knownFound = knownFoundByRoom.getOrDefault(roomName, -1);
+        //int knownFound = knownFoundByRoom.getOrDefault(roomName, -1);
 
         if (knownFound >= 0 && knownFound < attempt.totalSecrets) {
             return;
@@ -423,18 +409,11 @@ public final class SecretRoomTimerClient {
     }
 
     private static boolean isDungeonRoomContext(Minecraft mc, boolean log) {
-        if (log) {
-            System.out.println("[NSM] DungeonRoomContext");
-            System.out.println("[NSM] " + mc.level + " " + mc.level != null);
-            System.out.println("[NSM] " + mc.player + " " + mc.player != null);
-            System.out.println("[NSM] " + LocationUtils.isInDungeon() + " " + DungeonUtils.INSTANCE.getInDungeons());
-            System.out.println("[NSM] " + DungeonUtils.INSTANCE.getInBoss() + " " + DungeonUtils.INSTANCE.getInBoss());
-        }
         try {
             return mc.level != null
                     && mc.player != null
                     && LocationUtils.isInDungeon()
-                    && !DungeonUtils.INSTANCE.getInBoss();
+                    && !DungeonState.INSTANCE.getInBoss();
         } catch (Throwable throwable) {
             throwable.printStackTrace();
             return false;
@@ -445,7 +424,7 @@ public final class SecretRoomTimerClient {
         try {
             if (mc.player == null) return null;
 
-            String roomName = OdinRoomBridge.getRoomNameForPlayer(mc.player);
+            String roomName = DungeonScanner.getRoomNameForPlayer(mc.player);
 
             if (roomName == null || roomName.isBlank() || roomName.equals("Unknown")) {
                 return null;
@@ -534,7 +513,7 @@ public final class SecretRoomTimerClient {
         Minecraft mc = Minecraft.getInstance();
 
         if (mc.player != null) {
-            mc.player.displayClientMessage(Component.literal(message), false);
+            mc.getInstance().gui.getChat().addClientSystemMessage(Component.literal(message));
         }
     }
 
@@ -756,12 +735,12 @@ public final class SecretRoomTimerClient {
         tryFinish(roomName, attempt);
     }
 
-    public static void onOdinItemSecretPickup(BlockPos itemPos) {
+    public static void onItemSecretPickup(BlockPos itemPos) {
         Minecraft mc = Minecraft.getInstance();
 
         if (!mc.isSameThread()) {
             BlockPos immutablePos = itemPos == null ? null : itemPos.immutable();
-            mc.execute(() -> onOdinItemSecretPickup(immutablePos));
+            mc.execute(() -> onItemSecretPickup(immutablePos));
             return;
         }
 
@@ -775,15 +754,15 @@ public final class SecretRoomTimerClient {
             return;
         }
 
-        onOdinSecretPickup(itemPos);
+        onSecretPickup(itemPos);
     }
 
-    public static void onOdinChestSecretPickup(BlockPos chestPos) {
+    public static void onChestSecretPickup(BlockPos chestPos) {
         Minecraft mc = Minecraft.getInstance();
 
         if (!mc.isSameThread()) {
             BlockPos immutablePos = chestPos == null ? null : chestPos.immutable();
-            mc.execute(() -> onOdinChestSecretPickup(immutablePos));
+            mc.execute(() -> onChestSecretPickup(immutablePos));
             return;
         }
 
@@ -842,7 +821,7 @@ public final class SecretRoomTimerClient {
                 System.out.println("[NSM] Confirmed unlocked chest secret at " + pending.pos + " in room " + roomName);
 
                 rememberChestSecretPosition(roomName, pending.pos);
-                onOdinSecretPickup(pending.pos);
+                onSecretPickup(pending.pos);
             }
 
             if (queue.isEmpty()) {

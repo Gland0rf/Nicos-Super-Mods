@@ -56,7 +56,7 @@ HUD positions and scales are saved automatically.
 ## Requirements
 
 - **Mod loader:** Fabric Loader
-- **Required mods:** Fabric API, Fabric Language Kotlin, Odin, ModMenu
+- **Required mods:** Fabric API, Fabric Language Kotlin, ModMenu
 
 ## Configuration
 

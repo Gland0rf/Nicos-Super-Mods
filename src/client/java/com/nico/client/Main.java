@@ -1,6 +1,5 @@
 package com.nico.client;
 
-import com.nico.client.configuration.NsmConfig;
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.hud.HudLayoutManager;
 import com.nico.client.lag.LagMonitorFeature;
@@ -57,7 +56,7 @@ public final class Main implements ClientModInitializer {
     }
 
     public static void onOdinSecretPickup(BlockPos secretPos) {
-        SecretStackingDetector.onOdinSecretPickup(secretPos);
+        SecretStackingDetector.onSecretPickup(secretPos);
     }
 
     public static void onRoomSecretCounterUpdate(
