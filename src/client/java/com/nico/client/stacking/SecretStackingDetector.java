@@ -1,9 +1,8 @@
 package com.nico.client.stacking;
 
-import com.nico.OdinRoomBridge;
-import com.nico.client.configuration.NsmConfig;
+import com.nico.client.dungeon.DungeonScanner;
+import com.nico.client.dungeon.DungeonState;
 import com.nico.client.secretTimer.SecretRoomTimerClient;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -32,11 +31,6 @@ public final class SecretStackingDetector {
             int foundSecrets,
             int totalSecrets
     ) {
-        SecretRoomTimerClient.onRoomSecretsPacket(
-                foundSecrets,
-                totalSecrets
-        );
-
         if (!isDetectorEnabled()) {
             return;
         }
@@ -63,9 +57,7 @@ public final class SecretStackingDetector {
         clearPendingSelfSecret();
     }
 
-    public static void onOdinSecretPickup(BlockPos secretPos) {
-        SecretRoomTimerClient.onOdinSecretPickup(secretPos);
-
+    public static void onSecretPickup(BlockPos secretPos) {
         Minecraft minecraft = Minecraft.getInstance();
 
         if (!isValidDungeonState(minecraft)) {
@@ -181,13 +173,12 @@ public final class SecretStackingDetector {
 
         lastAlertAt = now;
 
-        minecraft.player.displayClientMessage(
+        minecraft.getInstance().gui.getChat().addClientSystemMessage(
                 Component.literal(
                         "§c§l[NSM] Stacking detected in §b"
                                 + roomName
                                 + "§c!"
-                ),
-                false
+                )
         );
 
         System.out.println(
@@ -207,14 +198,14 @@ public final class SecretStackingDetector {
     ) {
         return minecraft.level != null
                 && minecraft.player != null
-                && DungeonUtils.INSTANCE.getInDungeons()
-                && !DungeonUtils.INSTANCE.getInBoss();
+                && DungeonState.INSTANCE.getInDungeons()
+                && !DungeonState.INSTANCE.getInBoss();
     }
 
     private static String getCurrentPlayerRoom(
             Minecraft minecraft
     ) {
-        return OdinRoomBridge.getRoomNameForPlayer(
+        return DungeonScanner.getRoomNameForPlayer(
                 minecraft.player
         );
     }

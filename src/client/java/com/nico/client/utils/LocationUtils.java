@@ -48,8 +48,6 @@ public class LocationUtils {
     private static Island currentArea = Island.UNKNOWN;
     private static String lobbyId = null;
 
-    private static long lastDungeonEvidenceMs = 0L;
-
     private static final Pattern LOBBY_REGEX =
             Pattern.compile("\\d\\d/\\d\\d/\\d\\d (\\w{0,6}) *");
 
@@ -68,7 +66,7 @@ public class LocationUtils {
     }
 
     public static boolean isInDungeon() {
-        return currentArea == Island.DUNGEON || hasRecentDungeonEvidence();
+        return currentArea == Island.DUNGEON;
     }
 
     public static boolean isCurrentArea(Island... islands) {
@@ -102,7 +100,9 @@ public class LocationUtils {
 
         String text = clean(displayName.getString());
 
-        if (!text.startsWith("Area: ") && !text.startsWith("Dungeon: ")) {
+        if (!text.startsWith("Location: ")
+                && !text.startsWith("Area: ")
+                && !text.startsWith("Dungeon: ")) {
             return;
         }
 
@@ -111,11 +111,10 @@ public class LocationUtils {
         Island detected = detectIsland(text);
 
         if (detected != Island.UNKNOWN) {
-            setCurrentArea(detected, "tab display name: " + text);
-
-            if (detected == Island.DUNGEON) {
-                markDungeonEvidence("tab says dungeon");
-            }
+            setCurrentArea(
+                    detected,
+                    "tab display name: " + text
+            );
         }
     }
 
@@ -131,35 +130,6 @@ public class LocationUtils {
             lobbyId = matcher.group(1);
             debug("lobbyId=" + lobbyId);
         }
-
-        if (text.contains("The Catacombs")
-                || text.contains("Catacombs")
-                || text.contains("Cleared:")
-                || text.contains("Secrets Found")
-                || text.contains("Deaths:")) {
-            markDungeonEvidence("team text: " + text);
-            setCurrentArea(Island.DUNGEON, "team text dungeon evidence");
-        }
-    }
-
-    public static void markDungeonEvidence(String reason) {
-        lastDungeonEvidenceMs = System.currentTimeMillis();
-        debug("dungeon evidence: " + reason);
-    }
-
-    private static boolean hasRecentDungeonEvidence() {
-        return System.currentTimeMillis() - lastDungeonEvidenceMs < 60_000L;
-    }
-
-    public static void onWorldLoad() {
-        Minecraft mc = Minecraft.getInstance();
-
-        currentArea = mc.isSingleplayer() ? Island.SINGLE_PLAYER : Island.UNKNOWN;
-        inSkyBlock = false;
-        lobbyId = null;
-        lastDungeonEvidenceMs = 0L;
-
-        debug("world load reset, area=" + currentArea);
     }
 
     private static void setCurrentArea(Island area, String reason) {
@@ -198,44 +168,6 @@ public class LocationUtils {
 
     private static void debug(String message) {
         //System.out.println("[NSM Location] " + message);
-    }
-
-    public static void onPlayerInfoUpdate(ClientboundPlayerInfoUpdatePacket packet) {
-        if (!packet.actions().contains(ClientboundPlayerInfoUpdatePacket.Action.UPDATE_DISPLAY_NAME)) {
-            return;
-        }
-
-        for (ClientboundPlayerInfoUpdatePacket.Entry entry : packet.entries()) {
-            if (entry.displayName() == null) {
-                continue;
-            }
-
-            String text = clean(entry.displayName().getString());
-
-            if (!text.startsWith("Area: ") && !text.startsWith("Dungeon: ")) {
-                continue;
-            }
-
-            if (text.toLowerCase().contains("catacombs")) {
-                currentArea = Island.DUNGEON;
-                System.out.println("[NSM Location] inDungeon=true from tab");
-            }
-        }
-    }
-
-    public static void onSetObjective(ClientboundSetObjectivePacket packet) {
-        if (!inSkyBlock) {
-            inSkyBlock = "SBScoreboard".equals(packet.getObjectiveName());
-        }
-    }
-
-    public static void onSetPlayerTeam(ClientboundSetPlayerTeamPacket packet) {
-        packet.getParameters().ifPresent(parameters -> {
-            String text = clean(
-                    parameters.getPlayerPrefix().getString()
-                            + parameters.getPlayerSuffix().getString()
-            );
-        });
     }
 
 }

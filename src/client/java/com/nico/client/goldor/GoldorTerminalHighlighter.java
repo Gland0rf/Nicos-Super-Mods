@@ -1,20 +1,12 @@
-package com.nico.client.goldor;
+/*package com.nico.client.goldor;
 
 import com.nico.client.configuration.NsmConfig;
-import com.odtheking.odin.events.RenderEvent;
-import com.odtheking.odin.utils.Color;
-import com.odtheking.odin.utils.render.RenderUtilsKt;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonClass;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonPlayer;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
-import com.odtheking.odin.utils.skyblock.dungeon.M7Phases;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
@@ -101,7 +93,7 @@ public class GoldorTerminalHighlighter {
 
     private GoldorTerminalHighlighter() { }
 
-    /*public static void tick() {
+    public static void tick() {
         Minecraft mc = Minecraft.getInstance();
 
         if (!NsmConfig.INSTANCE.dungeons.goldorTerminal.enabled || mc.level == null || mc.player == null) {
@@ -153,17 +145,17 @@ public class GoldorTerminalHighlighter {
         }
 
         serviceQueuedSounds(mc);
-    }*/
+    }
 
     public static void render(RenderEvent.Extract event) {
         Minecraft mc = Minecraft.getInstance();
 
-        /*if (!NsmConfig.INSTANCE.dungeons.goldorTerminal.enabled || mc.level == null || mc.player == null) {
+        if (!NsmConfig.INSTANCE.dungeons.goldorTerminal.enabled || mc.level == null || mc.player == null) {
             return;
-        }*/
+        }
         return; // temporary
 
-        /*if (!active || !isInGoldorPhase()) return;
+        if (!active || !isInGoldorPhase()) return;
 
         SectionDefinition section = SECTIONS.get(goldorSection);
         if (section == null) return;
@@ -206,7 +198,7 @@ public class GoldorTerminalHighlighter {
                     DEPTH_CHECKED_RENDERING,
                     5.0F
             );
-        }*/
+        }
     }
 
     public static void onChatMessage(String message) {
@@ -584,3 +576,4 @@ public class GoldorTerminalHighlighter {
         }
     }
 }
+*/

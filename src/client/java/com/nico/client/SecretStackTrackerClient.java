@@ -1,33 +1,5 @@
 package com.nico.client;
 
-import com.nico.OdinRoomBridge;
-import com.nico.client.configuration.NsmConfig;
-import com.nico.client.configuration.NsmConfigManager;
-import com.nico.client.goldor.GoldorTerminalHighlighter;
-import com.nico.client.hud.HudLayoutManager;
-import com.nico.client.hud.HudMoveCommand;
-import com.nico.client.minions.MinionRoiClient;
-import com.nico.client.minions.base.MinionDataRegistry;
-import com.nico.client.secretTimer.SecretPacketHooks;
-import com.nico.client.secretTimer.SecretRoomTimerClient;
-import com.nico.client.stacking.RoomStackingDetector;
-import com.nico.client.utils.BazaarService;
-import com.nico.client.utils.HypixelApiClient;
-import com.nico.client.utils.SecretEventBridge;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonPlayer;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.player.Player;
-
-import java.io.IOException;
-import java.util.*;
-
 public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 	/**
 	public static HudLayoutManager HUD_LAYOUT;
@@ -156,7 +128,7 @@ public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 		if (!DungeonUtils.INSTANCE.getInDungeons()) return;
 		if (DungeonUtils.INSTANCE.getInBoss()) return;
 
-		String roomName = OdinRoomBridge.getRoomNameForPlayer(mc.player);
+		String roomName = RoomBridge.getRoomNameForPlayer(mc.player);
 
 		if (roomName == null || roomName.equals("Unknown")) return;
 
@@ -177,22 +149,17 @@ public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 
 		if (mc.level == null || mc.player == null) return;
 
-		if (!FabricLoader.getInstance().isModLoaded("odin")) {
-			mc.player.sendSystemMessage(Component.literal("§cOdin is not loaded."));
-			return;
-		}
-
-		Set<String> teammateNames = getOdinDungeonTeammateNames();
+		Set<String> teammateNames = getDungeonTeammateNames();
 
 		mc.player.sendSystemMessage(Component.literal("§a--- Secret Stack Tracker Room Debug ---"));
-		mc.player.sendSystemMessage(Component.literal("§7Odin teammates found: §e" + teammateNames.size()));
+		mc.player.sendSystemMessage(Component.literal("§7Teammates found: §e" + teammateNames.size()));
 
 		for (Player player : mc.level.players()) {
 			String playerName = player.getName().getString();
 
 			if (!teammateNames.contains(playerName)) continue;
 
-			String roomName = OdinRoomBridge.getRoomNameForPlayer(player);
+			String roomName = RoomBridge.getRoomNameForPlayer(player);
 
 			int x = player.blockPosition().getX();
 			int y = player.blockPosition().getY();
@@ -206,7 +173,7 @@ public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 		}
 	}
 
-	public static Set<String> getOdinDungeonTeammateNames() {
+	public static Set<String> getDungeonTeammateNames() {
 		Set<String> names = new HashSet<>();
 
 		try {
@@ -224,8 +191,8 @@ public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 		return names;
 	}
 
-	public static void onOdinSecretPickup(BlockPos secretPos) {
-		SecretRoomTimerClient.onOdinSecretPickup(secretPos);
+	public static void onSecretPickup(BlockPos secretPos) {
+		SecretRoomTimerClient.onSecretPickup(secretPos);
 
 		Minecraft mc = Minecraft.getInstance();
 
@@ -233,7 +200,7 @@ public class SecretStackTrackerClient /*implements ClientModInitializer*/ {
 		if (!DungeonUtils.INSTANCE.getInDungeons()) return;
 		if (DungeonUtils.INSTANCE.getInBoss()) return;
 
-		String roomName = OdinRoomBridge.getRoomNameForPlayer(mc.player);
+		String roomName = RoomBridge.getRoomNameForPlayer(mc.player);
 
 		if (roomName == null || roomName.equals("Unknown")) return;
 
