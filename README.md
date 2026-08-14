@@ -76,9 +76,6 @@ The config location is:
 
 Some ideas and implementation details were inspired by existing Hypixel SkyBlock mods and the work of their developers.
 
-In particular, thank you to the developer of odin for developing his mod and putting it under an open license. I could NOT imagine myself writing allat from scratch.
-https://github.com/odtheking/Odin
-
 ## Network access
 
 NSM is client-side, but some features communicate over the network:
