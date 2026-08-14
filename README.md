@@ -56,7 +56,7 @@ HUD positions and scales are saved automatically.
 ## Requirements
 
 - **Mod loader:** Fabric Loader
-- **Required mods:** Fabric API, Fabric Language Kotlin, Odin, ModMenu
+- **Required mods:** Fabric API, Fabric Language Kotlin, ModMenu
 
 ## Configuration
 
@@ -76,9 +76,6 @@ The config location is:
 
 Some ideas and implementation details were inspired by existing Hypixel SkyBlock mods and the work of their developers.
 
-In particular, thank you to the developer of odin for developing his mod and putting it under an open license. I could NOT imagine myself writing allat from scratch.
-https://github.com/odtheking/Odin
-
 ## Network access
 
 NSM is client-side, but some features communicate over the network:
@@ -87,12 +84,3 @@ NSM is client-side, but some features communicate over the network:
 - Bazaar tools request public Hypixel/Bazaar data through the project's API service.
 - Remote Wiki images are downloaded asynchronously.
 - The lag monitor sends lightweight ping requests over the active Minecraft connection while monitoring a run.
-
-## Known limitations
-
-- The lag monitor reports estimates rather than authoritative server metrics.
-- Hypixel UI and packet behavior can change without notice.
-- Wiki markup and public APIs can change and may temporarily break parsing.
-- Bazaar values depend on the availability and freshness of remote data.
-- Features that depend on dungeon room detection may require updates when Hypixel changes map, scoreboard, chat, or packet formats.
-- Clipboard copying is local to the client and may be unavailable on restricted desktop environments.

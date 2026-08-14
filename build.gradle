@@ -1,6 +1,7 @@
 plugins {
 	id 'net.fabricmc.fabric-loom' version "${loom_version}"
 	id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
+	id 'com.gradleup.shadow' version "${shadow_version}"
 	id 'maven-publish'
 }
 
@@ -47,12 +48,9 @@ loom {
 
 }
 
-sourceSets {
-	main {
-		java {
-			exclude "com/odtheking/**"
-		}
-	}
+configurations {
+	shadowModImpl
+	clientImplementation.extendsFrom(shadowModImpl)
 }
 
 dependencies {
@@ -70,8 +68,24 @@ dependencies {
 	clientImplementation "maven.modrinth:modmenu:${project.modmenu_version}"
 
 	clientImplementation include("org.notenoughupdates.moulconfig:${project.moulconfig_version}")
+}
 
-	compileOnly "maven.modrinth:odin:${project.odin_version}"
+tasks.named('shadowJar') {
+	archiveClassifier.set('dev-shadow')
+
+	configurations = [project.configurations.shadowModImpl]
+
+	from(sourceSets.client.output)
+
+	from('third_party/odin') {
+		into 'META-INF/licenses/odin'
+	}
+
+	from('LICENSE') {
+		rename {
+			"${it}_${project.archives_base_name}"
+		}
+	}
 }
 
 processResources {
