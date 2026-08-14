@@ -1,13 +1,6 @@
 /*package com.nico.client.goldor;
 
 import com.nico.client.configuration.NsmConfig;
-import com.odtheking.odin.events.RenderEvent;
-import com.odtheking.odin.utils.Color;
-import com.odtheking.odin.utils.render.RenderUtilsKt;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonClass;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonPlayer;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
-import com.odtheking.odin.utils.skyblock.dungeon.M7Phases;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
