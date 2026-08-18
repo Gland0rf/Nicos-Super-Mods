@@ -274,8 +274,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         graphics.text(font, "Bookmarks", x, y, LINK, true);
         y += 18;
 
-        List<WikiBrowserStore.Bookmark> bookmarks =
-                browserStore.bookmarks();
+        List<WikiBrowserStore.Bookmark> bookmarks = browserStore.bookmarks();
 
         if (bookmarks.isEmpty()) {
             graphics.text(
@@ -705,16 +704,6 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
     }
 
     protected void renderDocument(GuiGraphicsExtractor graphics, int top, int bottom) {
-        for (int index = 0; index < findMatches.size(); index++) {
-            FindTarget target = findMatches.get(index);
-            int y = top + target.y() - scrollPixels;
-            if (y + target.height() < top || y > bottom) {
-                continue;
-            }
-            int color = index == activeFindIndex ? 0x55FFD83D : 0x337A6A1E;
-            graphics.fill(target.x(), y, target.x() + target.width(), y + target.height(), color);
-        }
-
         for (RenderEntry entry : entries) {
             int y = top + entry.y() - scrollPixels;
             if (y + entry.height() < top || y > bottom) {

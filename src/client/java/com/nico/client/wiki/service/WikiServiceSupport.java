@@ -17,6 +17,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Shared parsing and HTTP helpers used by the wiki service pipeline.
+ *
+ * <p>Parser subclasses inherit these utilities so URL normalization, rich-text extraction,
+ * ignored-element handling, and MediaWiki API requests follow the same rules throughout the scraper.</p>
+ */
 public class WikiServiceSupport {
     protected static final String WIKI_API_ENDPOINT = "https://hypixelskyblock.minecraft.wiki/api.php";
     protected static final String WIKI_BASE = "https://hypixelskyblock.minecraft.wiki";
@@ -44,25 +50,6 @@ public class WikiServiceSupport {
     }
 
     protected static String inlineImagePlaceholder(WikiImage image) {
-        /*if (image == null || image.isEmpty()) {
-            return "  ";
-        }
-
-        int width = image.declaredWidth();
-        int height = image.declaredHeight();
-        if (width <= 0 || height <= 0) {
-            return "   ";
-        }
-
-        // Inline icons render into an ~11 px line box. Reserve fewer spaces
-        // for narrow portrait icons so they do not create a gap, while
-        // still leaving enough room for square icons.
-        double aspect = Math.max(0.2D, Math.min(0.2D, (double) width / (double) height));
-        double targetWidth = Math.min(11.0D, 11.0D * aspect);
-        int spaces = (int) Math.round(targetWidth / 4.0D);
-        spaces = Math.max(2, Math.min(3, spaces));
-        return " ".repeat(spaces);*/
-
         // Keep every inline icon in the same three-space text slot. The
         // renderer adds a one-pixel gutter on both sides of the actual image,
         // so the icon cannot touch the previous/next glyph and the spacing

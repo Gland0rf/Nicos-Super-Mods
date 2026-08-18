@@ -22,7 +22,9 @@ import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 /** Draws tables, infoboxes, tabs, crafting widgets, images, and slots. */
@@ -604,8 +606,9 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
             graphics.fill(button.x(), buttonY, button.x() + button.width(), buttonY + button.height(), active ? TAB_ACTIVE : TAB);
             renderBorder(graphics, new RenderEntry(Kind.HR, button.x(), buttonY, button.width(), button.height(), List.of(), 0, null),
                     buttonY, BORDER);
-            graphics.centeredText(font, font.plainSubstrByWidth(button.title(), button.width() - 8),
-                    button.x() + button.width() / 2, buttonY + 5, TEXT);
+            String visibleTitle = font.plainSubstrByWidth(button.title(), button.width() - 8);
+            drawCenteredFindHighlights(graphics, visibleTitle, button.x() + button.width() / 2, buttonY + 5);
+            graphics.centeredText(font, visibleTitle, button.x() + button.width() / 2, buttonY + 5, TEXT);
             tabHitboxes.add(new TabHitbox(button.x(), buttonY, button.width(), button.height(), entry.aux(), button.index()));
         }
     }
@@ -663,8 +666,10 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
 
         if (!caption.isBlank()) {
             String visible = font.plainSubstrByWidth(caption.plainText(), entry.width() - 10);
-            graphics.centeredText(font, visible, entry.x() + entry.width() / 2,
-                    y + entry.height() - captionHeight + 1, MUTED);
+            int captionY = y + entry.height() - captionHeight + 1;
+            int captionX = entry.x() + entry.width() / 2;
+            drawCenteredFindHighlights(graphics, visible, captionX, captionY);
+            graphics.centeredText(font, visible, captionX, captionY, MUTED);
         }
 
         renderBorder(graphics, entry, y, BORDER);
@@ -816,6 +821,8 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
             int y,
             int color
     ) {
+        drawFindHighlights(graphics, line, x, y);
+
         graphics.pose().pushMatrix();
         graphics.pose().translate(x, y);
         graphics.pose().scale(ARTICLE_TEXT_SCALE, ARTICLE_TEXT_SCALE);
@@ -913,6 +920,91 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
                     activeTooltip[0]
             ));
         }
+    }
+
+    protected void drawFindHighlights(GuiGraphicsExtractor graphics, FormattedCharSequence line, int x, int y) {
+        if (!findBarVisible || findQuery.isBlank()) return;
+
+        StringBuilder plainText = new StringBuilder();
+        List<Integer> charOffsets = new ArrayList<>();
+        List<Integer> logicalWidths = new ArrayList<>();
+        charOffsets.add(0);
+        logicalWidths.add(0);
+
+        final int[] logicalCursor = {0};
+        line.accept((index, style, codePoint) -> {
+            plainText.appendCodePoint(codePoint);
+            logicalCursor[0] += font.width(FormattedCharSequence.codepoint(codePoint, style));
+            charOffsets.add(plainText.length());
+            logicalWidths.add(logicalCursor[0]);
+            return true;
+        });
+
+        String haystack = plainText.toString().toLowerCase(Locale.ROOT);
+        String needle = findQuery.toLowerCase(Locale.ROOT);
+        int matchStart = haystack.indexOf(needle);
+        while (matchStart >= 0) {
+            int matchEnd = matchStart + needle.length();
+            int startWidth = logicalWidthAt(charOffsets, logicalWidths, matchStart);
+            int endWidth = logicalWidthAt(charOffsets, logicalWidths, matchEnd);
+            int left = x + Math.round(startWidth * ARTICLE_TEXT_SCALE);
+            int right = x + Math.round(endWidth * ARTICLE_TEXT_SCALE);
+            if (right > left) {
+                int highlightColor = findHighlightColor(left, y, right - left);
+                if (highlightColor != 0) {
+                    graphics.fill(left, y, right, y + LINE_HEIGHT - 1, highlightColor);
+                }
+            }
+            matchStart = haystack.indexOf(needle, matchStart + Math.max(1, needle.length()));
+        }
+    }
+
+    protected void drawCenteredFindHighlights(GuiGraphicsExtractor graphics, String text, int centerX, int y) {
+        if (!findBarVisible || findQuery.isBlank() || text == null || text.isEmpty()) return;
+
+        String haystack = text.toString().toLowerCase(Locale.ROOT);
+        String needle = findQuery.toLowerCase(Locale.ROOT);
+        int textX = centerX - font.width(text) / 2;
+        int matchStart = haystack.indexOf(needle);
+        while (matchStart >= 0) {
+            int matchEnd = matchStart + needle.length();
+            int left = textX + font.width(text.substring(0, matchStart));
+            int right = textX + font.width(text.substring(0, matchEnd));
+            if (right > left) {
+                int highlightColor = findHighlightColor(left, y, right - left);
+                if (highlightColor != 0) {
+                    graphics.fill(left, y, right, y + LINE_HEIGHT - 1, highlightColor);
+                }
+            }
+            matchStart = haystack.indexOf(needle, matchStart + Math.max(1, needle.length()));
+        }
+    }
+
+    private int findHighlightColor(int x, int y, int width) {
+        int documentTop = HEADER_HEIGHT + BROWSER_TAB_HEIGHT + TOOLBAR_HEIGHT + 7;
+        int inactiveColor = 0;
+
+        for (int index = 0; index < findMatches.size(); index++) {
+            FindTarget target = findMatches.get(index);
+            int targetY = documentTop + target.y() - scrollPixels;
+            boolean insideTarget = x + width > target.x()
+                    && x < target.x() + target.width()
+                    && y + LINE_HEIGHT > targetY
+                    && y < targetY + target.height();
+            if (!insideTarget) continue;
+            if (index == activeFindIndex) return 0x55FFD83D;
+            inactiveColor = 0x337A6A1E;
+        }
+        return inactiveColor;
+    }
+
+    private static int logicalWidthAt(List<Integer> charOffsets, List<Integer> logicalWidths, int charIndex) {
+        for (int index = 0; index < charOffsets.size(); index++) {
+            int offset = charOffsets.get(index);
+            if (offset == charIndex) return logicalWidths.get(index);
+            if (offset > charIndex) return logicalWidths.get(Math.max(0, index - 1));
+        }
+        return logicalWidths.isEmpty() ? 0 : logicalWidths.get(logicalWidths.size() - 1);
     }
 
     protected static URI clickUri(Style style) {

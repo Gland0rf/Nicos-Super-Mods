@@ -4,6 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Immutable article model passed from the scraper/parser layer to the Minecraft screen.
+ * @param spans
+ */
 public record WikiText(List<Span> spans) {
     public WikiText {
         spans = spans == null ? List.of() : List.copyOf(spans);

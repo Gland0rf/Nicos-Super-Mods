@@ -19,15 +19,16 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Maintains the asynchronously refreshed stat names used to recognize stat rows in wiki content.
+ */
 public final class WikiStatRegistry extends WikiServiceSupport {
-    private static final long REFRESH_INTERVAL =
-            Duration.ofHours(12).toMillis();
+    private static final long REFRESH_INTERVAL = Duration.ofHours(12).toMillis();
 
     private static volatile Set<String> stats = Set.of();
     private static volatile long lastRefresh = 0L;
 
-    private static final AtomicBoolean refreshing =
-            new AtomicBoolean(false);
+    private static final AtomicBoolean refreshing = new AtomicBoolean(false);
 
     private WikiStatRegistry() {
     }
@@ -45,8 +46,7 @@ public final class WikiStatRegistry extends WikiServiceSupport {
     public static void ensureFresh() {
         long now = System.currentTimeMillis();
 
-        if (!stats.isEmpty()
-                && now - lastRefresh < REFRESH_INTERVAL) {
+        if (!stats.isEmpty() && now - lastRefresh < REFRESH_INTERVAL) {
             return;
         }
 
@@ -87,15 +87,12 @@ public final class WikiStatRegistry extends WikiServiceSupport {
 
                             if (DEBUG) {
                                 System.out.println(
-                                        "[NSM Wiki] Loaded "
-                                                + stats.size()
-                                                + " SkyBlock stats"
+                                        "[NSM Wiki] Loaded " + stats.size() + " SkyBlock stats"
                                 );
                             }
                         } else if (throwable != null && DEBUG) {
                             System.err.println(
-                                    "[NSM Wiki] Could not refresh stats: "
-                                            + throwable.getMessage()
+                                    "[NSM Wiki] Could not refresh stats: " + throwable.getMessage()
                             );
                         }
                     } finally {
@@ -105,11 +102,9 @@ public final class WikiStatRegistry extends WikiServiceSupport {
     }
 
     private static Set<String> parseStats(String body) {
-        JsonObject root = JsonParser.parseString(body)
-                .getAsJsonObject();
+        JsonObject root = JsonParser.parseString(body).getAsJsonObject();
 
-        if (!root.has("parse")
-                || !root.get("parse").isJsonObject()) {
+        if (!root.has("parse") || !root.get("parse").isJsonObject()) {
             return Set.of();
         }
 
@@ -121,43 +116,28 @@ public final class WikiStatRegistry extends WikiServiceSupport {
 
         String html = parse.get("text").getAsString();
 
-        Document document = Jsoup.parse(
-                html,
-                WIKI_ARTICLE_BASE + "Stats"
-        );
+        Document document = Jsoup.parse(html, WIKI_ARTICLE_BASE + "Stats");
 
         Set<String> result = new LinkedHashSet<>();
 
         for (Element table : document.select("table")) {
             Element firstRow = table.selectFirst("tr");
 
-            if (firstRow == null) {
-                continue;
-            }
+            if (firstRow == null) continue;
 
-            Elements headerCells =
-                    firstRow.select(":scope > th, :scope > td");
+            Elements headerCells = firstRow.select(":scope > th, :scope > td");
 
-            if (headerCells.isEmpty()) {
-                continue;
-            }
+            if (headerCells.isEmpty()) continue;
 
             // Only consume actual stat tables.
-            if (!normalize(headerCells.first().text()).equals("stat")) {
-                continue;
-            }
+            if (!normalize(headerCells.first().text()).equals("stat")) continue;
 
             for (Element row : table.select("tr")) {
-                Elements cells =
-                        row.select(":scope > th, :scope > td");
+                Elements cells = row.select(":scope > th, :scope > td");
 
-                if (cells.isEmpty()) {
-                    continue;
-                }
+                if (cells.isEmpty()) continue;
 
-                String stat = normalizeStatName(
-                        cells.first().text()
-                );
+                String stat = normalizeStatName(cells.first().text());
 
                 if (!stat.isBlank() && !stat.equals("stat")) {
                     result.add(stat);
@@ -177,15 +157,11 @@ public final class WikiStatRegistry extends WikiServiceSupport {
          * Stat cells usually start with the wiki's custom stat icon.
          * Remove private-use glyphs before comparing the name.
          */
-        return normalize(
-                text.replaceAll("[\\uE000-\\uF8FF]", "")
-        );
+        return normalize(text.replaceAll("[\\uE000-\\uF8FF]", ""));
     }
 
     private static String normalize(String text) {
-        if (text == null) {
-            return "";
-        }
+        if (text == null) return "";
 
         return text
                 .replace('\u00A0', ' ')

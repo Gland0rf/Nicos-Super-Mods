@@ -31,11 +31,17 @@ abstract class WikiScreenActions extends WikiScreenNavigation {
         findBarVisible = visible;
         if (addressBox != null) {
             addressBox.setVisible(!visible);
+            if (visible) {
+                addressBox.setFocused(false);
+            }
         }
         if (findBox != null) {
             findBox.setVisible(visible);
             findBox.setFocused(visible);
-            if (!visible) {
+            if (visible) {
+                setFocused(findBox);
+            } else {
+                setFocused(null);
                 findBox.setValue("");
             }
         }

@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Builds HTTP requests with a stable, identifiable user agent for Hypixel Skyblock Wiki traffic. **/
 public final class WikiHttp {
     private static final String DEFAULT_MOD_PAGE_URL = "https://modrinth.com/mod/nicos-super-mods";
     private static final String DEFAULT_CONTACT = "ndkogler@icloud.com";

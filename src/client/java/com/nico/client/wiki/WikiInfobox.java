@@ -3,6 +3,11 @@ package com.nico.client.wiki;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Structured article infobox, including nested tab panels and item-slot strips.
+ * @param title
+ * @param entries
+ */
 public record WikiInfobox(String title, List<Entry> entries) {
     public WikiInfobox {
         title = Objects.requireNonNullElse(title, "").trim();

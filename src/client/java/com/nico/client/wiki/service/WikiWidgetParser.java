@@ -11,7 +11,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-abstract class WikiWidgetParser extends WikiContentParser{
+/**
+ * Parses reusable MediaWiki widgets such as tables, tabbers, and local UI panel groups.
+ */
+abstract class WikiWidgetParser extends WikiContentParser {
     @FunctionalInterface
     protected interface PanelBlockParser {
         List<WikiBlock> parse(Element panel);

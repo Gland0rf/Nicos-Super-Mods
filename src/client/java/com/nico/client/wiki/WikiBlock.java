@@ -3,6 +3,12 @@ package com.nico.client.wiki;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * A block-level element in a parsed wiki article
+ *
+ * <p>The parser converts supported MediaWiki structures into this model so rendering code does not
+ * need to retain or understand Jsoup elements.</p>
+ */
 public sealed interface WikiBlock permits
         WikiBlock.Heading,
         WikiBlock.MessageBox,

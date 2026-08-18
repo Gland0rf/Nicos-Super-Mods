@@ -3,6 +3,20 @@ package com.nico.client.wiki;
 import java.net.URI;
 import java.util.Objects;
 
+/**
+ * Metadata needed to credit a wiki image and expose its source and license information in the UI.
+ * @param fileTitle
+ * @param filePageUrl
+ * @param originalFileUrl
+ * @param licenseShortName
+ * @param licenseUrl
+ * @param artist
+ * @param credit
+ * @param usageTerms
+ * @param attribution
+ * @param source
+ * @param metadataAvailable
+ */
 public record WikiImageCredits(
         String fileTitle,
         String filePageUrl,

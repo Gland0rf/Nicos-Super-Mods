@@ -2,6 +2,7 @@ package com.nico.client.wiki;
 
 import java.net.URI;
 
+/** Centralized attribution and license links shown by the in-game wiki browser. **/
 public class WikiAttribution {
     public static final URI WIKI_HOME = URI.create("https://hypixelskyblock.minecraft.wiki");
     public static final URI WIKI_LICENSE_PAGE = URI.create(

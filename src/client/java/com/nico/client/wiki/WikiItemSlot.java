@@ -3,6 +3,14 @@ package com.nico.client.wiki;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * One inventory-slot widget from the wiki.
+ *
+ * <p>Slots may contain multiple synchronized frames when the source widget cycles through recipe alternatives.</p>
+ * @param frames
+ * @param activeFrameIndex
+ * @param large
+ */
 public record WikiItemSlot(List<Frame> frames, int activeFrameIndex, boolean large) {
     public WikiItemSlot {
         frames = frames == null ? List.of() : List.copyOf(frames);
