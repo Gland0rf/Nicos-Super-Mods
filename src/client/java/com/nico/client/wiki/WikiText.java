@@ -21,7 +21,7 @@ public record WikiText(List<Span> spans) {
     }
 
     public boolean isBlank() {
-        return spans.stream().allMatch(span -> span.text().isBlank());
+        return spans.stream().allMatch(span -> span.text().isBlank() && span.inlineImage().isEmpty());
     }
 
     public String plainText() {
@@ -57,7 +57,7 @@ public record WikiText(List<Span> spans) {
             }
             if (!result.isEmpty()) {
                 Span previous = result.get(result.size() - 1);
-                if (previous.sameFormatting(span)) {
+                if (!previous.hasInlineImage() && !span.hasInlineImage() && previous.sameFormatting(span)) {
                     result.set(result.size() - 1, new Span(
                             previous.text() + span.text(),
                             previous.href(),
@@ -65,7 +65,8 @@ public record WikiText(List<Span> spans) {
                             previous.italic(),
                             previous.cssClasses(),
                             previous.hoverTitle(),
-                            previous.hoverText()
+                            previous.hoverText(),
+                            WikiImage.empty()
                     ));
                     continue;
                 }
@@ -82,7 +83,8 @@ public record WikiText(List<Span> spans) {
             boolean italic,
             String cssClasses,
             String hoverTitle,
-            String hoverText
+            String hoverText,
+            WikiImage inlineImage
     ) {
         public Span {
             text = Objects.requireNonNullElse(text, "");
@@ -90,11 +92,17 @@ public record WikiText(List<Span> spans) {
             cssClasses = Objects.requireNonNullElse(cssClasses, "").trim();
             hoverTitle = Objects.requireNonNullElse(hoverTitle, "").trim();
             hoverText = Objects.requireNonNullElse(hoverText, "").trim();
+            inlineImage = inlineImage == null ? WikiImage.empty() : inlineImage;
+        }
+
+        /** Backwards-compatible constructor for existing rich-text call sites. */
+        public Span(String text, String href, boolean bold, boolean italic, String cssClasses, String hoverTitle, String hoverText) {
+            this(text, href, bold, italic, cssClasses, hoverTitle, hoverText, WikiImage.empty());
         }
 
         /** Backwards-compatible constructor for existing call sites. */
         public Span(String text, String href, boolean bold, boolean italic, String cssClasses) {
-            this(text, href, bold, italic, cssClasses, "", "");
+            this(text, href, bold, italic, cssClasses, "", "", WikiImage.empty());
         }
 
         public boolean isLink() {
@@ -105,6 +113,10 @@ public record WikiText(List<Span> spans) {
             return !hoverTitle.isBlank() || !hoverText.isBlank();
         }
 
+        public boolean hasInlineImage() {
+            return inlineImage != null && !inlineImage.isEmpty();
+        }
+
         private boolean sameFormatting(Span other) {
             return other != null
                     && href.equals(other.href)
@@ -112,7 +124,8 @@ public record WikiText(List<Span> spans) {
                     && italic == other.italic
                     && cssClasses.equals(other.cssClasses)
                     && hoverTitle.equals(other.hoverTitle)
-                    && hoverText.equals(other.hoverText);
+                    && hoverText.equals(other.hoverText)
+                    && inlineImage.equals(other.inlineImage);
         }
     }
 }

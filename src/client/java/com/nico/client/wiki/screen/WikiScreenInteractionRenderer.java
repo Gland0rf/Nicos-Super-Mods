@@ -5,7 +5,7 @@ import com.nico.client.wiki.WikiImageCredits;
 import com.nico.client.wiki.WikiImageTextureCache;
 import com.nico.client.wiki.WikiItemSlot;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -41,7 +41,8 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
 
     protected boolean containsLinkedSlot(double mouseX, double mouseY) {
         for (SlotHitbox hitbox : slotHitboxes) {
-            if (hitbox.contains(mouseX, mouseY) && !hitbox.frame().link().isBlank()) {
+            if (hitbox.contains(mouseX, mouseY)
+                    && (!hitbox.frame().link().isBlank() || !hitbox.frame().uiTarget().isBlank())) {
                 return true;
             }
         }
@@ -116,7 +117,7 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
         return false;
     }
 
-    protected void renderHoveredSlotTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
+    protected void renderHoveredSlotTooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         for (int index = slotHitboxes.size() - 1; index >= 0; index--) {
             SlotHitbox candidate = slotHitboxes.get(index);
             if (!candidate.contains(mouseX, mouseY)) {
@@ -151,7 +152,7 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
     }
 
     protected void renderTooltip(
-            GuiGraphics graphics,
+            GuiGraphicsExtractor graphics,
             List<? extends Component> logicalLines,
             int mouseX,
             int mouseY
@@ -202,7 +203,7 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
 
         int lineY = tooltipY + 5;
         for (int index = 0; index < renderedLines.size(); index++) {
-            graphics.drawString(font, renderedLines.get(index), tooltipX + 6, lineY,
+            graphics.text(font, renderedLines.get(index), tooltipX + 6, lineY,
                     index == 0 ? 0xFFFFFFFF : TOOLTIP_TEXT, false);
             lineY += LINE_HEIGHT;
             if (index == 0 && renderedLines.size() > 1) {

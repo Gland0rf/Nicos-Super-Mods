@@ -15,6 +15,15 @@ public final class WikiHtmlContract {
     public static final String MESSAGEBOX_IMAGE = "messagebox-image";
     public static final String MESSAGEBOX_TEXT = "messagebox-text";
 
+    public static final String AMBOX = "ambox";
+    public static final String MBOX_IMAGE = "mbox-image";
+    public static final String MBOX_TEXT = "mbox-text";
+
+    public static final String DARK_MESSAGEBOX = "darkmsgbox";
+    public static final String DARK_MESSAGEBOX_IMAGE = "darkmsgbox-image";
+    public static final String DARK_MESSAGEBOX_TEXT = "darkmsgbox-text";
+    public static final String DARK_MESSAGEBOX_BOTTOM = "darkmsgbox-bottom";
+
     public static final String INFOBOX = "infobox";
     public static final String INFOBOX_TITLE = "infobox-title";
     public static final String INFOBOX_PANEL = "infobox-panel";
@@ -45,6 +54,11 @@ public final class WikiHtmlContract {
     public static final String INVENTORY_SLOT_ITEM_IMAGE = "invslot-item-image";
     public static final String INVENTORY_SLOT_STACK_SIZE = "invslot-stacksize";
     public static final String INVENTORY_SLOT_ACTIVE_FRAME = "animated-active";
+
+    public static final String UI_TABBER = "sbw-ui-tabber";
+    public static final String UI_TAB_CONTENT = "sbw-ui-tab-content";
+    public static final String UI_GOTO_PREFIX = "goto-";
+    public static final String UI_GROUP_ATTRIBUTE = "data-nsm-ui-group";
 
     public static final String TABBER = "tabber";
     public static final String TABBER_HEADER = "tabber__header";

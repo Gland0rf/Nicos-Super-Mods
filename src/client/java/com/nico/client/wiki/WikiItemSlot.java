@@ -28,7 +28,9 @@ public record WikiItemSlot(List<Frame> frames, int activeFrameIndex, boolean lar
             String tooltipTitle,
             String tooltipText,
             String stackSize,
-            String imageId
+            String imageId,
+            String uiGroupKey,
+            String uiTarget
     ) {
         public Frame {
             image = image == null ? WikiImage.empty() : image;
@@ -38,10 +40,12 @@ public record WikiItemSlot(List<Frame> frames, int activeFrameIndex, boolean lar
             tooltipText = Objects.requireNonNullElse(tooltipText, "").trim();
             stackSize = Objects.requireNonNullElse(stackSize, "").trim();
             imageId = Objects.requireNonNullElse(imageId, "").trim();
+            uiGroupKey = Objects.requireNonNullElse(uiGroupKey, "").trim();
+            uiTarget = Objects.requireNonNullElse(uiTarget, "").trim();
         }
 
         public static Frame empty() {
-            return new Frame(WikiImage.empty(), "", "", "", "", "", "");
+            return new Frame(WikiImage.empty(), "", "", "", "", "", "", "", "");
         }
 
         public String displayName() {

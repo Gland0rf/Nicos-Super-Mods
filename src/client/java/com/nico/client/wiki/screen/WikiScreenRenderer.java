@@ -8,7 +8,7 @@ import com.nico.client.wiki.WikiHttp;
 import com.nico.client.wiki.WikiTitleResolver;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
@@ -23,7 +23,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         super(parent, itemStack);
     }
 
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         renderMouseX = mouseX;
         renderMouseY = mouseY;
 
@@ -43,7 +43,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         renderBody(graphics);
 
         // Widgets (toolbar buttons and edit boxes) render above the custom page background.
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
 
         renderSearchSuggestions(graphics);
         if (contextMenu == null) {
@@ -69,15 +69,15 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         }
     }
 
-    protected void renderHeader(GuiGraphics graphics) {
+    protected void renderHeader(GuiGraphicsExtractor graphics) {
         int tabsY = HEADER_HEIGHT;
         int toolbarY = HEADER_HEIGHT + BROWSER_TAB_HEIGHT;
         int totalHeaderHeight = HEADER_HEIGHT + BROWSER_TAB_HEIGHT + TOOLBAR_HEIGHT;
         graphics.fill(0, 0, width, height, backgroundColor());
         graphics.fill(0, 0, width, totalHeaderHeight, headerColor());
-        graphics.renderItem(itemStack, OUTER_MARGIN, 18);
-        graphics.drawString(font, "Hypixel SkyBlock Wiki", OUTER_MARGIN + 27, 12, 0xFFFFFFFF, true);
-        graphics.drawString(font, font.plainSubstrByWidth(visibleTitle, Math.max(80, width - 90)),
+        graphics.item(itemStack, OUTER_MARGIN, 18);
+        graphics.text(font, "Hypixel SkyBlock Wiki", OUTER_MARGIN + 27, 12, 0xFFFFFFFF, true);
+        graphics.text(font, font.plainSubstrByWidth(visibleTitle, Math.max(80, width - 90)),
                 OUTER_MARGIN + 27, 29, MUTED, true);
 
         renderBrowserTabs(graphics, tabsY);
@@ -85,7 +85,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         graphics.fill(0, totalHeaderHeight - 2, width, totalHeaderHeight, LINK);
     }
 
-    protected void renderBrowserTabs(GuiGraphics graphics, int y) {
+    protected void renderBrowserTabs(GuiGraphicsExtractor graphics, int y) {
         if (browserTabs.isEmpty()) {
             return;
         }
@@ -112,10 +112,10 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
 
             String label = tab.visibleTitle == null || tab.visibleTitle.isBlank() ? "Wiki" : tab.visibleTitle;
             int closeWidth = tab.closable ? 14 : 0;
-            graphics.drawString(font, font.plainSubstrByWidth(label, Math.max(18, actualWidth - 12 - closeWidth)),
+            graphics.text(font, font.plainSubstrByWidth(label, Math.max(18, actualWidth - 12 - closeWidth)),
                     x + 6, y + 6, TEXT, true);
             if (closeWidth > 0) {
-                graphics.drawCenteredString(font, "×", right - 7, y + 6, MUTED);
+                graphics.centeredText(font, "×", right - 7, y + 6, MUTED);
             }
 
             pageTabHitboxes.add(new PageTabHitbox(
@@ -134,11 +134,11 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         int plusY = y + 1;
         boolean hovered = contains(renderMouseX, renderMouseY, plusX, plusY, plusSize, plusSize);
         graphics.fill(plusX, plusY, plusX + plusSize, plusY + plusSize, hovered ? tocHoverColor() : TAB);
-        graphics.drawCenteredString(font, "+", plusX + plusSize / 2, plusY + 5, TEXT);
+        graphics.centeredText(font, "+", plusX + plusSize / 2, plusY + 5, TEXT);
         newTabHitbox = new NewTabHitbox(plusX, plusY, plusSize, plusSize);
     }
 
-    protected void renderBody(GuiGraphics graphics) {
+    protected void renderBody(GuiGraphicsExtractor graphics) {
         int top = HEADER_HEIGHT + BROWSER_TAB_HEIGHT + TOOLBAR_HEIGHT + 7;
         int bottom = height - FOOTER_HEIGHT - 4;
         PageTab tab = activeBrowserTab();
@@ -160,7 +160,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         graphics.fill(left, top, left + boxWidth, bottom, pageColor());
         graphics.enableScissor(left, top, left + boxWidth, bottom);
         if (state == LoadState.LOADING) {
-            graphics.drawCenteredString(font, Component.literal("Loading Wiki page...").withStyle(ChatFormatting.YELLOW),
+            graphics.centeredText(font, Component.literal("Loading Wiki page...").withStyle(ChatFormatting.YELLOW),
                     width / 2, top + 20, 0xFFFFFFFF);
         } else if (state == LoadState.ERROR) {
             renderError(graphics, top);
@@ -173,19 +173,19 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         }
     }
 
-    protected void renderSpecialPageFrame(GuiGraphics graphics, int top, int bottom) {
+    protected void renderSpecialPageFrame(GuiGraphicsExtractor graphics, int top, int bottom) {
         int left = OUTER_MARGIN;
         int right = width - OUTER_MARGIN;
         graphics.fill(left - 1, top - 1, right + 1, bottom + 1, borderColor());
         graphics.fill(left, top, right, bottom, pageColor());
     }
 
-    protected void renderHelpPage(GuiGraphics graphics, int top, int bottom) {
+    protected void renderHelpPage(GuiGraphicsExtractor graphics, int top, int bottom) {
         int x = OUTER_MARGIN + 22;
         int y = top + 18;
         int contentWidth = Math.max(180, width - OUTER_MARGIN * 2 - 44);
 
-        graphics.drawString(font, "Wiki Browser Help", x, y, TEXT, true);
+        graphics.text(font, "Wiki Browser Help", x, y, TEXT, true);
         y += 22;
 
         // Use two columns when enough room is available.
@@ -246,7 +246,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
                     toggleHovered ? tocHoverColor() : tableHeadColor()
             );
 
-            graphics.drawString(
+            graphics.text(
                     font,
                     "Website styling: " + (siteStyle ? "ON" : "OFF"),
                     x + 8,
@@ -271,14 +271,14 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
             return;
         }
 
-        graphics.drawString(font, "Bookmarks", x, y, LINK, true);
+        graphics.text(font, "Bookmarks", x, y, LINK, true);
         y += 18;
 
         List<WikiBrowserStore.Bookmark> bookmarks =
                 browserStore.bookmarks();
 
         if (bookmarks.isEmpty()) {
-            graphics.drawString(
+            graphics.text(
                     font,
                     "Right-click a Wiki link or press Ctrl+D to add a bookmark.",
                     x + 4,
@@ -310,7 +310,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
                         hovered ? tocHoverColor() : tocBackgroundColor()
                 );
 
-                graphics.drawString(
+                graphics.text(
                         font,
                         "★ " + font.plainSubstrByWidth(
                                 bookmark.title(),
@@ -337,13 +337,13 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
     }
 
     protected int renderShortcutPanel(
-            GuiGraphics graphics,
+            GuiGraphicsExtractor graphics,
             int x,
             int y,
             int panelWidth,
             int bottom
     ) {
-        graphics.drawString(
+        graphics.text(
                 font,
                 "Keyboard shortcuts",
                 x,
@@ -377,7 +377,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
                 break;
             }
 
-            graphics.drawString(
+            graphics.text(
                     font,
                     font.plainSubstrByWidth(
                             shortcut[0],
@@ -389,7 +389,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
                     false
             );
 
-            graphics.drawString(
+            graphics.text(
                     font,
                     font.plainSubstrByWidth(
                             shortcut[1],
@@ -408,13 +408,13 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
     }
 
     protected int renderCreditsPanel(
-            GuiGraphics graphics,
+            GuiGraphicsExtractor graphics,
             int x,
             int y,
             int panelWidth,
             int bottom
     ) {
-        graphics.drawString(
+        graphics.text(
                 font,
                 "Content & image credits",
                 x,
@@ -539,7 +539,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
     }
 
     protected int drawHelpWrappedLine(
-            GuiGraphics graphics,
+            GuiGraphicsExtractor graphics,
             String text,
             int x,
             int y,
@@ -552,7 +552,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         );
 
         for (FormattedCharSequence line : lines) {
-            graphics.drawString(font, line, x, y, color, false);
+            graphics.text(font, line, x, y, color, false);
             y += LINE_HEIGHT;
         }
 
@@ -560,7 +560,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
     }
 
     protected int drawHelpLink(
-            GuiGraphics graphics,
+            GuiGraphicsExtractor graphics,
             String label,
             URI uri,
             int x,
@@ -577,10 +577,9 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
                 12
         );
 
-        graphics.drawString(
+        graphics.text(
                 font,
-                Component.literal(label)
-                        .withStyle(ChatFormatting.UNDERLINE),
+                Component.literal(label),
                 x,
                 y,
                 hovered ? TEXT : LINK,
@@ -599,29 +598,29 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         return linkWidth;
     }
 
-    protected void renderNewTabPage(GuiGraphics graphics, int top, int bottom) {
+    protected void renderNewTabPage(GuiGraphicsExtractor graphics, int top, int bottom) {
         int x = OUTER_MARGIN + 24;
         int y = top + 24;
-        graphics.drawString(font, "New Wiki Tab", x, y, TEXT, true);
+        graphics.text(font, "New Wiki Tab", x, y, TEXT, true);
         y += 20;
-        graphics.drawString(font, "Use the search bar above. It accepts page names and internal IDs such as ASPECT_OF_THE_END.",
+        graphics.text(font, "Use the search bar above. It accepts page names and internal IDs such as ASPECT_OF_THE_END.",
                 x, y, MUTED, false);
         y += 30;
         int buttonWidth = 190;
         boolean hovered = contains(renderMouseX, renderMouseY, x, y, buttonWidth, 22);
         graphics.fill(x, y, x + buttonWidth, y + 22, hovered ? tocHoverColor() : tableHeadColor());
-        graphics.drawString(font, "Focus search", x + 8, y + 7, LINK, true);
+        graphics.text(font, "Focus search", x + 8, y + 7, LINK, true);
         specialPageHitboxes.add(new SpecialPageHitbox(x, y, buttonWidth, 22, SpecialAction.FOCUS_SEARCH, null));
 
         y += 38;
-        graphics.drawString(font, "Bookmarks", x, y, LINK, true);
+        graphics.text(font, "Bookmarks", x, y, LINK, true);
         y += 18;
         for (WikiBrowserStore.Bookmark bookmark : browserStore.bookmarks()) {
             if (y + 18 > bottom - 8) break;
             int rowWidth = Math.min(width - x - OUTER_MARGIN - 20, 420);
             boolean rowHovered = contains(renderMouseX, renderMouseY, x, y, rowWidth, 18);
             graphics.fill(x, y, x + rowWidth, y + 18, rowHovered ? tocHoverColor() : tocBackgroundColor());
-            graphics.drawString(font, "★ " + font.plainSubstrByWidth(bookmark.title(), rowWidth - 18),
+            graphics.text(font, "★ " + font.plainSubstrByWidth(bookmark.title(), rowWidth - 18),
                     x + 6, y + 5, LINK, false);
             specialPageHitboxes.add(new SpecialPageHitbox(
                     x, y, rowWidth, 18, SpecialAction.OPEN_BOOKMARK, bookmark.parsedUri()));
@@ -629,7 +628,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         }
     }
 
-    protected void renderSearchSuggestions(GuiGraphics graphics) {
+    protected void renderSearchSuggestions(GuiGraphicsExtractor graphics) {
         if (addressBox == null || !addressBox.isFocused() || searchSuggestions.isEmpty()) {
             return;
         }
@@ -647,14 +646,14 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
             boolean hovered = contains(renderMouseX, renderMouseY, x, rowY, width, SEARCH_SUGGESTION_HEIGHT);
             graphics.fill(x, rowY, x + width, rowY + SEARCH_SUGGESTION_HEIGHT,
                     hovered ? tocHoverColor() : pageColor());
-            graphics.drawString(font, font.plainSubstrByWidth(result.title(), width - 12),
+            graphics.text(font, font.plainSubstrByWidth(result.title(), width - 12),
                     x + 6, rowY + 5, hovered ? TEXT : LINK, false);
             searchSuggestionHitboxes.add(new SearchSuggestionHitbox(
                     x, rowY, width, SEARCH_SUGGESTION_HEIGHT, result));
         }
     }
 
-    protected void renderContextMenu(GuiGraphics graphics) {
+    protected void renderContextMenu(GuiGraphicsExtractor graphics) {
         if (contextMenu == null) {
             return;
         }
@@ -673,14 +672,14 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
             if (hovered) {
                 graphics.fill(x + 2, rowY, x + menuWidth - 2, rowY + CONTEXT_ROW_HEIGHT, tocHoverColor());
             }
-            graphics.drawString(font, action.label(), x + 7, rowY + 5, hovered ? TEXT : MUTED, false);
+            graphics.text(font, action.label(), x + 7, rowY + 5, hovered ? TEXT : MUTED, false);
             contextMenuHitboxes.add(new ContextMenuHitbox(
                     x + 2, rowY, menuWidth - 4, CONTEXT_ROW_HEIGHT, action, contextMenu.target()));
             rowY += CONTEXT_ROW_HEIGHT;
         }
     }
 
-    protected void renderFindStatus(GuiGraphics graphics) {
+    protected void renderFindStatus(GuiGraphicsExtractor graphics) {
         if (!findBarVisible || findBox == null) {
             return;
         }
@@ -689,23 +688,23 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
                 : (activeFindIndex + 1) + "/" + findMatches.size();
         int x = toolbarFindStatusX;
         int y = HEADER_HEIGHT + BROWSER_TAB_HEIGHT + 9;
-        graphics.drawString(font, status, x, y, findMatches.isEmpty() ? MUTED : LINK, false);
-        graphics.drawString(font, "↑↓", x + 31, y, MUTED, false);
+        graphics.text(font, status, x, y, findMatches.isEmpty() ? MUTED : LINK, false);
+        graphics.text(font, "↑↓", x + 31, y, MUTED, false);
     }
 
-    protected void renderError(GuiGraphics graphics, int top) {
-        graphics.drawCenteredString(font, Component.literal("Could not load the Wiki page").withStyle(ChatFormatting.RED),
+    protected void renderError(GuiGraphicsExtractor graphics, int top) {
+        graphics.centeredText(font, Component.literal("Could not load the Wiki page").withStyle(ChatFormatting.RED),
                 width / 2, top + 12, 0xFFFFFFFF);
         List<FormattedCharSequence> lines = font.split(Component.literal(errorMessage == null ? "Unknown error" : errorMessage)
                 .withStyle(ChatFormatting.GRAY), Math.max(100, width - 120));
         int y = top + 34;
         for (FormattedCharSequence line : lines) {
-            graphics.drawCenteredString(font, line, width / 2, y, 0xFFFFFFFF);
+            graphics.centeredText(font, line, width / 2, y, 0xFFFFFFFF);
             y += LINE_HEIGHT;
         }
     }
 
-    protected void renderDocument(GuiGraphics graphics, int top, int bottom) {
+    protected void renderDocument(GuiGraphicsExtractor graphics, int top, int bottom) {
         for (int index = 0; index < findMatches.size(); index++) {
             FindTarget target = findMatches.get(index);
             int y = top + target.y() - scrollPixels;
@@ -738,7 +737,7 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         return new ScrollbarGeometry(x, top, bottom, thumbY, thumbHeight);
     }
 
-    protected void renderScrollbar(GuiGraphics graphics, int top, int bottom) {
+    protected void renderScrollbar(GuiGraphicsExtractor graphics, int top, int bottom) {
         ScrollbarGeometry geometry = scrollbarGeometry();
         if (geometry == null) {
             return;
@@ -803,8 +802,8 @@ abstract class WikiScreenRenderer extends WikiScreenLayout {
         return browserStore.websiteStyle() ? TABLE_ALT : 0xFF252C34;
     }
 
-    protected abstract void renderEntry(GuiGraphics graphics, RenderEntry entry, int y);
-    protected abstract void renderHoveredSlotTooltip(GuiGraphics graphics, int mouseX, int mouseY);
+    protected abstract void renderEntry(GuiGraphicsExtractor graphics, RenderEntry entry, int y);
+    protected abstract void renderHoveredSlotTooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY);
     protected abstract boolean containsToc(double mouseX, double mouseY);
     protected abstract boolean containsTab(double mouseX, double mouseY);
     protected abstract boolean containsLinkedSlot(double mouseX, double mouseY);

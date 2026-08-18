@@ -1,11 +1,16 @@
 package com.nico.client.wiki.screen;
 
+import com.nico.client.wiki.WikiBlock;
+import com.nico.client.wiki.WikiImage;
+import com.nico.client.wiki.WikiItemSlot;
 import com.nico.client.wiki.service.HypixelWikiService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.world.item.ItemStack;
 
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -118,7 +123,7 @@ abstract class WikiScreenActions extends WikiScreenNavigation {
     protected List<ContextAction> contextActions(LinkTarget target) {
         List<ContextAction> actions = new ArrayList<>();
         actions.add(ContextAction.OPEN);
-        if (HypixelWikiService.isWikiArticleUri(target.uri())) {
+        if (target.isImage() || HypixelWikiService.isWikiArticleUri(target.uri())) {
             actions.add(ContextAction.OPEN_NEW_TAB);
         }
         actions.add(ContextAction.OPEN_EXTERNALLY);
@@ -131,11 +136,11 @@ abstract class WikiScreenActions extends WikiScreenNavigation {
         return List.copyOf(actions);
     }
 
-    protected void executeContextAction(ContextAction action, LinkTarget target) {
+        protected void executeContextAction(ContextAction action, LinkTarget target) {
         contextMenu = null;
         switch (action) {
-            case OPEN -> openResolvedUri(target.uri(), OpenDisposition.CURRENT_TAB);
-            case OPEN_NEW_TAB -> openResolvedUri(target.uri(), OpenDisposition.NEW_TAB);
+            case OPEN -> openLinkTarget(target, OpenDisposition.CURRENT_TAB);
+            case OPEN_NEW_TAB -> openLinkTarget(target, OpenDisposition.NEW_TAB);
             case OPEN_EXTERNALLY -> openResolvedUri(target.uri(), OpenDisposition.EXTERNAL);
             case COPY_LINK -> Minecraft.getInstance().keyboardHandler.setClipboard(target.uri().toString());
             case ADD_BOOKMARK, REMOVE_BOOKMARK -> toggleBookmark(target);
@@ -143,22 +148,117 @@ abstract class WikiScreenActions extends WikiScreenNavigation {
     }
 
     protected Optional<LinkTarget> linkTargetAt(double mouseX, double mouseY) {
+        // A slot owns the pixels of its item image. Do not let the nested image
+        // hitbox turn UI controls into links to File:/thumbnail URLs.
+        for (int index = slotHitboxes.size() - 1; index >= 0; index--) {
+            SlotHitbox hitbox = slotHitboxes.get(index);
+            if (!hitbox.contains(mouseX, mouseY)) continue;
+
+            WikiItemSlot.Frame frame = hitbox.frame();
+            if (!frame.uiTarget().isBlank()) {
+                return Optional.empty();
+            }
+            if (!frame.link().isBlank()) {
+                URI uri = resolveHref(frame.link());
+                if (uri != null) {
+                    return Optional.of(new LinkTarget(uri, frame.displayName()));
+                }
+            }
+
+            // It is still a slot even if it has no action. Never fall through
+            // to the image hitbox underneath it.
+            return Optional.empty();
+        }
+
+        for (int index = imageHitboxes.size() - 1; index >= 0; index--) {
+            ImageHitbox hitbox = imageHitboxes.get(index);
+            if (!hitbox.contains(mouseX, mouseY) || hitbox.image().isEmpty()) {
+                continue;
+            }
+
+            try {
+                URI uri = URI.create(hitbox.image().url());
+                String title = hitbox.image().displayName();
+                if (title.isBlank()) title = "Wiki Image";
+                return Optional.of(new LinkTarget(uri, title, hitbox.image()));
+            } catch (IllegalArgumentException ignored) {
+                // Malformed image URL: keep looking for another target.
+            }
+        }
+
         for (LinkHitbox hitbox : linkHitboxes) {
             if (hitbox.contains(mouseX, mouseY)) {
                 return Optional.of(new LinkTarget(hitbox.uri(), articleLabel(hitbox.uri())));
             }
         }
-        for (int index = slotHitboxes.size() - 1; index >= 0; index--) {
-            SlotHitbox hitbox = slotHitboxes.get(index);
-            if (!hitbox.contains(mouseX, mouseY) || hitbox.frame().link().isBlank()) {
-                continue;
-            }
-            URI uri = resolveHref(hitbox.frame().link());
-            if (uri != null) {
-                return Optional.of(new LinkTarget(uri, hitbox.frame().displayName()));
+        return Optional.empty();
+    }
+
+    protected boolean activateUiTarget(String groupKey, String targetId) {
+        if (page == null || targetId == null || targetId.isBlank()) return false;
+
+        UiTargetMatch match = findUiTargetMatch(page.blocks(), groupKey, targetId);
+
+        // Some UI templates/transclusions lose the synthetic group marker while
+        // their goto-* class survives. Fall back to the unique panel target on
+        // the page instead of silently swallowing the click.
+        if (match == null && groupKey != null && !groupKey.isBlank()) {
+            match = findUiTargetMatch(page.blocks(), "", targetId);
+        }
+        if (match == null) return false;
+
+        int oldScroll = scrollPixels;
+        selectedTabs.put(uiSelectionKeyForActions(match.groupKey()), match.panelIndex());
+        rebuildLayout();
+        scrollPixels = Math.max(0, Math.min(oldScroll, maxScrollPixels));
+        saveScreenToActiveTab();
+        updateFindMatches(false);
+        return true;
+    }
+
+    protected static int uiSelectionKeyForActions(String groupKey) {
+        return -1 - (groupKey == null ? 0 : (groupKey.hashCode() & 0x7fffffff));
+    }
+
+    protected static String normalizeUiId(String value) {
+        if (value == null) return "";
+        String result = value.trim().toLowerCase(Locale.ROOT);
+        while (result.startsWith("#")) result = result.substring(1);
+        if (result.startsWith("ui-")) result = result.substring(3);
+
+        // The Wiki uses both dashes and underscores in UI ids/goto targets.
+        // Treat them as equivalent for local panel navigation.
+        return result.replace("-", "_");
+    }
+
+    protected static UiTargetMatch findUiTargetMatch(List<WikiBlock> blocks, String requestedGroupKey, String targetId) {
+        if (blocks == null) return null;
+
+        String wantedTarget = normalizeUiId(targetId);
+        boolean restrictGroup = requestedGroupKey != null && !requestedGroupKey.isBlank();
+
+        for (WikiBlock block : blocks) {
+            if (block instanceof WikiBlock.UiGroup group) {
+                boolean groupMatches = !restrictGroup || group.key().equals(requestedGroupKey);
+                if (groupMatches) {
+                    for (int index = 0; index < group.panels().size(); index++) {
+                        if (normalizeUiId(group.panels().get(index).id()).equals(wantedTarget)) {
+                            return new UiTargetMatch(group.key(), index);
+                        }
+                    }
+                }
+                for (WikiBlock.UiGroup.Panel panel : group.panels()) {
+                     UiTargetMatch nested = findUiTargetMatch(panel.blocks(), requestedGroupKey, targetId);
+                    if (nested != null) return nested;
+                }
+            } else if (block instanceof WikiBlock.TabGroup tabs) {
+                for (WikiBlock.TabGroup.Tab tab : tabs.tabs()) {
+                    UiTargetMatch nested = findUiTargetMatch(tab.blocks(), requestedGroupKey, targetId);
+                    if (nested != null) return nested;
+                }
             }
         }
-        return Optional.empty();
+        return null;
     }
 
     protected void toggleWebsiteStyle() {
@@ -200,6 +300,92 @@ abstract class WikiScreenActions extends WikiScreenNavigation {
         }
     }
 
+    protected void openLinkTarget(LinkTarget target, OpenDisposition disposition) {
+        if (target == null || target.uri() == null) {
+            return;
+        }
+
+        URI uri = target.uri();
+
+        if (target.isImage()) {
+            URI filePage = wikiFilePageUri(target.image());
+            if (filePage != null) {
+                uri = filePage;
+            }
+        }
+
+        openResolvedUri(uri, disposition);
+    }
+
+    protected URI wikiFilePageUri(WikiImage image) {
+        if (image == null || image.isEmpty()) {
+            return null;
+        }
+
+        String fileName = image.displayName().trim();
+
+        // Usually alt/title already contains the real filename, e.g.
+        // "Derpy (Old).png".
+        if (fileName.isBlank() || !fileName.contains(".")) {
+            String rawPath;
+
+            try {
+                rawPath = URI.create(image.url()).getRawPath();
+            } catch (IllegalArgumentException exception) {
+                return null;
+            }
+
+            if (rawPath == null || rawPath.isBlank()) {
+                return null;
+            }
+
+            // MediaWiki thumbnail URL:
+            // /images/thumb/Derpy_%28Old%29.png/56px-Derpy_%28Old%29.png
+            int thumb = rawPath.indexOf("/thumb/");
+            if (thumb >= 0) {
+                String afterThumb = rawPath.substring(thumb + "/thumb/".length());
+                int slash = afterThumb.indexOf('/');
+
+                if (slash > 0) {
+                    fileName = afterThumb.substring(0, slash);
+                }
+            }
+
+            if (fileName.isBlank() || !fileName.contains(".")) {
+                int slash = rawPath.lastIndexOf('/');
+                fileName = slash >= 0
+                        ? rawPath.substring(slash + 1)
+                        : rawPath;
+
+                // Strip MediaWiki thumbnail prefixes such as "56px-".
+                fileName = fileName.replaceFirst("^\\d+px-", "");
+            }
+
+            try {
+                fileName = java.net.URLDecoder.decode(
+                        fileName,
+                        StandardCharsets.UTF_8
+                );
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+
+        if (fileName.isBlank()) {
+            return null;
+        }
+
+        String encoded = URLEncoder.encode(
+                        fileName.replace(' ', '_'),
+                        StandardCharsets.UTF_8
+                )
+                .replace("+", "%20");
+
+        return URI.create(
+                "https://hypixelskyblock.minecraft.wiki/w/File:" + encoded
+        );
+    }
+
+    protected record UiTargetMatch(String groupKey, int panelIndex) { }
 
     /** Implemented by the layout layer. */
 }

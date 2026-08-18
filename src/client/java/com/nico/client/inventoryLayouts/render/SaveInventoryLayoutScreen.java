@@ -3,7 +3,7 @@ package com.nico.client.inventoryLayouts.render;
 import com.nico.client.inventoryLayouts.core.InventoryLayout;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutManager;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -61,10 +61,10 @@ public final class SaveInventoryLayoutScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(0, 0, width, height, 0xE0101218);
-        graphics.drawCenteredString(font, title, width / 2, height / 2 - 60, 0xFF55CCFF);
-        graphics.drawCenteredString(
+        graphics.centeredText(font, title, width / 2, height / 2 - 60, 0xFF55CCFF);
+        graphics.centeredText(
                 font,
                 "This saves positions only. It never moves any items.",
                 width / 2,
@@ -73,10 +73,10 @@ public final class SaveInventoryLayoutScreen extends Screen {
         );
 
         if (!status.getString().isEmpty()) {
-            graphics.drawCenteredString(font, status, width / 2, height / 2 + 40, 0xFFFF7777);
+            graphics.centeredText(font, status, width / 2, height / 2 + 40, 0xFFFF7777);
         }
 
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
     }
 
 

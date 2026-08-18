@@ -51,6 +51,7 @@ abstract class WikiArticleParser extends WikiWidgetParser {
         List<WikiBlock> blocks = new ArrayList<>();
         appendChildrenAsBlocks(workingRoot, blocks, 0);
         blocks.removeIf(WikiArticleParser::isEmptyBlock);
+        trimFooterNavigation(blocks);
 
         if (blocks.isEmpty() && infobox.isEmpty()) {
             throw new HypixelWikiService.WikiRequestException("The Wiki article contained no supported content");
@@ -68,6 +69,7 @@ abstract class WikiArticleParser extends WikiWidgetParser {
         String title = titleElement == null ? "" : titleElement.text().trim();
         List<WikiInfobox.Entry> entries = new ArrayList<>();
         walkInfobox(root, entries);
+        entries = new ArrayList<>(removeUnsupportedDynamicPriceEntries(entries));
 
         WikiInfobox result = new WikiInfobox(title, entries);
         if (result.isEmpty() && DEBUG) {
@@ -76,20 +78,104 @@ abstract class WikiArticleParser extends WikiWidgetParser {
         return result;
     }
 
+    protected static List<WikiInfobox.Entry> removeUnsupportedDynamicPriceEntries(List<WikiInfobox.Entry> entries) {
+        if (entries == null || entries.isEmpty()) return List.of();
+
+        List<WikiInfobox.Entry> result = new ArrayList<>(entries.size());
+        for (WikiInfobox.Entry entry : entries) {
+            if (entry instanceof WikiInfobox.Header header
+                    && isUnsupportedDynamicPriceHeader(header.text().plainText())) {
+                continue;
+            }
+
+            if (entry instanceof WikiInfobox.Row row
+                    && isUnsupportedDynamicPriceLabel(row.label().plainText())) {
+                continue;
+            }
+
+            if (entry instanceof WikiInfobox.PanelTabs tabs && !tabs.sections().isEmpty()) {
+                List<String> labels = new ArrayList<>();
+                List<List<WikiInfobox.Entry>> sections = new ArrayList<>();
+                int active = 0;
+
+                int count = Math.min(tabs.labels().size(), tabs.sections().size());
+                for (int index = 0; index < count; index++) {
+                    String label = tabs.labels().get(index);
+                    if (isUnsupportedDynamicPricePanel(label)) continue;
+
+                    List<WikiInfobox.Entry> cleaned = removeUnsupportedDynamicPriceEntries(tabs.sections().get(index));
+                    if (cleaned.isEmpty()) continue;
+
+                    if (index == tabs.activeIndex()) active = labels.size();
+                    labels.add(label);
+                    sections.add(cleaned);
+                }
+
+                if (labels.isEmpty()) continue;
+                if (labels.size() == 1) {
+                    result.addAll(sections.get(0));
+                    continue;
+                }
+
+                result.add(new WikiInfobox.PanelTabs(labels, active, sections));
+                continue;
+            }
+
+            result.add(entry);
+        }
+
+        return List.copyOf(result);
+    }
+
+    protected static boolean isUnsupportedDynamicPriceHeader(String value) {
+        String label = normalizeInfoboxLabel(value);
+        return label.equals("auction house")
+                || label.equals("auction house prices")
+                || label.equals("auction house price")
+                || label.equals("ah prices")
+                || label.equals("ah price");
+    }
+
+    protected static boolean isUnsupportedDynamicPriceLabel(String value) {
+        String label = normalizeInfoboxLabel(value);
+        return label.startsWith("lowest bin")
+                || label.equals("ah cost")
+                || label.equals("ah cost daily average")
+                || label.equals("auction house cost")
+                || label.equals("auction house cost daily average")
+                || label.equals("bazaar material cost")
+                || label.equals("bazaar material cost to upgrade");
+    }
+
+    protected static boolean isUnsupportedDynamicPricePanel(String value) {
+        String label = normalizeInfoboxLabel(value);
+        return label.equals("auction house")
+                || label.equals("auction house prices")
+                || label.equals("ah")
+                || label.equals("ah prices");
+    }
+
+    protected static String normalizeInfoboxLabel(String value) {
+        return value == null
+                ? ""
+                : value.replace('\u00A0', ' ')
+                .replaceAll("[^\\p{L}\\p{N}]+", " ")
+                .replaceAll("\\s+", " ")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+    }
+
     protected static void walkInfobox(Element parent, List<WikiInfobox.Entry> entries) {
         for (Element child : parent.children()) {
             if (child.hasClass(WikiHtmlContract.INFOBOX_TITLE)) {
                 continue;
             }
-            if (child.hasClass(WikiHtmlContract.INFOBOX_IMAGE_CONTAINER)) {
-                parseInfoboxImageContainer(child, entries);
+            if (child.hasClass(WikiHtmlContract.INFOBOX_PANEL)) {
+                parseInfoboxPanel(child, entries);
                 continue;
             }
-            if (child.hasClass(WikiHtmlContract.INFOBOX_SECTION_LABELS)) {
-                WikiInfobox.PanelTabs tabs = parseInfoboxPanelTabs(child);
-                if (!tabs.labels().isEmpty()) {
-                    entries.add(tabs);
-                }
+            if (child.hasClass(WikiHtmlContract.INFOBOX_IMAGE_CONTAINER)) {
+                parseInfoboxImageContainer(child, entries);
                 continue;
             }
             if (child.hasClass(WikiHtmlContract.INFOBOX_HEADER)) {
@@ -105,6 +191,51 @@ abstract class WikiArticleParser extends WikiWidgetParser {
             }
             walkInfobox(child, entries);
         }
+    }
+
+    protected static void parseInfoboxPanel(Element panel, List<WikiInfobox.Entry> entries) {
+        Element labelsContainer = ownedDescendantWithClass(
+                panel,
+                WikiHtmlContract.INFOBOX_SECTION_LABELS,
+                WikiHtmlContract.INFOBOX_PANEL
+        );
+        if (labelsContainer == null) {
+            walkInfobox(panel, entries);
+            return;
+        }
+
+        WikiInfobox.PanelTabs parsedTabs = parseInfoboxPanelTabs(labelsContainer);
+        if (parsedTabs.labels().isEmpty()) {
+            walkInfobox(panel, entries);
+            return;
+        }
+
+        List<Element> sectionElements = new ArrayList<>();
+        for (Element section : panel.getElementsByClass(WikiHtmlContract.INFOBOX_SECTION)) {
+            if (nearestAncestorWithClass(section, WikiHtmlContract.INFOBOX_PANEL) == panel) {
+                sectionElements.add(section);
+            }
+        }
+
+        // Fail closed if PortableInfobox changes its markup. Flattening the
+        // content is preferable to wiring a tab to the wrong section.
+        if (sectionElements.size() != parsedTabs.labels().size()) {
+            walkInfobox(panel, entries);
+            return;
+        }
+
+        List<List<WikiInfobox.Entry>> sections = new ArrayList<>(sectionElements.size());
+        for (Element section : sectionElements) {
+            List<WikiInfobox.Entry> sectionEntries = new ArrayList<>();
+            walkInfobox(section, sectionEntries);
+            sections.add(List.copyOf(sectionEntries));
+        }
+
+        entries.add(new WikiInfobox.PanelTabs(
+                parsedTabs.labels(),
+                parsedTabs.activeIndex(),
+                sections
+        ));
     }
 
     protected static void parseInfoboxImageContainer(Element container, List<WikiInfobox.Entry> entries) {
@@ -188,19 +319,31 @@ abstract class WikiArticleParser extends WikiWidgetParser {
     }
 
     protected static void appendElementAsBlocks(Element element, List<WikiBlock> blocks, int listDepth) {
-        if (isIgnoredElement(element)) {
-            return;
-        }
-
         if (element.hasClass(WikiHtmlContract.MESSAGEBOX_NARROW_WRAPPER)) {
             Element box = element.getElementsByClass(WikiHtmlContract.MESSAGEBOX).first();
+            if (box == null) {
+                box = element.getElementsByClass(WikiHtmlContract.MESSAGEBOX_MAIN).first();
+            }
             if (box != null) {
                 appendMessageBox(box, blocks);
+            } else {
+                appendMessageBox(element, blocks);
             }
             return;
         }
-        if (element.hasClass(WikiHtmlContract.MESSAGEBOX)) {
+        if (isMessageBoxContainer(element)) {
             appendMessageBox(element, blocks);
+            return;
+        }
+
+        if (isIgnoredElement(element)) return;
+
+        // SkyBlock's interactive inventory UIs use hidden sibling panels and
+        // goto-* classes on slots. Parse the whole wrapper as one switchable
+        // group before generic recursion can flatten all of its panels.
+        WikiBlock.UiGroup uiGroup = tryParseUiGroup(element, WikiArticleParser::parsePanelBlocks);
+        if (uiGroup != null) {
+            blocks.add(uiGroup);
             return;
         }
 
@@ -278,6 +421,10 @@ abstract class WikiArticleParser extends WikiWidgetParser {
             }
             return;
         }
+        
+        if (isWikiGallery(element)) {
+            appendGallery(element, blocks);
+        }
 
         switch (element.tagName()) {
             case "h2", "h3", "h4", "h5", "h6" -> {
@@ -307,11 +454,17 @@ abstract class WikiArticleParser extends WikiWidgetParser {
                 Element image = element.selectFirst("img");
                 if (image != null && !isInsideWidget(image)) {
                     Element caption = element.selectFirst("figcaption");
+
                     blocks.add(new WikiBlock.Image(
                             parseImage(image),
-                            caption == null ? WikiText.empty() : parseStyledText(caption)
+                            caption == null
+                                    ? WikiText.empty()
+                                    : parseStyledText(caption),
+                            isRightFloatingFigure(element)
                     ));
                 }
+
+
             }
             case "img" -> {
                 if (!isInsideWidget(element)) {
@@ -322,6 +475,55 @@ abstract class WikiArticleParser extends WikiWidgetParser {
                 }
             }
             default -> appendChildrenAsBlocks(element, blocks, listDepth);
+        }
+    }
+
+    protected static boolean isWikiGallery(Element element) {
+        if (element == null) {
+            return false;
+        }
+        String classes = String.join(" ", element.classNames()).toLowerCase(Locale.ROOT);
+        return element.hasClass("gallery")
+                || classes.contains("mw-gallery")
+                || classes.contains("gallerybox");
+    }
+
+    protected static void appendGallery(Element gallery, List<WikiBlock> blocks) {
+        boolean found = false;
+
+        for (Element item : gallery.children()) {
+            if (!item.tagName().equals("li") && !item.hasClass("gallerybox")) {
+                continue;
+            }
+
+            Element imageElement = item.selectFirst("img");
+            if (imageElement == null || isInsideWidget(imageElement)) {
+                continue;
+            }
+
+            WikiImage image = parseImage(imageElement);
+            if (image.isEmpty()) {
+                continue;
+            }
+
+            Element captionElement = item.selectFirst(".gallerytext");
+            if (captionElement == null) {
+                captionElement = item.selectFirst("figcaption");
+            }
+            WikiText caption = captionElement == null ? WikiText.empty() : parseStyledText(captionElement);
+
+            blocks.add(new WikiBlock.Image(image, caption, false));
+            found = true;
+        }
+
+        if (!found) {
+            for (Element imageElement : gallery.select("img")) {
+                if (isInsideWidget(imageElement)) continue;
+                WikiImage image = parseImage(imageElement);
+                if (!image.isEmpty()) {
+                    blocks.add(new WikiBlock.Image(image, WikiText.empty(), false));
+                }
+            }
         }
     }
 
@@ -416,7 +618,8 @@ abstract class WikiArticleParser extends WikiWidgetParser {
                         span.italic(),
                         span.cssClasses(),
                         span.hoverTitle(),
-                        span.hoverText()
+                        span.hoverText(),
+                        span.inlineImage()
                 ));
             }
         }
@@ -451,10 +654,41 @@ abstract class WikiArticleParser extends WikiWidgetParser {
             tone = WikiBlock.MessageBox.Tone.PURPLE;
         } else if (classes.contains("boxcol-gray") || classes.contains("boxcol-grey")) {
             tone = WikiBlock.MessageBox.Tone.GRAY;
+        } else if (classes.contains("ambox-content") || classes.contains("ambox-notice")) {
+            tone = WikiBlock.MessageBox.Tone.BLUE;
+        } else if (classes.contains("ambox-style")) {
+            tone = WikiBlock.MessageBox.Tone.YELLOW;
+        } else if (classes.contains("ambox-speedy")) {
+            tone = WikiBlock.MessageBox.Tone.RED;
         } else {
             tone = WikiBlock.MessageBox.Tone.DEFAULT;
         }
         blocks.add(new WikiBlock.MessageBox(content, tone));
+    }
+
+    protected static boolean isMessageBoxContainer(Element element) {
+        if (element == null) return false;
+        if (element.hasClass(WikiHtmlContract.MESSAGEBOX)
+                || element.hasClass(WikiHtmlContract.MESSAGEBOX_MAIN)
+                || element.hasClass(WikiHtmlContract.AMBOX)
+                || element.hasClass(WikiHtmlContract.DARK_MESSAGEBOX)){
+            return true;
+        }
+
+        String classes = String.join(" ", element.classNames()).toLowerCase(Locale.ROOT);
+        boolean boxLike = classes.contains("messagebox")
+                || classes.contains("message-box")
+                || classes.contains("darkmsgbox")
+                || classes.contains("ambox")
+                || classes.contains("mbox")
+                || classes.contains("maintenance")
+                || classes.contains("notice")
+                || classes.contains("outdated");
+
+        if (!boxLike) return false;
+
+        String text = element.text().trim();
+        return text.length() >= 12;
     }
 
     protected static void appendList(Element list, List<WikiBlock> blocks, boolean ordered, int depth) {
@@ -480,4 +714,59 @@ abstract class WikiArticleParser extends WikiWidgetParser {
         }
     }
 
+    /**
+     * The independent Wiki appends a large H2 "Navigation" navbox to most
+     * articles. It is site chrome rather than article content, so stop the
+     * parsed document at the final Navigation heading.
+     */
+    protected static void trimFooterNavigation(List<WikiBlock> blocks) {
+        if (blocks == null || blocks.isEmpty()) return;
+        for (int index = blocks.size() - 1; index >= 0; index--) {
+            WikiBlock block = blocks.get(index);
+            if (block instanceof WikiBlock.Heading heading
+                    && heading.level() == 2
+                    && heading.text().plainText().equalsIgnoreCase("Navigation")) {
+                blocks.subList(index, blocks.size()).clear();
+                return;
+            }
+        }
+    }
+
+
+    protected static boolean isRightFloatingFigure(Element element) {
+        if (element == null) return false;
+
+        boolean mediaWikiThumb = false;
+        Element current = element;
+        while (current != null) {
+            String classes = String.join(" ", current.classNames()).toLowerCase(Locale.ROOT);
+            String style = current.attr("style").toLowerCase(Locale.ROOT).replace(" ", "");
+            String type = current.attr("typeof").toLowerCase(Locale.ROOT);
+
+            // Explicit alignment always wins over the normal thumbnail default.
+            if (classes.contains("mw-halign-left")
+                    || classes.contains("floatleft")
+                    || classes.contains("float-left")
+                    || classes.contains("tleft")
+                    || current.attr("align").equalsIgnoreCase("left")
+                    || style.contains("float:left")) {
+                return false;
+            }
+            if (classes.contains("mw-halign-right")
+                    || classes.contains("floatright")
+                    || classes.contains("float-right")
+                    || classes.contains("tright")
+                    || current.attr("align").equalsIgnoreCase("right")
+                    || style.contains("float:right")) {
+                return true;
+            }
+
+            mediaWikiThumb |= type.contains("mw:file/thumb")
+                    || classes.contains("thumb")
+                    || classes.contains("thumbinner");
+
+            current = current.parent();
+        }
+        return mediaWikiThumb;
+    }
 }
