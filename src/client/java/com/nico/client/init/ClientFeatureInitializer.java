@@ -6,10 +6,8 @@ import com.nico.client.hud.HudLayoutManager;
 import com.nico.client.hud.HudMoveCommand;
 import com.nico.client.minions.MinionRoiClient;
 import com.nico.client.minions.base.MinionDataRegistry;
-import com.nico.client.secretTimer.SecretPacketHooks;
 import com.nico.client.secretTimer.SecretRoomTimerClient;
 import com.nico.client.utils.BazaarService;
-import com.nico.client.utils.SecretEventBridge;
 
 import java.io.IOException;
 
@@ -34,8 +32,6 @@ public final class ClientFeatureInitializer {
     }
 
     private static void initializeSecretFeatures() {
-        SecretPacketHooks.init();
-        SecretEventBridge.INSTANCE.init();
         SecretRoomTimerClient.init();
     }
 

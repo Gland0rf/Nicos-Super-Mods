@@ -3,6 +3,14 @@ package com.nico.client.wiki;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * One inventory-slot widget from the wiki.
+ *
+ * <p>Slots may contain multiple synchronized frames when the source widget cycles through recipe alternatives.</p>
+ * @param frames
+ * @param activeFrameIndex
+ * @param large
+ */
 public record WikiItemSlot(List<Frame> frames, int activeFrameIndex, boolean large) {
     public WikiItemSlot {
         frames = frames == null ? List.of() : List.copyOf(frames);
@@ -28,7 +36,9 @@ public record WikiItemSlot(List<Frame> frames, int activeFrameIndex, boolean lar
             String tooltipTitle,
             String tooltipText,
             String stackSize,
-            String imageId
+            String imageId,
+            String uiGroupKey,
+            String uiTarget
     ) {
         public Frame {
             image = image == null ? WikiImage.empty() : image;
@@ -38,10 +48,12 @@ public record WikiItemSlot(List<Frame> frames, int activeFrameIndex, boolean lar
             tooltipText = Objects.requireNonNullElse(tooltipText, "").trim();
             stackSize = Objects.requireNonNullElse(stackSize, "").trim();
             imageId = Objects.requireNonNullElse(imageId, "").trim();
+            uiGroupKey = Objects.requireNonNullElse(uiGroupKey, "").trim();
+            uiTarget = Objects.requireNonNullElse(uiTarget, "").trim();
         }
 
         public static Frame empty() {
-            return new Frame(WikiImage.empty(), "", "", "", "", "", "");
+            return new Frame(WikiImage.empty(), "", "", "", "", "", "", "", "");
         }
 
         public String displayName() {

@@ -3,7 +3,11 @@ package com.nico.client.wiki;
 import java.util.List;
 import java.util.Objects;
 
-/** A collapsible nested resource tree used by the Wiki's forging sections. */
+/**
+ * A collapsible nested resource tree used by the Wiki's forging sections.
+ * @param id
+ * @param roots
+ */
 public record WikiForgingTree(String id, List<Node> roots) {
     public WikiForgingTree {
         id = Objects.requireNonNullElse(id, "forging-tree").trim();

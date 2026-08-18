@@ -27,23 +27,12 @@ public final class DungeonRunPacketDetector {
             return;
         }
 
-        if (service.config().debugLogging) {
-            System.out.println(
-                    "[NSM Lag][Detector] " + packet.getClass().getSimpleName()
-                            + " active=" + service.isDungeonRunActive()
-                            + " raw=\"" + rawText.replace("\n", "\\n") + "\""
-                            + " normalized=\"" + text + "\""
-            );
-        }
-
         if (packet instanceof ClientboundSystemChatPacket && isDungeonStart(text)) {
-            System.out.println("[NSM Lag][Detector] START matched: " + text);
             service.onDungeonRunStart();
             return;
         }
 
         if (isDungeonEnd(text)) {
-            System.out.println("[NSM Lag][Detector] END matched: " + text);
             service.onDungeonRunEnd(Minecraft.getInstance());
         }
     }

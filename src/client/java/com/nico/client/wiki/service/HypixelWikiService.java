@@ -29,6 +29,12 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Resolves, downloads, parses, caches, and optionally enriches Hypixel Skyblock Wiki pages.
+ *
+ * <p>Network work is asynchronous. Parsed pages are cached by request identity, while reload
+ * methods deliberately bypass that cache.</p>
+ */
 public final class HypixelWikiService extends WikiArticleParser {
     private static final Map<String, CompletableFuture<WikiPage>> CACHE = new ConcurrentHashMap<>();
     private static volatile BazaarService bazaarService;

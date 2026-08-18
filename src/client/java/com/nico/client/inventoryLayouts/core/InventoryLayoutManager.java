@@ -52,11 +52,10 @@ public class InventoryLayoutManager {
 
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player != null && layout != null) {
-            minecraft.player.displayClientMessage(
+            minecraft.player.sendSystemMessage(
                     Component.literal("[NSM] Loaded inventory layout: ")
                             .withStyle(ChatFormatting.GREEN)
-                            .append(Component.literal(layout.name()).withStyle(ChatFormatting.WHITE)),
-                    false
+                            .append(Component.literal(layout.name()).withStyle(ChatFormatting.WHITE))
             );
         }
     }
@@ -68,11 +67,10 @@ public class InventoryLayoutManager {
 
         Minecraft minecraft = Minecraft.getInstance();
         if (notifyPlayer && previous != null && minecraft.player != null) {
-            minecraft.player.displayClientMessage(
+            minecraft.player.sendSystemMessage(
                     Component.literal("[NSM] Stopped inventory layout: ")
                             .withStyle(ChatFormatting.YELLOW)
-                            .append(Component.literal(previous.name()).withStyle(ChatFormatting.WHITE)),
-                    false
+                            .append(Component.literal(previous.name()).withStyle(ChatFormatting.WHITE))
             );
         }
     }
@@ -100,11 +98,10 @@ public class InventoryLayoutManager {
         activeLayout = null;
         activatedMillis = 0L;
 
-        minecraft.player.displayClientMessage(
+        minecraft.player.sendSystemMessage(
                 Component.literal("[NSM] Inventory layout complete: ")
                         .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
-                        .append(Component.literal(completedName).withStyle(ChatFormatting.WHITE)),
-                false
+                        .append(Component.literal(completedName).withStyle(ChatFormatting.WHITE))
         );
     }
 }

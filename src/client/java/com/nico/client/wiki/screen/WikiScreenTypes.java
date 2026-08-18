@@ -130,7 +130,8 @@ record RenderedTableCell(
         int height,
         boolean header,
         List<FormattedCharSequence> lines,
-        WikiContent content
+        WikiContent content,
+        int contentHeight
 ) {
     RenderedTableCell {
         lines = lines == null ? List.of() : List.copyOf(lines);

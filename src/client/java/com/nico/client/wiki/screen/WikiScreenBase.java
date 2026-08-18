@@ -1,9 +1,6 @@
 package com.nico.client.wiki.screen;
 
-import com.nico.client.wiki.WikiBlock;
-import com.nico.client.wiki.WikiBrowserStore;
-import com.nico.client.wiki.WikiPage;
-import com.nico.client.wiki.WikiTitleResolver;
+import com.nico.client.wiki.*;
 import com.nico.client.wiki.service.HypixelWikiService;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -39,7 +36,10 @@ abstract class WikiScreenBase extends Screen {
      */
     protected static final int MIN_ARTICLE_WIDTH = 300;
     protected static final int MAX_PAGE_WIDTH = 1240;
-    protected static final int LINE_HEIGHT = 12;
+    protected static final float ARTICLE_TEXT_SCALE = 0.90F;
+    protected static final int LINE_HEIGHT = 11;
+    protected static final int INLINE_IMAGE_SIZE = 9;
+    protected static final String INLINE_IMAGE_INSERTION_PREFIX = "nsm-wiki-inline:";
     protected static final int SCROLL_STEP = 28;
 
     protected static final int BACKGROUND = 0xFF121426;
@@ -103,6 +103,7 @@ abstract class WikiScreenBase extends Screen {
     protected final List<FindTarget> findMatches = new ArrayList<>();
     protected final Map<Integer, Integer> selectedTabs = new HashMap<>();
     protected final Map<String, Boolean> forgingTreeExpansion = new HashMap<>();
+    protected final Map<String, WikiImage> inlineImages = new HashMap<>();
     protected final List<PageTab> browserTabs = new ArrayList<>();
     protected final WikiBrowserStore browserStore = WikiBrowserStore.get();
 
@@ -136,6 +137,7 @@ abstract class WikiScreenBase extends Screen {
     protected NewTabHitbox newTabHitbox;
     protected boolean suppressAddressResponder;
     protected int searchRequestSerial;
+    protected int nextInlineImageId;
     protected int toolbarAddressX;
     protected int toolbarAddressWidth;
     protected int toolbarFindWidth;

@@ -4,7 +4,7 @@ import com.nico.client.inventoryLayouts.core.InventoryLayout;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutManager;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutSlot;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -52,10 +52,10 @@ public class InventoryLayoutPreviewScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(0, 0, width, height, 0xE0101218);
-        graphics.drawCenteredString(font, layout.name(), width / 2, 18, 0xFF55CCFF);
-        graphics.drawCenteredString(
+        graphics.centeredText(font, layout.name(), width / 2, 18, 0xFF55CCFF);
+        graphics.centeredText(
                 font,
                 "Main inventory (top 3 rows) and hotbar (bottom row)",
                 width / 2,
@@ -87,7 +87,7 @@ public class InventoryLayoutPreviewScreen extends Screen {
                 if (representative.isEmpty()) {
                     InventoryLayoutRenderUtil.drawMissingMarker(graphics, x + 1, y + 1);
                 } else {
-                    graphics.renderItem(representative, x + 1, y + 1);
+                    graphics.item(representative, x + 1, y + 1);
                 }
             }
 
@@ -100,7 +100,7 @@ public class InventoryLayoutPreviewScreen extends Screen {
             graphics.setTooltipForNextFrame(font, Component.literal(hovered.displayName()), mouseX, mouseY);
         }
 
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override

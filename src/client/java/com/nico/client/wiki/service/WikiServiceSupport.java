@@ -1,10 +1,7 @@
 package com.nico.client.wiki.service;
 
 import com.google.gson.JsonObject;
-import com.nico.client.wiki.WikiBlock;
-import com.nico.client.wiki.WikiHtmlContract;
-import com.nico.client.wiki.WikiHttp;
-import com.nico.client.wiki.WikiText;
+import com.nico.client.wiki.*;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
@@ -20,6 +17,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Shared parsing and HTTP helpers used by the wiki service pipeline.
+ *
+ * <p>Parser subclasses inherit these utilities so URL normalization, rich-text extraction,
+ * ignored-element handling, and MediaWiki API requests follow the same rules throughout the scraper.</p>
+ */
 public class WikiServiceSupport {
     protected static final String WIKI_API_ENDPOINT = "https://hypixelskyblock.minecraft.wiki/api.php";
     protected static final String WIKI_BASE = "https://hypixelskyblock.minecraft.wiki";
@@ -46,6 +49,14 @@ public class WikiServiceSupport {
         return result.replace(" ", "%20");
     }
 
+    protected static String inlineImagePlaceholder(WikiImage image) {
+        // Keep every inline icon in the same three-space text slot. The
+        // renderer adds a one-pixel gutter on both sides of the actual image,
+        // so the icon cannot touch the previous/next glyph and the spacing
+        // stays consistent regardless of the source image dimensions.
+        return "\u00A0\u00A0\u00A0";
+    }
+
     protected static WikiText parseStyledText(Element element) {
         Element clone = element.clone();
         removeIgnoredElements(clone);
@@ -62,7 +73,8 @@ public class WikiServiceSupport {
                         span.italic,
                         span.cssClasses,
                         span.hoverTitle,
-                        span.hoverText
+                        span.hoverText,
+                        span.inlineImage
                 ));
             }
         }
@@ -87,12 +99,55 @@ public class WikiServiceSupport {
             return;
         }
         String tag = element.tagName();
-        if (tag.equals("script") || tag.equals("style") || tag.equals("noscript")
-                || tag.equals("img") || tag.equals("svg") || tag.equals("canvas")) {
+
+        if (element.hasClass(WikiHtmlContract.INVENTORY_SLOT)
+                && WikiContentParser.isInlineInventorySlot(element)) {
+            WikiItemSlot slot = WikiContentParser.parseItemSlot(element);
+            WikiItemSlot.Frame frame = slot.activeFrame();
+            if (!frame.image().isEmpty()) {
+                spans.add(new MutableSpan(
+                        inlineImagePlaceholder(frame.image()),
+                        firstNonBlank(frame.link(), href),
+                        bold,
+                        italic,
+                        cssClasses,
+                        firstNonBlank(frame.tooltipTitle(), frame.displayName(), hoverText),
+                        firstNonBlank(frame.tooltipText(), hoverText),
+                        frame.image()
+                ));
+            }
             return;
         }
+
+        if (tag.equals("script") || tag.equals("style") || tag.equals("noscript")
+                || tag.equals("svg") || tag.equals("canvas")) {
+            return;
+        }
+        if (tag.equals("img")) {
+            WikiImage image = WikiContentParser.parseImage(element);
+            if (!image.isEmpty() && WikiContentParser.isInlineWikiIcon(element, image)) {
+                String imageHoverTitle = firstNonBlank(
+                        hoverTitle,
+                        normalizePlainHoverAttribute(element.attr("title")),
+                        normalizePlainHoverAttribute(element.attr("alt"))
+                );
+
+                spans.add(new MutableSpan(
+                        inlineImagePlaceholder(image),
+                        href,
+                        bold,
+                        italic,
+                        cssClasses,
+                        imageHoverTitle,
+                        hoverText,
+                        image
+                ));
+            }
+            return;
+        }
+
         if (tag.equals("br")) {
-            appendText(spans, " ", href, bold, italic, cssClasses, hoverTitle, hoverText);
+            appendText(spans, "\n", href, bold, italic, cssClasses, hoverTitle, hoverText);
             return;
         }
 
@@ -137,23 +192,37 @@ public class WikiServiceSupport {
         if (raw == null || raw.isEmpty()) {
             return;
         }
-        String text = raw.replace('\u00a0', ' ').replaceAll("\\s+", " ");
+        String text = raw.replace('\u00a0', ' ')
+                .replaceAll("[\\t\\x0B\\f\\r ]+", " ")
+                .replaceAll(" *\\n *", "\n");
+
         if (spans.isEmpty()) {
             text = text.stripLeading();
-        } else if (spans.get(spans.size() - 1).text.endsWith(" ") && text.startsWith(" ")) {
-            text = text.substring(1);
+        } else {
+            MutableSpan previous = spans.get(spans.size() - 1);
+            if (!previous.inlineImage.isEmpty() && text.startsWith(" ")) {
+                // The inline-image placeholder already provides the visual gap.
+                // Removing this normal space also prevents a wrap opportunity
+                // between the icon and its label.
+                text = text.substring(1);
+            } else if (previous.text.endsWith(" ") && text.startsWith(" ")
+                    || (previous.text.endsWith("\n") && text.startsWith(" "))
+                    || (previous.text.endsWith(" ") && text.startsWith("\n"))) {
+                text = text.substring(1);
+            }
         }
         if (text.isEmpty()) {
             return;
         }
         if (!spans.isEmpty()) {
             MutableSpan previous = spans.get(spans.size() - 1);
-            if (previous.sameFormat(href, bold, italic, cssClasses, hoverTitle, hoverText)) {
+            if (previous.inlineImage.isEmpty()
+                    && previous.sameFormat(href, bold, italic, cssClasses, hoverTitle, hoverText)) {
                 previous.text += text;
                 return;
             }
         }
-        spans.add(new MutableSpan(text, href, bold, italic, cssClasses, hoverTitle, hoverText));
+        spans.add(new MutableSpan(text, href, bold, italic, cssClasses, hoverTitle, hoverText, WikiImage.empty()));
     }
 
     protected static String normalizeMineTipAttribute(String value) {
@@ -185,15 +254,21 @@ public class WikiServiceSupport {
     }
 
     protected static void trimSpans(List<MutableSpan> spans) {
-        while (!spans.isEmpty() && spans.get(0).text.isBlank()) {
+        while (!spans.isEmpty() && spans.get(0).text.isBlank() && spans.get(0).inlineImage.isEmpty()) {
             spans.remove(0);
         }
-        while (!spans.isEmpty() && spans.get(spans.size() - 1).text.isBlank()) {
+        while (!spans.isEmpty()
+                && spans.get(spans.size() - 1).text.isBlank()
+                && spans.get(spans.size() - 1).inlineImage.isEmpty()) {
             spans.remove(spans.size() - 1);
         }
         if (!spans.isEmpty()) {
-            spans.get(0).text = spans.get(0).text.stripLeading();
-            spans.get(spans.size() - 1).text = spans.get(spans.size() - 1).text.stripTrailing();
+            if (spans.get(0).inlineImage.isEmpty()) {
+                spans.get(0).text = spans.get(0).text.stripLeading();
+            }
+            if (spans.get(spans.size() - 1).inlineImage.isEmpty()) {
+                spans.get(spans.size() - 1).text = spans.get(spans.size() - 1).text.stripTrailing();
+            }
         }
     }
 
@@ -230,6 +305,24 @@ public class WikiServiceSupport {
 
     protected static void removeIgnoredElements(Element root) {
         root.select("script,style,noscript").remove();
+
+        for (Element element : new ArrayList<>(root.select("[hidden]"))) {
+            if (!element.hasClass(WikiHtmlContract.UI_TAB_CONTENT)) element.remove();
+        }
+
+        root.select(".sortkey,.sort-key,.mw-sortkey,.mw-sort-key").remove();
+
+        for (Element element : new ArrayList<>(root.select("[style]"))) {
+            String style = element.attr("style")
+                    .toLowerCase(java.util.Locale.ROOT)
+                    .replaceAll("\\s+", "");
+
+            if ((style.contains("display:none") || style.contains("visibility:hidden"))
+                    && !element.hasClass(WikiHtmlContract.UI_TAB_CONTENT)) {
+                element.remove();
+            }
+        }
+
         root.getElementsByClass(WikiHtmlContract.EDIT_SECTION).remove();
         root.getElementsByClass(WikiHtmlContract.REFERENCE).remove();
         root.getElementsByClass(WikiHtmlContract.REFERENCES).remove();
@@ -428,6 +521,7 @@ public class WikiServiceSupport {
         private final String cssClasses;
         private final String hoverTitle;
         private final String hoverText;
+        private final WikiImage inlineImage;
 
         private MutableSpan(
                 String text,
@@ -436,7 +530,8 @@ public class WikiServiceSupport {
                 boolean italic,
                 String cssClasses,
                 String hoverTitle,
-                String hoverText
+                String hoverText,
+                WikiImage inlineImage
         ) {
             this.text = text;
             this.href = href == null ? "" : href;
@@ -445,6 +540,7 @@ public class WikiServiceSupport {
             this.cssClasses = cssClasses == null ? "" : cssClasses;
             this.hoverTitle = hoverTitle == null ? "" : hoverTitle;
             this.hoverText = hoverText == null ? "" : hoverText;
+            this.inlineImage = inlineImage == null ? WikiImage.empty() : inlineImage;
         }
 
         private boolean sameFormat(

@@ -7,7 +7,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
@@ -30,7 +30,7 @@ final class LagMonitorHud {
     }
 
     private static void render(
-            GuiGraphics graphics,
+            GuiGraphicsExtractor graphics,
             DeltaTracker deltaTracker
     ) {
         LagMonitorService service =
@@ -103,7 +103,7 @@ final class LagMonitorHud {
                     ? snapshot.diagnosis().color()
                     : 0xFFFFFFFF;
 
-            graphics.drawString(
+            graphics.text(
                     client.font,
                     lines.get(index),
                     7,
