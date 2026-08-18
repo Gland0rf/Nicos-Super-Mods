@@ -1,15 +1,10 @@
 package com.nico.client;
 
-import com.nico.OdinRoomBridge;
-import com.nico.client.bloodrush.BloodRoutes;
-import com.nico.client.bloodrush.RouteCommands;
-import com.nico.client.bloodrush.RouteContext;
-import com.nico.client.bloodrush.RouteEditor;
 import com.nico.client.configuration.NsmConfigManager;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonPlayer;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
+import com.nico.client.dungeon.DungeonScanner;
+import com.nico.client.dungeon.DungeonTeammateScanner;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -20,13 +15,10 @@ import java.util.Set;
 
 public final class NsmClientCommands {
 
-    private static RouteEditor routeEditor;
-
-    private NsmClientCommands() { }
+    private NsmClientCommands() {
+    }
 
     public static void register() {
-        routeEditor = BloodRoutes.initialize(new RouteContext());
-
         ClientCommandRegistrationCallback.EVENT.register(
                 (dispatcher, registryAccess) -> {
                     registerRoomsCommand(dispatcher);
@@ -41,7 +33,7 @@ public final class NsmClientCommands {
                     > dispatcher
     ) {
         dispatcher.register(
-                ClientCommandManager.literal("nsmrooms")
+                ClientCommands.literal("nsmrooms")
                         .executes(context -> executeRoomsCommand())
         );
     }
@@ -52,14 +44,13 @@ public final class NsmClientCommands {
                     > dispatcher
     ) {
         dispatcher.register(
-                ClientCommandManager.literal("nsmconfig")
+                ClientCommands.literal("nsmconfig")
                         .executes(context -> openConfigScreen())
         );
 
         dispatcher.register(
-                ClientCommandManager.literal("nsm")
+                ClientCommands.literal("nsm")
                         .executes(context -> openConfigScreen())
-                        .then(RouteCommands.node(routeEditor))
         );
     }
 
@@ -99,12 +90,7 @@ public final class NsmClientCommands {
             return;
         }
 
-        if (!FabricLoader.getInstance().isModLoaded("odin")) {
-            sendMessage(Component.literal("§cOdin is not loaded."));
-            return;
-        }
-
-        Set<String> teammateNames = getOdinDungeonTeammateNames();
+        Set<String> teammateNames = getDungeonTeammateNames();
 
         sendMessage(
                 Component.literal(
@@ -114,7 +100,7 @@ public final class NsmClientCommands {
 
         sendMessage(
                 Component.literal(
-                        "§7Odin teammates found: §e" + teammateNames.size()
+                        "§Teammates found: §e" + teammateNames.size()
                 )
         );
 
@@ -133,7 +119,7 @@ public final class NsmClientCommands {
             return;
         }
 
-        String roomName = OdinRoomBridge.getRoomNameForPlayer(player);
+        String roomName = DungeonScanner.getRoomNameForPlayer(player);
 
         int x = player.blockPosition().getX();
         int y = player.blockPosition().getY();
@@ -148,20 +134,11 @@ public final class NsmClientCommands {
         );
     }
 
-    public static Set<String> getOdinDungeonTeammateNames() {
+    public static Set<String> getDungeonTeammateNames() {
         Set<String> names = new HashSet<>();
 
         try {
-            for (
-                    DungeonPlayer teammate
-                    : DungeonUtils.INSTANCE.getDungeonTeammates()
-            ) {
-                String name = teammate.getName();
-
-                if (name != null && !name.isBlank()) {
-                    names.add(name);
-                }
-            }
+            names.addAll(DungeonTeammateScanner.getDungeonTeammateNames());
         } catch (Throwable throwable) {
             throwable.printStackTrace();
         }
@@ -169,15 +146,11 @@ public final class NsmClientCommands {
         return names;
     }
 
-    public static RouteEditor getRouteEditor() {
-        return routeEditor;
-    }
-
     private static void sendMessage(Component message) {
         Minecraft minecraft = Minecraft.getInstance();
 
         if (minecraft.player != null) {
-            minecraft.player.displayClientMessage(message, false);
+            minecraft.getInstance().gui.getChat().addClientSystemMessage(message);
         }
     }
 }

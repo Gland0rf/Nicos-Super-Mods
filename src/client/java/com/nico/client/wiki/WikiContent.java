@@ -2,6 +2,16 @@ package com.nico.client.wiki;
 
 import java.util.List;
 
+/**
+ * Rich inline content extracted from one paragraph, table cell, infobox value, or similar wiki fragment.
+ *
+ * <p>Text, images, item slots, and crafting grids stay together so callers can render the original
+ * mixed content without falling back to raw HTML</p>
+ * @param text
+ * @param images
+ * @param itemSlots
+ * @param craftingGrids
+ */
 public record WikiContent(
         WikiText text,
         List<WikiImage> images,

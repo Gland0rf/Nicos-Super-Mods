@@ -3,7 +3,7 @@ package com.nico.client.inventoryLayouts.render;
 import com.nico.client.inventoryLayouts.core.InventoryLayout;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutManager;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -134,7 +134,7 @@ public class InventoryLayoutsScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(0, 0, width, height, 0xE0101218);
 
         int panelWidth = panelWidth();
@@ -144,7 +144,7 @@ public class InventoryLayoutsScreen extends Screen {
         graphics.fill(left, panelTop, left + panelWidth, panelBottom, 0xCC1A1D28);
         graphics.fill(left, panelTop, left + 3, panelBottom, 0xFF55CCFF);
 
-        graphics.drawCenteredString(font, title, width / 2, 16, 0xFF55CCFF);
+        graphics.centeredText(font, title, width / 2, 16, 0xFF55CCFF);
 
         List<InventoryLayout> layouts = manager.storage().getLayouts();
         int rowsPerPage = rowsPerPage();
@@ -153,7 +153,7 @@ public class InventoryLayoutsScreen extends Screen {
         int lastIndex = Math.min(layouts.size(), firstIndex + rowsPerPage);
 
         if (layouts.isEmpty()) {
-            graphics.drawCenteredString(
+            graphics.centeredText(
                     font,
                     "No layouts saved yet. Open your inventory and save the current setup.",
                     width / 2,
@@ -167,8 +167,8 @@ public class InventoryLayoutsScreen extends Screen {
                 int y = 56 + row * ROW_HEIGHT;
                 int textColor = manager.isActive(layout) ? 0xFF55FF88 : 0xFFFFFFFF;
 
-                graphics.drawString(font, layout.name(), left + 10, y, textColor, true);
-                graphics.drawString(
+                graphics.text(font, layout.name(), left + 10, y, textColor, true);
+                graphics.text(
                         font,
                         layout.itemSlotCount() + " occupied slots",
                         left + 10,
@@ -179,7 +179,7 @@ public class InventoryLayoutsScreen extends Screen {
             }
         }
 
-        graphics.drawCenteredString(
+        graphics.centeredText(
                 font,
                 "Page " + (page + 1) + "/" + pageCount,
                 width / 2,
@@ -187,7 +187,7 @@ public class InventoryLayoutsScreen extends Screen {
                 0xFFAAAAAA
         );
 
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override

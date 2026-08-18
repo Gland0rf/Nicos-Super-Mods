@@ -82,12 +82,16 @@ public final class WikiImageTextureCache {
         }
     }
 
-    public enum Status { EMPTY, LOADING, READY, FAILED }
+    public enum Status { EMPTY, LOADING, READY, LICENSE_RESTRICTED, FAILED }
 
     public record Snapshot(
             Status status,
             Identifier textureId,
             int width,
+            int contentX,
+            int contentY,
+            int contentWidth,
+            int contentHeight,
             int height,
             String error,
             WikiImageCredits credits
@@ -96,12 +100,16 @@ public final class WikiImageTextureCache {
             status = status == null ? Status.EMPTY : status;
             width = Math.max(0, width);
             height = Math.max(0, height);
+            contentX = Math.max(0, contentX);
+            contentY = Math.max(0, contentY);
+            contentWidth = Math.max(0, contentWidth);
+            contentHeight = Math.max(0, contentHeight);
             error = error == null ? "" : error;
             credits = credits == null ? WikiImageCredits.empty() : credits;
         }
 
         public static Snapshot empty() {
-            return new Snapshot(Status.EMPTY, null, 0, 0, "", WikiImageCredits.empty());
+            return new Snapshot(Status.EMPTY, null, 0, 0, 0, 0, 0, 0, "", WikiImageCredits.empty());
         }
 
         public boolean ready() {
@@ -116,6 +124,10 @@ public final class WikiImageTextureCache {
         private volatile Identifier identifier;
         private volatile int width;
         private volatile int height;
+        private volatile int contentX;
+        private volatile int contentY;
+        private volatile int contentWidth;
+        private volatile int contentHeight;
         private volatile String error = "";
         private volatile WikiImageCredits credits = WikiImageCredits.empty();
         private volatile long failedAt;
@@ -126,7 +138,7 @@ public final class WikiImageTextureCache {
         }
 
         private synchronized void startIfNeeded() {
-            if (status == Status.LOADING || status == Status.READY) {
+            if (status == Status.LOADING || status == Status.READY || status == Status.LICENSE_RESTRICTED) {
                 return;
             }
             if (status == Status.FAILED && System.currentTimeMillis() - failedAt < RETRY_AFTER_MILLIS) {
@@ -142,6 +154,10 @@ public final class WikiImageTextureCache {
                 }
                 if (resolveFailure != null || resolved == null || resolved.url().isBlank()) {
                     fail(resolveFailure == null ? "Could not resolve original wiki image URL" : resolveFailure.getMessage());
+                    return;
+                }
+                if (!resolved.credits().permitsInGameDisplay()) {
+                    status = Status.LICENSE_RESTRICTED;
                     return;
                 }
                 download(resolved);
@@ -242,9 +258,36 @@ public final class WikiImageTextureCache {
                     && bytes[7] == 0x0A;
         }
 
+        private static int[] visibleBounds(NativeImage image) {
+            int width = image.getWidth();
+            int height = image.getHeight();
+            int minX = width;
+            int minY = height;
+            int maxX = -1;
+            int maxY = -1;
+
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    int argb = image.getPixel(x, y);
+                    int alpha = (argb >>> 24) & 0xFF;
+                    if (alpha <= 8) continue;
+                    minX = Math.min(minX, x);
+                    minY = Math.min(minY, y);
+                    maxX = Math.max(maxX, x);
+                    maxY = Math.max(maxY, y);
+                }
+            }
+
+            if (maxX < minX || maxY < minY) {
+                return new int[]{0, 0, width, height};
+            }
+            return new int[]{minX, minY, maxX - minX + 1, maxY - minY + 1};
+        }
+
         private void register(NativeImage image, int decodedWidth, int decodedHeight) {
             Identifier id = textureId(key);
             DynamicTexture texture = null;
+            int[] visible = visibleBounds(image);
             try {
                 texture = new DynamicTexture(() -> "NSM Wiki image " + source.displayName(), image);
                 Minecraft.getInstance().getTextureManager().register(id, texture);
@@ -252,6 +295,10 @@ public final class WikiImageTextureCache {
                 identifier = id;
                 width = decodedWidth;
                 height = decodedHeight;
+                contentX = visible[0];
+                contentY = visible[1];
+                contentWidth = visible[2];
+                contentHeight = visible[3];
                 error = "";
                 status = Status.READY;
             } catch (RuntimeException | LinkageError exception) {
@@ -272,7 +319,10 @@ public final class WikiImageTextureCache {
         }
 
         private Snapshot snapshot() {
-            return new Snapshot(status, identifier, width, height, error, credits);
+            return new Snapshot(status, identifier, width,
+                    contentX, contentY, contentWidth, contentHeight,
+                    height, error, credits
+            );
         }
 
         private void releaseTexture() {

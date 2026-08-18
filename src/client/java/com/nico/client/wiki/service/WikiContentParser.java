@@ -11,10 +11,7 @@ import org.jsoup.select.Elements;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /** Parses crafting grids, inventory slots, images, and rich cell/paragraph content. */
 abstract class WikiContentParser extends WikiServiceSupport {
@@ -167,7 +164,8 @@ abstract class WikiContentParser extends WikiServiceSupport {
                 && frame.tooltipTitle().isBlank()
                 && frame.tooltipText().isBlank()
                 && frame.stackSize().isBlank()
-                && frame.imageId().isBlank());
+                && frame.imageId().isBlank())
+                && frame.uiTarget().isBlank();
     }
 
     protected static WikiContent parseContent(Element element) {
@@ -195,7 +193,18 @@ abstract class WikiContentParser extends WikiServiceSupport {
             }
         }
 
-        List<WikiItemSlot> slots = new ArrayList<>(parseSlotsWithin(element));
+        List<WikiItemSlot> slots = new ArrayList<>();
+        for (Element slotElement : element.getElementsByClass(WikiHtmlContract.INVENTORY_SLOT)) {
+            if (nearestAncestorWithClass(slotElement, WikiHtmlContract.INVENTORY_SLOT) != null
+                    || nearestAncestorWithClass(slotElement, WikiHtmlContract.CRAFTING_TABLE) != null) {
+                continue;
+            }
+            WikiItemSlot parsedSlot = parseItemSlot(slotElement);
+            if (!parsedSlot.isEmpty() && !isInlineInventorySlot(slotElement)) {
+                slots.add(parsedSlot);
+            }
+        }
+
         List<WikiImage> images = new ArrayList<>();
         Set<String> imageUrls = new LinkedHashSet<>();
         for (Element image : element.select("img")) {
@@ -209,9 +218,10 @@ abstract class WikiContentParser extends WikiServiceSupport {
             }
 
             /*
-             * Inline Wiki icons belong to the text flow. parseStyledText keeps
-             * them as WikiText image spans, so do not duplicate them later as
-             * a standalone slot strip or article image.
+             * The Wiki uses ordinary linked <img> elements for many inline
+             * item/mob icons. Keep those in the rich text itself so they stay
+             * beside the words they belong to. Turning them into inventory
+             * slots moved them onto a new line and added the gray slot frame.
              */
             if (isInlineWikiIcon(image, parsed)) {
                 continue;
@@ -224,20 +234,18 @@ abstract class WikiContentParser extends WikiServiceSupport {
 
         Element textClone = element.clone();
         textClone.getElementsByClass(WikiHtmlContract.CRAFTING_TABLE).remove();
-        textClone.select("figure").remove();
 
-        /* Keep inventory slots that are embedded inside prose; remove only
-         * block-level slot widgets so they still render in the slot strip. */
-        for (Element slot : new ArrayList<>(textClone.getElementsByClass(WikiHtmlContract.INVENTORY_SLOT))) {
-            if (!isProseInlineSlot(slot)) {
-                slot.remove();
+        for (Element slotElement : new ArrayList<>(
+            textClone.getElementsByClass(WikiHtmlContract.INVENTORY_SLOT)
+        )) {
+            if (!isInlineInventorySlot(slotElement)) {
+                slotElement.remove();
             }
         }
-
-        /* Keep only inline <img> elements in the text clone. */
+        textClone.select("figure").remove();
         for (Element image : new ArrayList<>(textClone.select("img"))) {
             WikiImage parsed = parseImage(image);
-            if (!isInlineWikiIcon(image, parsed)) {
+            if (parsed.isEmpty() || !isInlineWikiIcon(image, parsed)) {
                 image.remove();
             }
         }
@@ -269,58 +277,46 @@ abstract class WikiContentParser extends WikiServiceSupport {
     }
 
     protected static boolean isInlineWikiIcon(Element image, WikiImage parsed) {
+        if (hasAncestorClass(image, WikiHtmlContract.MESSAGEBOX_IMAGE)
+                || hasAncestorClass(image, WikiHtmlContract.MBOX_IMAGE)
+                || hasAncestorClass(image, WikiHtmlContract.DARK_MESSAGEBOX_IMAGE)
+                || hasAncestorClass(image, WikiHtmlContract.INFOBOX_IMAGE_CONTAINER)) {
+            return false;
+        }
         int width = parsed.declaredWidth();
         int height = parsed.declaredHeight();
-
-        /*
-         * A surprising amount of MediaWiki markup omits width/height on the
-         * actual <img> and only puts the dimensions in the thumbnail URL or
-         * surrounding link. Requiring declared dimensions therefore turned
-         * small in-line item/mob icons into full article images.
-         */
-        boolean hasDeclaredSize = width > 0 && height > 0;
-        boolean smallDeclaredImage = hasDeclaredSize && width <= 128 && height <= 128;
+        boolean smallDeclaredImage = width > 0 && height > 0 && width <= 96 && height <= 96;
         boolean linked = nearestAncestorTag(image, "a") != null;
         boolean inlineParent = image.parent() != null
                 && (image.parent().tagName().equals("a")
                 || image.parent().tagName().equals("span")
-                || image.parent().tagName().equals("p")
-                || image.parent().tagName().equals("li")
-                || image.parent().tagName().equals("dd")
-                || image.parent().tagName().equals("dt"));
-        boolean insideTextContainer = nearestAncestorTag(image, "p") != null
-                || nearestAncestorTag(image, "li") != null
-                || nearestAncestorTag(image, "dd") != null
-                || nearestAncestorTag(image, "dt") != null;
-
-        // Missing dimensions are common for inline icons, but not for figures.
-        boolean likelyInlineWithoutSize = !hasDeclaredSize
-                && (linked || inlineParent)
-                && insideTextContainer
-                && nearestAncestorTag(image, "figure") == null;
-
-        return (smallDeclaredImage && (linked || inlineParent || insideTextContainer))
-                || likelyInlineWithoutSize;
-    }
-
-    protected static boolean isInlineTextElement(Element element) {
-        return nearestAncestorTag(element, "p") != null
-                || nearestAncestorTag(element, "li") != null
-                || nearestAncestorTag(element, "dd") != null
-                || nearestAncestorTag(element, "dt") != null
-                || nearestAncestorTag(element, "td") != null
-                || nearestAncestorTag(element, "th") != null;
+                || image.parent().tagName().equals("p"));
+        return smallDeclaredImage && (linked || inlineParent);
     }
 
     /**
-     * Inventory slots inside prose are inline icons. Slots in table cells are
-     * real Minecraft-style item boxes and must stay in WikiContent.itemSlots.
+     * Item-link templates sometimes use a tiny .invslot directly inside a
+     * paragraph/list item. Those are inline icons, not standalone inventory
+     * widgets. Keep real table/crafting/infobox slot widgets unchanged.
      */
-    protected static boolean isProseInlineSlot(Element element) {
-        return nearestAncestorTag(element, "p") != null
-                || nearestAncestorTag(element, "li") != null
-                || nearestAncestorTag(element, "dd") != null
-                || nearestAncestorTag(element, "dt") != null;
+    protected static boolean isInlineInventorySlot(Element slot) {
+        if (slot == null
+                || nearestAncestorWithClass(slot, WikiHtmlContract.CRAFTING_TABLE) != null
+                || nearestAncestorWithClass(slot, WikiHtmlContract.INFOBOX) != null) {
+            return false;
+        }
+        Element current = slot.parent();
+        while (current != null) {
+            String tag = current.tagName();
+            if (tag.equals("p") || tag.equals("li") || tag.equals("dd") || tag.equals("dt")) {
+                return true;
+            }
+            if (tag.equals("td") || tag.equals("th") || tag.equals("table")) {
+                return false;
+            }
+            current = current.parent();
+        }
+        return false;
     }
 
     protected static String craftingKey(WikiCraftingGrid grid) {
@@ -339,8 +335,7 @@ abstract class WikiContentParser extends WikiServiceSupport {
         List<WikiItemSlot> result = new ArrayList<>();
         for (Element slot : container.getElementsByClass(WikiHtmlContract.INVENTORY_SLOT)) {
             if (nearestAncestorWithClass(slot, WikiHtmlContract.INVENTORY_SLOT) != null
-                    || nearestAncestorWithClass(slot, WikiHtmlContract.CRAFTING_TABLE) != null
-                    || isProseInlineSlot(slot)) {
+                    || nearestAncestorWithClass(slot, WikiHtmlContract.CRAFTING_TABLE) != null) {
                 continue;
             }
             WikiItemSlot parsed = parseItemSlot(slot);
@@ -353,6 +348,10 @@ abstract class WikiContentParser extends WikiServiceSupport {
 
     protected static WikiItemSlot parseItemSlot(Element slot) {
         List<WikiItemSlot.Frame> frames = new ArrayList<>();
+        Element uiOwner = nearestAncestorWithAttribute(slot, WikiHtmlContract.UI_GROUP_ATTRIBUTE);
+        String uiGroupKey = uiOwner == null
+                ? ""
+                : uiOwner.attr(WikiHtmlContract.UI_GROUP_ATTRIBUTE).trim();
         Elements frameElements = slot.getElementsByClass(WikiHtmlContract.INVENTORY_SLOT_ITEM);
         if (frameElements.isEmpty()) {
             frameElements = new Elements(slot);
@@ -367,6 +366,7 @@ abstract class WikiContentParser extends WikiServiceSupport {
             Element imageElement = frameElement.getElementsByClass(
                     WikiHtmlContract.INVENTORY_SLOT_ITEM_IMAGE
             ).first();
+
             if (imageElement != null && !imageElement.tagName().equals("img")) {
                 imageElement = imageElement.selectFirst("img");
             }
@@ -407,14 +407,28 @@ abstract class WikiContentParser extends WikiServiceSupport {
                     WikiHtmlContract.INVENTORY_SLOT_STACK_SIZE
             ).first();
 
+            String uiTarget = firstUiTarget(slot, frameElement);
+            String link = anchor == null ? "" : absoluteUrl(anchor, "href");
+
+            // A goto-* class is the real action for SkyBlock UI controls. The
+            // nested image often has its own MediaWiki File: link; that must
+            // never override the UI action.
+            if (!uiTarget.isBlank()) {
+                link = "";
+            } else if (isInventoryImageLink(link)) {
+                link = "";
+            }
+
             WikiItemSlot.Frame frame = new WikiItemSlot.Frame(
                     image,
                     itemName,
-                    anchor == null ? "" : absoluteUrl(anchor, "href"),
+                    link,
                     mineTipTitle,
                     mineTipText,
                     stackSize == null ? "" : stackSize.text().trim(),
-                    imageId
+                    imageId,
+                    uiGroupKey,
+                    uiTarget
             );
 
             boolean meaningful = !isEmptyFrame(frame);
@@ -428,6 +442,35 @@ abstract class WikiContentParser extends WikiServiceSupport {
             }
         }
         return new WikiItemSlot(frames, active, slot.hasClass(WikiHtmlContract.INVENTORY_SLOT_LARGE));
+    }
+
+    protected static String firstUiTarget(Element... elements) {
+        if (elements == null) return "";
+        for (Element element : elements) {
+            if (element == null) continue;
+
+            // Module:Inventory slot normally puts goto-* on the outer invslot,
+            // but other UI helpers can put it on a nested wrapper. Search the
+            // supplied element and its descendants so both forms work.
+            for (Element candidate : element.getAllElements()) {
+                for (String className : candidate.classNames()) {
+                    if (className.startsWith(WikiHtmlContract.UI_GOTO_PREFIX)
+                            && className.length() > WikiHtmlContract.UI_GOTO_PREFIX.length()) {
+                        return className.substring(WikiHtmlContract.UI_GOTO_PREFIX.length()).trim();
+                    }
+                }
+            }
+        }
+        return "";
+    }
+
+    protected static boolean isInventoryImageLink(String link) {
+        if (link == null || link.isBlank()) return false;
+        String lower = link.toLowerCase(Locale.ROOT);
+        return lower.contains("/images/")
+                || lower.contains("/w/file:")
+                || lower.contains("/wiki/file:")
+                || lower.contains("special:redirect/file");
     }
 
     protected static WikiImage deriveDefaultItemImage(String itemName) {
@@ -483,13 +526,38 @@ abstract class WikiContentParser extends WikiServiceSupport {
 
 
     protected static WikiImage parseImage(Element image) {
-        return parseWikiImage(image);
+        String url = firstNonBlank(
+                image.attr("data-src"),
+                image.attr("data-lazy-src"),
+                image.attr("src")
+        );
+        if (url.isBlank()) {
+            url = firstSrcSetUrl(firstNonBlank(
+                    image.attr("data-srcset"),
+                    image.attr("srcset")
+            ));
+        }
+        url = normalizeImageUrl(image, url);
+
+        int width = parsePositiveInt(firstNonBlank(
+                image.attr("width"),
+                image.attr("data-file-width")
+        ), 0);
+        int height = parsePositiveInt(firstNonBlank(
+                image.attr("height"),
+                image.attr("data-file-height")
+        ), 0);
+
+        return new WikiImage(url, image.attr("alt"), image.attr("title"), width, height);
     }
 
-    protected static String bestSrcSetUrl(String srcSet) {
-        return bestImageCandidate(srcSet);
+    protected static String firstSrcSetUrl(String srcSet) {
+        if (srcSet == null || srcSet.isBlank()) {
+            return "";
+        }
+        String first = srcSet.split(",", 2)[0].trim();
+        int whitespace = first.indexOf(' ');
+        return whitespace < 0 ? first : first.substring(0, whitespace).trim();
     }
-
-
 
 }

@@ -37,6 +37,18 @@ abstract class WikiScreenInput extends WikiScreenInteractionRenderer {
             }
         }
 
+        // Browser/content hitboxes are rebuilt independently from vanilla widgets.
+        // Give the toolbar field first chance at left clicks so a page link or
+        // image hitbox can never make the address bar appear read-only.
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
+            int toolbarY = HEADER_HEIGHT + BROWSER_TAB_HEIGHT + 3;
+            int fieldWidth = findBarVisible ? toolbarFindWidth : toolbarAddressWidth;
+            if (event.x() >= toolbarAddressX && event.x() < toolbarAddressX + fieldWidth
+                    && event.y() >= toolbarY && event.y() < toolbarY + 19) {
+                return super.mouseClicked(event, doubled);
+            }
+        }
+
         if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT) {
             Optional<LinkTarget> target = linkTargetAt(event.x(), event.y());
             if (target.isPresent()) {
@@ -48,8 +60,8 @@ abstract class WikiScreenInput extends WikiScreenInteractionRenderer {
         if (event.button() == InputConstants.MOUSE_BUTTON_MIDDLE) {
             Optional<LinkTarget> target = linkTargetAt(event.x(), event.y());
             if (target.isPresent()) {
-                openResolvedUri(
-                        target.get().uri(),
+                openLinkTarget(
+                        target.get(),
                         target.get().isImage() ? OpenDisposition.EXTERNAL : OpenDisposition.NEW_TAB
                 );
                 return true;
@@ -142,6 +154,29 @@ abstract class WikiScreenInput extends WikiScreenInteractionRenderer {
                     return true;
                 }
 
+                // Inventory UI controls own their item-image area.
+                for (int index = slotHitboxes.size() - 1; index >= 0; index--) {
+                    SlotHitbox hitbox = slotHitboxes.get(index);
+                    if (!hitbox.contains(event.x(), event.y())) continue;
+
+                    if (!hitbox.frame().uiTarget().isBlank()
+                            && activateUiTarget(hitbox.frame().uiGroupKey(), hitbox.frame().uiTarget())) {
+                        return true;
+                    }
+
+                    if (!hitbox.frame().link().isBlank()) {
+                        openLink(
+                                hitbox.frame().link(),
+                                control ? OpenDisposition.NEW_TAB : OpenDisposition.CURRENT_TAB
+                        );
+                        return true;
+                    }
+
+                    // It is still a slot even if it has no action. Swallow the
+                    // click so the nested item image cannot open a File: page.
+                    return true;
+                }
+
                 for (int index = imageHitboxes.size() - 1; index >= 0; index--) {
                     ImageHitbox hitbox = imageHitboxes.get(index);
                     if (!hitbox.contains(event.x(), event.y())) {
@@ -149,15 +184,7 @@ abstract class WikiScreenInput extends WikiScreenInteractionRenderer {
                     }
                     Optional<LinkTarget> target = linkTargetAt(event.x(), event.y());
                     if (target.isPresent() && target.get().isImage()) {
-                        openResolvedUri(target.get().uri(), OpenDisposition.EXTERNAL);
-                        return true;
-                    }
-                }
-
-                for (int index = slotHitboxes.size() - 1; index >= 0; index--) {
-                    SlotHitbox hitbox = slotHitboxes.get(index);
-                    if (hitbox.contains(event.x(), event.y()) && !hitbox.frame().link().isBlank()) {
-                        openLink(hitbox.frame().link(), control ? OpenDisposition.NEW_TAB : OpenDisposition.CURRENT_TAB);
+                        openLinkTarget(target.get(), OpenDisposition.EXTERNAL);
                         return true;
                     }
                 }

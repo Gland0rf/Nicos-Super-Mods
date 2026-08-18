@@ -5,7 +5,7 @@ import com.nico.client.inventoryLayouts.core.InventoryLayout;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutSlot;
 import com.nico.client.inventoryLayouts.storage.SkyblockItemIdentity;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
@@ -50,10 +50,10 @@ public class InventoryLayoutRenderUtil {
         return fallback.isEmpty() ? ItemStack.EMPTY : fallback;
     }
 
-    public static void renderGhostItem(GuiGraphics graphics, ItemStack stack, int x, int y) {
+    public static void renderGhostItem(GuiGraphicsExtractor graphics, ItemStack stack, int x, int y) {
         if (stack == null || stack.isEmpty()) return;
 
-        graphics.renderItem(stack, x, y);
+        graphics.item(stack, x, y);
 
         graphics.fill(
                 x + 1,
@@ -65,7 +65,7 @@ public class InventoryLayoutRenderUtil {
     }
 
     public static void drawBorder(
-            GuiGraphics graphics,
+            GuiGraphicsExtractor graphics,
             int x,
             int y,
             int width,
@@ -78,9 +78,9 @@ public class InventoryLayoutRenderUtil {
         graphics.fill(x + width - 1, y, x + width, y + height, color);
     }
 
-    public static void drawMissingMarker(GuiGraphics graphics, int x, int y) {
+    public static void drawMissingMarker(GuiGraphicsExtractor graphics, int x, int y) {
         Minecraft minecraft = Minecraft.getInstance();
-        graphics.drawCenteredString(
+        graphics.centeredText(
                 minecraft.font,
                 "?",
                 x + 8,

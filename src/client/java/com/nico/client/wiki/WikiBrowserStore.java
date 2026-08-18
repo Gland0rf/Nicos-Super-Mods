@@ -13,6 +13,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
 
+/**
+ * Persists browser-only preferences and bookmarks in the Minecraft config directoy.
+ *
+ * <p>The store is lazy-loaded and synchronized because screen callbacks and asynchronous
+ * page work can touch the same process-wide instance.</p>
+ */
 public final class WikiBrowserStore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final WikiBrowserStore INSTANCE = new WikiBrowserStore();
