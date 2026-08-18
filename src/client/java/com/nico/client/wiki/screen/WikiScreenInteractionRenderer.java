@@ -224,7 +224,10 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
         List<MutableComponent> result = new ArrayList<>();
         result.add(Component.literal(credits.displayTitle(fallbackTitle)).withStyle(ChatFormatting.AQUA));
 
-        if (!credits.metadataAvailable()
+        if (snapshot != null && snapshot.status() == WikiImageTextureCache.Status.LICENSE_RESTRICTED) {
+            result.add(Component.literal("This image is protected by its license.").withStyle(ChatFormatting.GRAY));
+            result.add(Component.literal("License: " + credits.licenseLabel()).withStyle(ChatFormatting.GRAY));
+        } else if (!credits.metadataAvailable()
                 && snapshot != null
                 && snapshot.status() == WikiImageTextureCache.Status.LOADING) {
             result.add(Component.literal("Loading file license metadata...").withStyle(ChatFormatting.GRAY));
@@ -236,7 +239,7 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
         if (!creator.isBlank()) {
             result.add(Component.literal("Creator / credit: " + creator).withStyle(ChatFormatting.GRAY));
         }
-        result.add(Component.literal("Right-click for source and attribution").withStyle(ChatFormatting.DARK_GRAY));
+        result.add(Component.literal("Click to open source; right-click for attribution").withStyle(ChatFormatting.DARK_GRAY));
         return result;
     }
 

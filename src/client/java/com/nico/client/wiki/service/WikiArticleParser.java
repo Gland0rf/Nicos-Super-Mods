@@ -13,6 +13,7 @@ import com.nico.client.wiki.WikiText;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -42,11 +43,8 @@ abstract class WikiArticleParser extends WikiWidgetParser {
         Element workingRoot = articleRoot.clone();
         removeIgnoredElements(workingRoot);
 
-        WikiInfobox infobox = parseInfobox(workingRoot);
-        Element infoboxElement = workingRoot.getElementsByClass(WikiHtmlContract.INFOBOX).first();
-        if (infoboxElement != null) {
-            infoboxElement.remove();
-        }
+        WikiInfobox infobox = parseInfoboxes(workingRoot);
+        workingRoot.getElementsByClass(WikiHtmlContract.INFOBOX).remove();
 
         List<WikiBlock> blocks = new ArrayList<>();
         appendChildrenAsBlocks(workingRoot, blocks, 0);
@@ -59,17 +57,37 @@ abstract class WikiArticleParser extends WikiWidgetParser {
         return new WikiPage(title, "Hypixel SkyBlock Wiki", pageUri, revisionId, infobox, blocks);
     }
 
-    protected static WikiInfobox parseInfobox(Element articleRoot) {
-        Element root = articleRoot.getElementsByClass(WikiHtmlContract.INFOBOX).first();
-        if (root == null) {
+    /**
+     * Parse every top-level infobox on the page. Some articles deliberately
+     * place multiple infoboxes next to each other; treating only the first one
+     * as an infobox would let the others fall through into normal article
+     * parsing and turn their internal icons into standalone content.
+     */
+    protected static WikiInfobox parseInfoboxes(Element articleRoot) {
+        List<Element> roots = new ArrayList<>();
+        for (Element candidate : articleRoot.getElementsByClass(WikiHtmlContract.INFOBOX)) {
+            if (nearestAncestorWithClass(candidate, WikiHtmlContract.INFOBOX) == null) {
+                roots.add(candidate);
+            }
+        }
+        if (roots.isEmpty()) {
             return WikiInfobox.empty();
         }
 
-        Element titleElement = root.getElementsByClass(WikiHtmlContract.INFOBOX_TITLE).first();
-        String title = titleElement == null ? "" : titleElement.text().trim();
+        String title = "";
         List<WikiInfobox.Entry> entries = new ArrayList<>();
-        walkInfobox(root, entries);
-        entries = new ArrayList<>(removeUnsupportedDynamicPriceEntries(entries));
+        for (Element root : roots) {
+            Element titleElement = root.getElementsByClass(WikiHtmlContract.INFOBOX_TITLE).first();
+            String rootTitle = titleElement == null ? "" : titleElement.text().trim();
+            if (title.isBlank()) title = rootTitle;
+            else if (!rootTitle.isBlank() && !rootTitle.equalsIgnoreCase(title)) {
+                entries.add(new WikiInfobox.Header(WikiText.plain(rootTitle)));
+            }
+
+            List<WikiInfobox.Entry> rootEntries = new ArrayList<>();
+            walkInfobox(root, rootEntries);
+            entries.addAll(removeUnsupportedDynamicPriceEntries(rootEntries));
+        }
 
         WikiInfobox result = new WikiInfobox(title, entries);
         if (result.isEmpty() && DEBUG) {
@@ -186,11 +204,63 @@ abstract class WikiArticleParser extends WikiWidgetParser {
                 continue;
             }
             if (child.hasClass(WikiHtmlContract.INFOBOX_ROW_CONTAINER)) {
-                entries.addAll(parseInfoboxRows(child));
+                parseInfoboxRowContainer(child, entries);
                 continue;
             }
             walkInfobox(child, entries);
         }
+    }
+
+    /**
+     * Parses an infobox data row while preserving image-only rows.
+     *
+     * <p>The Wiki's infobox image helper currently emits ordinary images via
+     * an unlabeled {@code .infobox-row-value} instead of the older
+     * {@code .infobox-image-container} markup. Those rows therefore need to
+     * be promoted to {@link WikiInfobox.Image} entries before the normal
+     * label/value row parser runs.</p>
+     */
+    protected static void parseInfoboxRowContainer(Element rowContainer, List<WikiInfobox.Entry> entries) {
+        Elements labels = rowContainer.getElementsByClass(WikiHtmlContract.INFOBOX_ROW_LABEL);
+        Elements values = rowContainer.getElementsByClass(WikiHtmlContract.INFOBOX_ROW_VALUE);
+
+        if (labels.isEmpty() && values.size() == 1) {
+            Element value = values.get(0);
+            Element imageElement = selectInfoboxThumbnail(value);
+
+            if (imageElement != null) {
+                WikiImage image = parseImage(imageElement);
+                Element captionElement = value.getElementsByClass(WikiHtmlContract.INFOBOX_INLINE_IMAGE_CAPTION).first();
+                WikiText caption = captionElement == null ? WikiText.empty() : parseStyledText(captionElement);
+                if (!image.isEmpty() || !caption.isBlank()) {
+                    entries.add(new WikiInfobox.Image(image, caption));
+                    return;
+                }
+            }
+        }
+
+        entries.addAll(parseInfoboxRows(rowContainer));
+    }
+
+    /**
+     * Finds the image produced by the Wiki's infobox image helper.
+     *
+     * <p>MediaWiki 1.40+ applies the {@code class=} file option to the wrapper
+     * around the image instead of directly to the {@code <img>} element. Keep
+     * the older form as a fallback so the parser works with either DOM shape.</p>
+     */
+    private static Element selectInfoboxThumbnail(Element value) {
+        String thumbnailClass = WikiHtmlContract.INFOBOX_IMAGE_THUMBNAIL;
+
+        Element image = value.selectFirst(
+                ".animated-active ." + thumbnailClass + " img, "
+                        + ".animated-active img." + thumbnailClass
+        );
+        if (image != null) return image;
+
+        return value.selectFirst(
+                "." + thumbnailClass + " img, img." + thumbnailClass
+        );
     }
 
     protected static void parseInfoboxPanel(Element panel, List<WikiInfobox.Entry> entries) {

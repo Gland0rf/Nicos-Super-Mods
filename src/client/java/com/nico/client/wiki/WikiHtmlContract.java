@@ -38,6 +38,8 @@ public final class WikiHtmlContract {
     public static final String INFOBOX_IMAGE_CONTAINER = "infobox-image-container";
     public static final String INFOBOX_IMAGE = "infobox-image";
     public static final String INFOBOX_IMAGE_CAPTION = "infobox-image-caption";
+    public static final String INFOBOX_IMAGE_THUMBNAIL = "pi-image-thumbnail";
+    public static final String INFOBOX_INLINE_IMAGE_CAPTION = "pi-caption";
 
     public static final String CRAFTING_ROOT = "mcui";
     public static final String CRAFTING_TABLE = "mcui-Crafting_Table";

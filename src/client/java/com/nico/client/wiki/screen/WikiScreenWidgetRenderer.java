@@ -702,6 +702,10 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
         imageHitboxes.add(new ImageHitbox(x, y, maxWidth, maxHeight, image));
         WikiImageTextureCache.Snapshot snapshot = WikiImageTextureCache.request(image);
         if (!snapshot.ready()) {
+            if (snapshot.status() == WikiImageTextureCache.Status.LICENSE_RESTRICTED) {
+                drawLicenseProtectionImageMessage(graphics, x, y, maxWidth, maxHeight);
+                return false;
+            }
             String message = snapshot.status() == WikiImageTextureCache.Status.FAILED
                     ? (snapshot.error().isBlank() ? "Image failed" : snapshot.error())
                     : "Loading image...";
@@ -750,6 +754,52 @@ abstract class WikiScreenWidgetRenderer extends WikiScreenRenderer {
                 snapshot.height()
         );
         return true;
+    }
+
+    protected void drawLicenseProtectionImageMessage(GuiGraphicsExtractor graphics, int x, int y, int width, int height) {
+        if (width < 70 || height < LINE_HEIGHT * 3) {
+            int compactWidth = Math.max(1, width - 4);
+            String compactMessage = font.width("Open source") <= compactWidth
+                    ? "Open source"
+                    : font.width("Source") <= compactWidth ? "Source" : "Src";
+            graphics.centeredText(font, compactMessage, x + width / 2, y + height / 2 - 4, LINK);
+            return;
+        }
+
+        int textWidth = Math.max(8, width - 8);
+        String protectedText = width < 110
+                ? "License protected"
+                : "This image is protected by its license.";
+        String sourceText = width < 110
+                ? "Open source"
+                : "Click to open the source.";
+        List<FormattedCharSequence> protectedLines = font.split(Component.literal(protectedText), textWidth);
+        List<FormattedCharSequence> sourceLines = font.split(Component.literal(sourceText), textWidth);
+
+        int lineCount = protectedLines.size() + sourceLines.size();
+        int availableLines = Math.max(1, (height - 6) / LINE_HEIGHT);
+        if (lineCount > availableLines) {
+            String compactMessage = font.width("Open source") <= textWidth ? "Open source" : "Source";
+            graphics.centeredText(font, compactMessage, x + width / 2, y + height / 2 - 4, LINK);
+            return;
+        }
+
+        int gap = protectedLines.isEmpty() || sourceLines.isEmpty() ? 0 : 2;
+        int contentHeight = lineCount * LINE_HEIGHT + gap;
+        int lineY = y + Math.max(3, (height - contentHeight) / 2);
+
+        for (FormattedCharSequence line : protectedLines) {
+            int lineX = x + Math.max(0, (width - font.width(line)) / 2);
+            graphics.text(font, line, lineX, lineY, MUTED, false);
+            lineY += LINE_HEIGHT;
+        }
+
+        lineY += gap;
+        for (FormattedCharSequence line : sourceLines) {
+            int lineX = x + Math.max(0, (width - font.width(line)) / 2);
+            graphics.text(font, line, lineX, lineY, LINK, false);
+            lineY += LINE_HEIGHT;
+        }
     }
 
     protected void drawSlot(GuiGraphicsExtractor graphics, int x, int y, int size, WikiItemSlot slot) {

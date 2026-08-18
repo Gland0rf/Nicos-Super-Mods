@@ -16,12 +16,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Resolves a MediaWiki file title to the original file URL via prop=imageinfo. */
+/** Resolves a MediaWiki file title, original URL, and file-specific attribution metadata. */
 final class WikiImageInfoResolver {
     private static final String API = "https://hypixelskyblock.minecraft.wiki/api.php";
     private static final String FILE_PAGE_BASE = "https://hypixelskyblock.minecraft.wiki/w/";
@@ -71,8 +72,9 @@ final class WikiImageInfoResolver {
                 + "?action=query"
                 + "&format=json"
                 + "&formatversion=2"
-                + "&prop=imageinfo"
+                + "&prop=imageinfo%7Ctemplates"
                 + "&iiprop=url%7Cmime%7Csize%7Cextmetadata"
+                + "&tllimit=max"
                 + "&titles=" + URLEncoder.encode(fileTitle, StandardCharsets.UTF_8);
 
         HttpRequest request = WikiHttp.request(URI.create(uri), Duration.ofSeconds(20))
@@ -131,19 +133,24 @@ final class WikiImageInfoResolver {
         JsonObject metadata = info.has("extmetadata") && info.get("extmetadata").isJsonObject()
                 ? info.getAsJsonObject("extmetadata")
                 : null;
+        String templateLicense = templateLicense(page);
+        String licenseShortName = mergeLicenseEvidence(
+                metadataText(metadata, "LicenseShortName"),
+                templateLicense
+        );
 
         WikiImageCredits credits = new WikiImageCredits(
                 fileTitle,
                 filePageUrl,
                 url,
-                metadataText(metadata, "LicenseShortName"),
+                licenseShortName,
                 metadataUrl(metadata, "LicenseUrl"),
                 metadataText(metadata, "Artist"),
                 metadataText(metadata, "Credit"),
                 metadataText(metadata, "UsageTerms"),
                 metadataText(metadata, "Attribution"),
                 metadataText(metadata, "Source"),
-                metadata != null
+                metadata != null || !templateLicense.isBlank()
         );
 
         return new ResolvedImage(
@@ -252,6 +259,71 @@ final class WikiImageInfoResolver {
             return "";
         }
         return string(metadata.getAsJsonObject(key), "value");
+    }
+
+    /**
+     * Reads the Wiki's file-license templates as supplemental license evidence.
+     *
+     * <p>Some SkyBlock Wiki files do not expose a useful LicenseShortName through
+     * extmetadata, while others combine a general site license with third-party
+     * ownership notices. Keeping every relevant template prevents an open-looking
+     * label from accidentally hiding a more restrictive second notice.</p>
+     */
+    private static String templateLicense(JsonObject page) {
+        if (page == null || !page.has("templates") || !page.get("templates").isJsonArray()) {
+            return "";
+        }
+
+        LinkedHashSet<String> labels = new LinkedHashSet<>();
+        for (JsonElement element : page.getAsJsonArray("templates")) {
+            if (!element.isJsonObject()) continue;
+
+            String title = string(element.getAsJsonObject(), "title");
+            if (!title.regionMatches(true, 0, "Template:License/", 0, 17)) continue;
+
+            String name = title.substring(17).replace('_', ' ').trim();
+            if (!name.isBlank()) {
+                labels.add(readableLicenseTemplate(name));
+            }
+        }
+        return String.join(" + ", labels);
+    }
+
+    private static String mergeLicenseEvidence(String metadataLicense, String templateLicense) {
+        String metadata = metadataLicense == null ? "" : metadataLicense.trim();
+        String templates = templateLicense == null ? "" : templateLicense.trim();
+        if (metadata.isBlank()) return templates;
+        if (templates.isBlank() || metadata.equalsIgnoreCase(templates)) return metadata;
+        return metadata + " + " + templates;
+    }
+
+    private static String readableLicenseTemplate(String name) {
+        String normalized = name.toLowerCase(Locale.ROOT)
+                .replace('-', ' ')
+                .replaceAll("\\s+", " ")
+                .trim();
+        return switch (normalized) {
+            case "cc by sa" -> "CC BY-SA";
+            case "cc by nc" -> "CC BY-NC";
+            case "cc by nc sa" -> "CC BY-NC-SA";
+            case "cc0" -> "CC0";
+            case "fairuse", "fair use", "nonfree", "non free" -> "Fair Use / non-free";
+            case "from wikimedia" -> "From Wikimedia (see file page)";
+            case "gpl" -> "GNU GPL";
+            case "own work" -> "Site License";
+            case "permission" -> "Used with permission";
+            case "publicdomain", "public domain" -> "Public Domain";
+            case "mojang" -> "Mojang Studios copyright";
+            case "own work (server)", "own work (minecraft)" ->
+                    "Site License + Mojang Studios copyright";
+            case "minecraft wiki" -> "CC BY-NC-SA (Minecraft Wiki)";
+            case "minecraft wiki (mojang)" ->
+                    "CC BY-NC-SA (Minecraft Wiki) + Mojang Studios copyright";
+            case "hypixel", "hypixel website" -> "Hypixel copyright";
+            case "skyblockresourcepack", "skyblock resource pack", "hypixel skyblock resource pack" ->
+                    "SkyBlockResourcePack";
+            default -> name;
+        };
     }
 
     private static String filePageUrl(String fileTitle) {

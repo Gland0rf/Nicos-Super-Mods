@@ -82,7 +82,7 @@ public final class WikiImageTextureCache {
         }
     }
 
-    public enum Status { EMPTY, LOADING, READY, FAILED }
+    public enum Status { EMPTY, LOADING, READY, LICENSE_RESTRICTED, FAILED }
 
     public record Snapshot(
             Status status,
@@ -138,7 +138,7 @@ public final class WikiImageTextureCache {
         }
 
         private synchronized void startIfNeeded() {
-            if (status == Status.LOADING || status == Status.READY) {
+            if (status == Status.LOADING || status == Status.READY || status == Status.LICENSE_RESTRICTED) {
                 return;
             }
             if (status == Status.FAILED && System.currentTimeMillis() - failedAt < RETRY_AFTER_MILLIS) {
@@ -154,6 +154,10 @@ public final class WikiImageTextureCache {
                 }
                 if (resolveFailure != null || resolved == null || resolved.url().isBlank()) {
                     fail(resolveFailure == null ? "Could not resolve original wiki image URL" : resolveFailure.getMessage());
+                    return;
+                }
+                if (!resolved.credits().permitsInGameDisplay()) {
+                    status = Status.LICENSE_RESTRICTED;
                     return;
                 }
                 download(resolved);
