@@ -39,7 +39,7 @@ public class ModCheckTitleButton {
 
                     button.active = ModCheckRuntime.report() != null;
 
-                    Screens.getButtons(screen).add(button);
+                    Screens.getWidgets(screen).add(button);
                 }
         );
     }

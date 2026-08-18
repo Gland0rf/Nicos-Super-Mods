@@ -1,6 +1,6 @@
 package com.nico.client.stacking;
 
-import com.nico.client.NsmClientCommands;
+import com.nico.client.init.NsmClientCommands;
 import com.nico.client.configuration.NsmConfig;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonState;

@@ -8,7 +8,7 @@ import com.nico.client.modcheck.scan.FindingStatus;
 import com.nico.client.modcheck.scan.ScanFinding;
 import com.nico.client.modcheck.scan.ScanReport;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -125,11 +125,11 @@ public final class ModCheckWarningScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float deltaTicks) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float deltaTicks) {
         graphics.fill(0, 0, this.width, this.height, 0xA0000000);
 
         int titleColor = report.criticalCount() > 0 ? COLOR_CRITICAL : COLOR_WARNING;
-        graphics.drawCenteredString(
+        graphics.centeredText(
                 this.font,
                 Component.literal(report.headline()),
                 this.width / 2,
@@ -181,7 +181,7 @@ public final class ModCheckWarningScreen extends Screen {
             contentY += 6;
         }
 
-        graphics.drawCenteredString(
+        graphics.centeredText(
                 this.font,
                 Component.literal(
                         "Critical: " + report.criticalCount()
@@ -239,7 +239,7 @@ public final class ModCheckWarningScreen extends Screen {
         for (ScanFinding finding : visible) {
             int color = finding.severity() == FindingSeverity.CRITICAL ? COLOR_CRITICAL : COLOR_WARNING;
 
-            graphics.drawString(
+            graphics.text(
                     this.font,
                     Component.literal(shorten(finding.fileName(), 46) + " - " + finding.status()),
                     24,
@@ -248,7 +248,7 @@ public final class ModCheckWarningScreen extends Screen {
             );
             y += 12;
 
-            graphics.drawString(
+            graphics.text(
                     this.font,
                     Component.literal(shorten(finding.detail(), 105)),
                     34,
@@ -267,7 +267,7 @@ public final class ModCheckWarningScreen extends Screen {
                     + actionableFindings.size()
                     + " - scroll for more";
 
-            graphics.drawString(
+            graphics.text(
                     this.font,
                     Component.literal(position),
                     this.width - this.font.width(position) - 16,
@@ -280,7 +280,7 @@ public final class ModCheckWarningScreen extends Screen {
                 .filter(finding -> finding.severity() != FindingSeverity.INFO)
                 .count() - visible.size();
         if (hidden > 0) {
-            graphics.drawString(
+            graphics.text(
                     this.font,
                     Component.literal("...and " + hidden + " more issue(s). Copy the report for full details."),
                     24,
@@ -292,7 +292,7 @@ public final class ModCheckWarningScreen extends Screen {
         String reportLocation = report.reportPath() == null
                 ? "Report file could not be written."
                 : "Report: " + report.reportPath();
-        graphics.drawCenteredString(
+        graphics.centeredText(
                 this.font,
                 Component.literal(shorten(reportLocation, Math.max(40, this.width / 6))),
                 this.width / 2,
@@ -300,7 +300,7 @@ public final class ModCheckWarningScreen extends Screen {
                 copied ? 0xFF55FF55 : COLOR_MUTED
         );
 
-        super.render(graphics, mouseX, mouseY, deltaTicks);
+        super.extractRenderState(graphics, mouseX, mouseY, deltaTicks);
     }
 
     @Override
@@ -328,7 +328,7 @@ public final class ModCheckWarningScreen extends Screen {
     }
 
     private int drawCenteredWrapped(
-            GuiGraphics graphics,
+            GuiGraphicsExtractor graphics,
             String text,
             int startY,
             int maximumWidth,
@@ -348,7 +348,7 @@ public final class ModCheckWarningScreen extends Screen {
             );
 
             for (FormattedCharSequence line : lines) {
-                graphics.drawCenteredString(
+                graphics.centeredText(
                         this.font,
                         line,
                         this.width / 2,

@@ -1,4 +1,4 @@
-package com.nico.client;
+package com.nico.client.init;
 
 import com.nico.client.configuration.NsmConfig;
 //import com.nico.client.goldor.GoldorTerminalHighlighter;
