@@ -16,6 +16,7 @@ import java.util.Map;
 public class HudLayoutManager {
     public static final String MINION_OUTPUT = "minion_output";
     public static final String LAG_MONITOR = "lag_monitor";
+    public static final String INVENTORY_LAYOUTS_BUTTON = "inventory_layouts_button";
 
     private static final Gson GSON =
             new GsonBuilder().setPrettyPrinting().create();
@@ -52,6 +53,16 @@ public class HudLayoutManager {
 
         lagMonitor.setMeasuredSize(94, 58);
         register(lagMonitor);
+
+        HudElement inventoryLayoutsButton = new HudElement(
+                INVENTORY_LAYOUTS_BUTTON,
+                "Inventory Layouts Button",
+                12,
+                138
+        );
+
+        inventoryLayoutsButton.setMeasuredSize(78, 20);
+        register(inventoryLayoutsButton);
     }
 
     private void register(HudElement element) {
