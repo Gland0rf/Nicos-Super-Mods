@@ -4,28 +4,22 @@ import com.google.gson.JsonObject;
 import com.nico.client.utils.BazaarService;
 import com.google.gson.JsonParser;
 import com.nico.client.wiki.*;
+import com.nico.client.wiki.service.auctionHouse.WikiAuctionHouseEnricher;
+import com.nico.client.wiki.service.auctionHouse.WikiAuctionHouseService;
+import com.nico.client.wiki.service.bazaar.WikiBazaarEnricher;
+import com.nico.client.wiki.service.bazaar.WikiBazaarService;
 import net.minecraft.world.item.ItemStack;
 import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.nodes.Node;
-import org.jsoup.nodes.TextNode;
-import org.jsoup.select.Elements;
 
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -63,6 +57,7 @@ public final class HypixelWikiService extends WikiArticleParser {
     }
 
     public static CompletableFuture<WikiPage> reloadPage(ItemStack itemStack) {
+        invalidateLivePriceCaches();
         SkyblockItemResolver.ItemIdentity identity = SkyblockItemResolver.resolveIdentity(itemStack);
         CACHE.remove(cacheKey(identity));
         return findPage(itemStack);
@@ -80,6 +75,7 @@ public final class HypixelWikiService extends WikiArticleParser {
     }
 
     public static CompletableFuture<WikiPage> reloadPage(String exactDisplayName) {
+        invalidateLivePriceCaches();
         SkyblockItemResolver.ItemIdentity identity = new SkyblockItemResolver.ItemIdentity("", exactDisplayName);
         CACHE.remove(cacheKey(identity));
         return findPage(exactDisplayName);
@@ -97,6 +93,10 @@ public final class HypixelWikiService extends WikiArticleParser {
                 .thenCompose(page -> WikiBazaarEnricher.enrich(page,
                         query.matches("[A-Z0-9_]{3,}") ? query : "",
                         bazaarService))
+                .thenCompose(page -> WikiAuctionHouseEnricher.enrich(
+                        page,
+                        query.matches("[A-Z0-9_]{3,}") ? query : ""
+                ))
                 .whenComplete((page, throwable) -> {
                     if (throwable != null) {
                         CACHE.remove(key);
@@ -105,6 +105,7 @@ public final class HypixelWikiService extends WikiArticleParser {
     }
 
     public static CompletableFuture<WikiPage> reloadPageQuery(String rawQuery) {
+        invalidateLivePriceCaches();
         String query = rawQuery == null ? "" : rawQuery.trim();
         CACHE.remove("query:" + query.toLowerCase(Locale.ROOT));
         return findPageQuery(query);
@@ -123,6 +124,7 @@ public final class HypixelWikiService extends WikiArticleParser {
 
         return CACHE.computeIfAbsent(key, ignored -> fetchParsedPage(resolved)
                 .thenCompose(page -> WikiBazaarEnricher.enrich(page, "", bazaarService))
+                .thenCompose(page -> WikiAuctionHouseEnricher.enrich(page, ""))
                 .whenComplete((page, throwable) -> {
                     if (throwable != null) {
                         CACHE.remove(key);
@@ -131,9 +133,16 @@ public final class HypixelWikiService extends WikiArticleParser {
     }
 
     public static CompletableFuture<WikiPage> reloadPage(URI articleUri) {
+        invalidateLivePriceCaches();
         String title = articleTitleFromUri(articleUri);
         CACHE.remove("wiki:" + title.toLowerCase(Locale.ROOT));
         return findPage(articleUri);
+    }
+
+
+    private static void invalidateLivePriceCaches() {
+        WikiAuctionHouseService.invalidate();
+        WikiBazaarService.invalidate();
     }
 
     public static boolean isWikiArticleUri(URI uri) {
@@ -181,7 +190,8 @@ public final class HypixelWikiService extends WikiArticleParser {
     private static CompletableFuture<WikiPage> resolveAndFetch(SkyblockItemResolver.ItemIdentity identity) {
         return WikiTitleResolver.resolve(identity)
                 .thenCompose(HypixelWikiService::fetchParsedPage)
-                .thenCompose(page -> WikiBazaarEnricher.enrich(page, identity.internalId(), bazaarService));
+                .thenCompose(page -> WikiBazaarEnricher.enrich(page, identity.internalId(), bazaarService))
+                .thenCompose(page -> WikiAuctionHouseEnricher.enrich(page, identity.internalId()));
     }
 
     private static CompletableFuture<WikiPage> fetchParsedPage(WikiTitleResolver.ResolvedWikiTitle resolved) {

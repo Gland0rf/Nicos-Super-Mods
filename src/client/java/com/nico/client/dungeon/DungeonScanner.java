@@ -6,10 +6,14 @@ import net.minecraft.world.level.Level;
 public final class DungeonScanner {
 
     private static final DungeonLayoutScanner LAYOUT = new DungeonLayoutScanner();
-
     private static final DungeonDoorScanner DOORS = new DungeonDoorScanner();
+    private static final DungeonRoomGeometry GEOMETRY = new DungeonRoomGeometry();
 
     private DungeonScanner() { }
+
+    public static DungeonLayoutScanner.Layout scan(Level level) {
+        return LAYOUT.scan(level);
+    }
 
     public static DungeonRoom getRoomForPlayer(Player player) {
         DungeonGrid.Tile tile = DungeonGrid.fromPlayer(player);
@@ -23,6 +27,14 @@ public final class DungeonScanner {
         if (room == null) return "Unknown";
 
         return room.name();
+    }
+
+    public static boolean isInDungeon(Player player) {
+        return getRoomForPlayer(player) != null;
+    }
+
+    public static DungeonRoomGeometry.Orientation getRoomOrientation(Level level, DungeonRoom room) {
+        return GEOMETRY.getOrientation(level, room);
     }
 
     public static boolean hasLockedWitherDoorForPlayer(Player player) {
