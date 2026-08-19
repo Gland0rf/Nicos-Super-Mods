@@ -2,9 +2,9 @@ package com.nico.client.bloodrush;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldExtractionContext;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionContext;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
@@ -24,12 +24,12 @@ public final class RouteRenderer {
     }
 
     public static void register(RouteEditor editor) {
-        WorldRenderEvents.END_EXTRACTION.register(context -> extract(context, editor));
-        WorldRenderEvents.BEFORE_DEBUG_RENDER.register(RouteRenderer::render);
+        LevelRenderEvents.END_EXTRACTION.register(context -> extract(context, editor));
+        LevelRenderEvents.BEFORE_GIZMOS.register(RouteRenderer::render);
     }
 
-    private static void extract(WorldExtractionContext context, RouteEditor editor) {
-        float partialTick = context.tickCounter().getGameTimeDeltaPartialTick(false);
+    private static void extract(LevelExtractionContext context, RouteEditor editor) {
+        float partialTick = context.deltaTracker().getGameTimeDeltaPartialTick(false);
 
         List<RouteEditor.DisplayRoute> routes =
                 editor.getDisplayRoutes(partialTick);
@@ -92,13 +92,13 @@ public final class RouteRenderer {
         preparedRoutes = List.copyOf(result);
     }
 
-    private static void render(WorldRenderContext context) {
+    private static void render(LevelRenderContext context) {
         if (preparedRoutes.isEmpty()) {
             return;
         }
 
-        PoseStack matrices = context.matrices();
-        MultiBufferSource consumers = context.consumers();
+            PoseStack matrices = context.poseStack();
+            MultiBufferSource consumers = context.bufferSource();
         if (matrices == null || consumers == null) {
             return;
         }

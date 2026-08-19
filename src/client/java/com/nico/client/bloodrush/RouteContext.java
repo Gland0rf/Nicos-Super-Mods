@@ -1,23 +1,16 @@
 package com.nico.client.bloodrush;
 
-import com.nico.OdinRoomBridge;
-import com.odtheking.odin.features.impl.dungeon.map.Door;
-import com.odtheking.odin.features.impl.dungeon.map.MapRoom;
-import com.odtheking.odin.features.impl.dungeon.map.MapScanner;
-import com.odtheking.odin.features.impl.dungeon.map.Vec2i;
-import com.odtheking.odin.utils.Vec2;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
-import com.odtheking.odin.utils.skyblock.dungeon.ScanUtils;
-import com.odtheking.odin.utils.skyblock.dungeon.tiles.Room;
-import com.odtheking.odin.utils.skyblock.dungeon.tiles.RoomType;
-import com.odtheking.odin.utils.skyblock.dungeon.tiles.Rotations;
+import com.nico.client.dungeon.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -29,17 +22,19 @@ import java.util.Optional;
  */
 public final class RouteContext implements RouteContextProvider {
 
-    private Room previousRoom;
-    private Door entranceDoor;
-
+    private static final DungeonDoorScanner DOORS = new DungeonDoorScanner();
     private static final Logger LOGGER = LoggerFactory.getLogger("NSM-BloodRush");
+
+    private DungeonRoom previousRoom;
+    private DungeonDoorScanner.Door entranceDoor;
 
     @Override
     public Optional<RouteLocation> currentRouteLocation() {
         Minecraft minecraft = Minecraft.getInstance();
         Player player = minecraft.player;
 
-        if (player == null) {
+        if (player == null || player.level() == null) {
+            reset();
             return Optional.empty();
         }
 
@@ -48,75 +43,41 @@ public final class RouteContext implements RouteContextProvider {
             return Optional.empty();
         }
 
-        Room room = OdinRoomBridge.getRoomForPlayer(player);
+        Level level = player.level();
+        DungeonLayoutScanner.Layout layout = DungeonScanner.scan(level);
+        DungeonRoom room = roomForPlayer(layout, player);
 
         if (room == null) {
             return Optional.empty();
         }
 
-        if (room.getData() == null) {
-            return Optional.empty();
-        }
-
-        if (room.getRotation() == Rotations.NONE) {
+        RoomInfo roomInfo = createRoomInfo(level, room);
+        if (roomInfo == null) {
             return Optional.empty();
         }
 
         try {
-            if (player.level() != null) {
-                MapScanner.INSTANCE.scan(player.level());
-            }
+            logDoorsForRoom(level, layout, room);
 
-            logDoorsForRoom(room, player);
-
-            updateEntrance(room, player);
+            updateEntrance(level, layout, room, player);
 
             if (entranceDoor == null) {
-                entranceDoor = findClosestDoor(
-                        room,
-                        player,
-                        null
-                );
+                entranceDoor = findClosestDoor(level, layout, room, player, null);
             }
 
             if (entranceDoor == null) {
                 return Optional.empty();
             }
 
-            Door exitDoor = findRushExitDoor(
-                    room,
-                    player,
-                    entranceDoor
-            );
-
-            if (exitDoor == null) {
+            DungeonDoorScanner.Door exitDoor = findRushExitDoor(level, layout, room, entranceDoor);
+            if (exitDoor == null || sameDoor(exitDoor, entranceDoor)) {
                 return Optional.empty();
             }
 
-            if (exitDoor == entranceDoor) {
-                return Optional.empty();
-            }
+            DoorId entrance = DoorId.fromWorld(entranceDoor.pos(), roomInfo);
+            DoorId exit = DoorId.fromWorld(exitDoor.pos(), roomInfo);
 
-            RoomInfo roomInfo = createRoomInfo(room);
-
-            DoorId entrance = DoorId.fromWorld(
-                    getDoorBlockPos(entranceDoor),
-                    roomInfo
-            );
-
-            DoorId exit = DoorId.fromWorld(
-                    getDoorBlockPos(exitDoor),
-                    roomInfo
-            );
-
-            return Optional.of(
-                    new RouteLocation(
-                            roomInfo,
-                            entrance,
-                            exit
-                    )
-            );
-
+            return Optional.of(new RouteLocation(roomInfo, entrance, exit));
         } catch (Throwable throwable) {
             return Optional.empty();
         }
@@ -124,13 +85,16 @@ public final class RouteContext implements RouteContextProvider {
 
     @Override
     public DungeonRole currentRole() {
-        if (!isInDungeon()) return null;
+        Minecraft minecraft = Minecraft.getInstance();
+        Player player = minecraft.player;
+
+        if (player == null || !isInDungeon()) return null;
 
         try {
-            var dungeonPlayer = DungeonUtils.INSTANCE.getCurrentDungeonPlayer();
-            if (dungeonPlayer == null || dungeonPlayer.getClazz() == null) return null;
+            String dungeonClass = DungeonTeammateScanner.getDungeonClassForPlayer(player);
+            if (dungeonClass == null) return null;
 
-            return switch (String.valueOf(dungeonPlayer.getClazz()).toLowerCase()) {
+            return switch (dungeonClass.toLowerCase(Locale.ROOT)) {
                 case "mage" -> DungeonRole.MAGE;
                 case "archer" -> DungeonRole.ARCHER;
                 case "healer" -> DungeonRole.HEALER;
@@ -148,47 +112,31 @@ public final class RouteContext implements RouteContextProvider {
         Minecraft minecraft = Minecraft.getInstance();
         Player player = minecraft.player;
 
-        if (player == null || !isInDungeon()) {
-            return Optional.empty();
-        }
-
-        Room room = OdinRoomBridge.getRoomForPlayer(player);
-
-        if (room == null
-                || room.getData() == null
-                || room.getRotation() == Rotations.NONE) {
+        if (player == null || player.level() == null || !isInDungeon()) {
             return Optional.empty();
         }
 
         try {
-            if (player.level() != null) {
-                MapScanner.INSTANCE.scan(player.level());
+            Level level = player.level();
+            DungeonLayoutScanner.Layout layout = DungeonScanner.scan(level);
+            DungeonRoom room = roomForPlayer(layout, player);
+            if (room == null) {
+                return Optional.empty();
             }
 
-            Door closestDoor = findClosestDoor(
-                    room,
-                    player,
-                    null
-            );
+            RoomInfo roomInfo = createRoomInfo(level, room);
+            if (roomInfo == null) {
+                return Optional.empty();
+            }
 
+            DungeonDoorScanner.Door closestDoor = findClosestDoor(level, layout, room, player, null);
             if (closestDoor == null) {
                 return Optional.empty();
             }
 
-            RoomInfo roomInfo = createRoomInfo(room);
+            DoorId doorId = DoorId.fromWorld(closestDoor.pos(), roomInfo);
 
-            DoorId doorId = DoorId.fromWorld(
-                    getDoorBlockPos(closestDoor),
-                    roomInfo
-            );
-
-            return Optional.of(
-                    new RouteSetupPosition(
-                            roomInfo,
-                            doorId
-                    )
-            );
-
+            return Optional.of(new RouteSetupPosition(roomInfo, doorId));
         } catch (Throwable throwable) {
             return Optional.empty();
         }
@@ -196,7 +144,8 @@ public final class RouteContext implements RouteContextProvider {
 
     @Override
     public boolean isInDungeon() {
-        return DungeonUtils.INSTANCE.getInDungeons();
+        Player player = Minecraft.getInstance().player;
+        return player != null && DungeonScanner.isInDungeon(player);
     }
 
     /**
@@ -204,31 +153,31 @@ public final class RouteContext implements RouteContextProvider {
      *
      * Priority:
      * 1. Normal connector into Fairy if Fairy's Wither door is still closed
-     * 2. Locked Wither door in the current room
-     * 3. Blood door
+     * 2. Blood door
+     * 3. Locked Wither door in the current room
      */
-    private static Door findRushExitDoor(
-            Room room,
-            Player player,
-            Door entrance
+    private static DungeonDoorScanner.Door findRushExitDoor(
+            Level level,
+            DungeonLayoutScanner.Layout layout,
+            DungeonRoom room,
+            DungeonDoorScanner.Door entrance
     ) {
-        Door fairy = findFairyConnector(room, player, entrance);
+        DungeonDoorScanner.Door fairy = findFairyConnector(level, layout, room, entrance);
 
         if (fairy != null) {
             return fairy;
         }
 
-        Door blood = findBloodConnector(room, entrance);
+        DungeonDoorScanner.Door blood = findBloodConnector(level, layout, room, entrance);
 
         if (blood != null) {
             return blood;
         }
 
-        for (Door door : MapScanner.INSTANCE.getDoors()) {
+        for (DungeonDoorScanner.Door door : DOORS.getDoorsForRoom(level, layout, room)) {
             if (sameDoor(door, entrance)) continue;
-            if (!OdinRoomBridge.doorTouchesScanRoom(door, room)) continue;
 
-            if (OdinRoomBridge.getDoorLocked(door, player)) {
+            if (DOORS.isClosedWitherDoor(level, door)) {
                 return door;
             }
         }
@@ -240,21 +189,19 @@ public final class RouteContext implements RouteContextProvider {
      * The door before Fairy is normal. If Fairy still has its locked Wither
      * door, that normal connector is the correct exit from the current room.
      */
-    private static Door findFairyConnector(
-            Room room,
-            Player player,
-            Door entrance
+    private static DungeonDoorScanner.Door findFairyConnector(
+            Level level,
+            DungeonLayoutScanner.Layout layout,
+            DungeonRoom room,
+            DungeonDoorScanner.Door entrance
     ) {
-        if (room.getData() != null
-                && room.getData().getType() == RoomType.FAIRY) {
-            return null;
-        }
+        if (room.type() == DungeonRoomData.Type.FAIRY) return null;
 
-        for (Door door : MapScanner.INSTANCE.getDoors()) {
+        for (DungeonDoorScanner.Door door : DOORS.getDoorsForRoom(level, layout, room)) {
             if (sameDoor(door, entrance)) continue;
-            if (!OdinRoomBridge.doorTouchesScanRoom(door, room)) continue;
 
-            if (OdinRoomBridge.doorLeadsToRoomType(door, room, RoomType.FAIRY)) {
+            DungeonRoom otherRoom = door.otherRoom();
+            if (otherRoom != null && otherRoom.type() == DungeonRoomData.Type.FAIRY) {
                 return door;
             }
         }
@@ -262,15 +209,19 @@ public final class RouteContext implements RouteContextProvider {
         return null;
     }
 
-    private static Door findBloodConnector(
-            Room room,
-            Door entrance
-    ) {
-        for (Door door : MapScanner.INSTANCE.getDoors()) {
-            if (sameDoor(door, entrance)) continue;
-            if (!OdinRoomBridge.doorTouchesScanRoom(door, room)) continue;
 
-            if (OdinRoomBridge.doorLeadsToRoomType(door, room, RoomType.BLOOD)) {
+    private static DungeonDoorScanner.Door findBloodConnector(
+            Level level,
+            DungeonLayoutScanner.Layout layout,
+            DungeonRoom room,
+            DungeonDoorScanner.Door entrance
+    ) {
+        for (DungeonDoorScanner.Door door : DOORS.getDoorsForRoom(level, layout, room)) {
+            if (sameDoor(door, entrance)) continue;
+
+            DungeonRoom otherRoom = door.otherRoom();
+            if ((otherRoom != null && otherRoom.type() == DungeonRoomData.Type.BLOOD)
+                    || DOORS.getType(level, door) == DungeonDoorScanner.Type.BLOOD) {
                 return door;
             }
         }
@@ -281,7 +232,12 @@ public final class RouteContext implements RouteContextProvider {
     /**
      * Records the door crossed when the player's current room changes.
      */
-    private void updateEntrance(Room currentRoom, Player player) {
+    private void updateEntrance(
+            Level level,
+            DungeonLayoutScanner.Layout layout,
+            DungeonRoom currentRoom,
+            Player player
+    ) {
         if (previousRoom == null) {
             previousRoom = currentRoom;
             return;
@@ -291,29 +247,25 @@ public final class RouteContext implements RouteContextProvider {
             return;
         }
 
-        Door connecting = findConnectingDoor(previousRoom, currentRoom);
-        entranceDoor = connecting != null ? connecting : findClosestDoor(currentRoom, player, null);
+        DungeonDoorScanner.Door connecting = DOORS.findConnectingDoor(level, layout, previousRoom, currentRoom);
+        entranceDoor = connecting != null ? connecting : findClosestDoor(level, layout, currentRoom, player, null);
         previousRoom = currentRoom;
     }
 
-    private static Door findConnectingDoor(Room first, Room second) {
-        for (Door door : MapScanner.INSTANCE.getDoors()) {
-            if (OdinRoomBridge.doorTouchesScanRoom(door, first) && OdinRoomBridge.doorTouchesScanRoom(door, second)) {
-                return door;
-            }
-        }
-
-        return null;
-    }
-
-    private static Door findClosestDoor(Room room, Player player, Door excluded) {
-        Door closest = null;
+    private static DungeonDoorScanner.Door findClosestDoor(
+            Level level,
+            DungeonLayoutScanner.Layout layout,
+            DungeonRoom room,
+            Player player,
+            DungeonDoorScanner.Door excluded
+    ) {
+        DungeonDoorScanner.Door closest = null;
         double closestDistance = Double.MAX_VALUE;
 
-        for (Door door : MapScanner.INSTANCE.getDoors()) {
-            if (door == excluded || !OdinRoomBridge.doorTouchesScanRoom(door, room)) continue;
+        for (DungeonDoorScanner.Door door : DOORS.getDoorsForRoom(level, layout, room)) {
+            if (sameDoor(door, excluded)) continue;
 
-            Vec2i pos = door.getPos();
+            BlockPos pos = door.pos();
             double dx = pos.getX() + 0.5 - player.getX();
             double dz = pos.getZ() + 0.5 - player.getZ();
             double distance = dx * dx + dz * dz;
@@ -327,59 +279,27 @@ public final class RouteContext implements RouteContextProvider {
         return closest;
     }
 
-    private static boolean sameRoom(Room first, Room second) {
-        if (first == second) {
-            return true;
-        }
-
-        if (first == null || second == null) {
-            return false;
-        }
-
-        if (first.getData() == null || second.getData() == null) {
-            return false;
-        }
-
-        if (!first.getData().getName().equals(second.getData().getName())) {
-            return false;
-        }
-
-        return first.getRoomComponents().equals(second.getRoomComponents());
+    private static DungeonRoom roomForPlayer(DungeonLayoutScanner.Layout layout, Player player) {
+        DungeonGrid.Tile tile = DungeonGrid.fromPlayer(player);
+        return tile == null ? null : layout.roomAt(tile);
     }
 
-    private static boolean sameDoor(Door first, Door second) {
-        if (first == second) {
-            return true;
-        }
-
-        if (first == null || second == null) {
-            return false;
-        }
-
-        return first.getPos().getX() == second.getPos().getX()
-                && first.getPos().getZ() == second.getPos().getZ();
+    private static boolean sameRoom(DungeonRoom first, DungeonRoom second) {
+        return Objects.equals(first, second);
     }
 
-    private static RoomInfo createRoomInfo(Room room) {
-        BlockPos clayPos = room.getClayPos();
-        Vec3 pivot = new Vec3(clayPos.getX(), 0, clayPos.getZ());
-
-        return new RoomInfo(room.getData().getName(), pivot, quarterTurns(room.getRotation()));
+    private static boolean sameDoor(DungeonDoorScanner.Door first, DungeonDoorScanner.Door second) {
+        return first == second || (first != null && second != null && first.pos().equals(second.pos()));
     }
 
-    private static int quarterTurns(Rotations rotation) {
-        return switch (rotation) {
-            case NORTH -> 0;
-            case EAST -> 1;
-            case SOUTH -> 2;
-            case WEST -> 3;
-            case NONE -> throw new IllegalStateException("Room rotation is unknown.");
-        };
-    }
+    private static RoomInfo createRoomInfo(Level level, DungeonRoom room) {
+        DungeonRoomGeometry.Orientation orientation = DungeonScanner.getRoomOrientation(level, room);
+        if (orientation == null) return null;
 
-    private static BlockPos getDoorBlockPos(Door door) {
-        Vec2i pos = door.getPos();
-        return new BlockPos(pos.getX(), 69, pos.getZ());
+        BlockPos pivotPos = orientation.pivot();
+        Vec3 pivot = new Vec3(pivotPos.getX(), 0, pivotPos.getZ());
+
+        return new RoomInfo(room.name(), pivot, orientation.quarterTurns());
     }
 
     private void reset() {
@@ -387,44 +307,28 @@ public final class RouteContext implements RouteContextProvider {
         entranceDoor = null;
     }
 
-    private static void logDoorsForRoom(Room room, Player player) {
-        LOGGER.info("[Route] --- Doors touching {} ---", room.getData().getName());
+    private static void logDoorsForRoom(Level level, DungeonLayoutScanner.Layout layout, DungeonRoom room) {
+        if (!LOGGER.isDebugEnabled()) return;
 
-        for (Door door : MapScanner.INSTANCE.getDoors()) {
-            boolean touches = OdinRoomBridge.doorTouchesScanRoom(
-                    door,
-                    room
-            );
+        LOGGER.info("[Route] --- Doors touching {} ---", room.name());
 
-            if (!touches) {
-                continue;
-            }
+        for (DungeonDoorScanner.Door door : DOORS.getDoorsForRoom(level, layout, room)) {
+            DungeonDoorScanner.Type type = DOORS.getType(level, door);
+            boolean locked = type == DungeonDoorScanner.Type.WITHER
+                    && DOORS.isClosedWitherDoor(level, door);
+            boolean fairy = door.otherRoom() != null
+                    && door.otherRoom().type() == DungeonRoomData.Type.FAIRY;
 
-            boolean locked = false;
+            BlockPos pos = door.pos();
 
-            if (door.getType() == Door.Type.WITHER) {
-                locked = OdinRoomBridge.getDoorLocked(
-                        door,
-                        player
-                );
-            }
-
-            boolean fairy = OdinRoomBridge.doorTouchesFairyRoom(door);
-
-            BlockPos pos = new BlockPos(
-                    door.getPos().getX(),
-                    69,
-                    door.getPos().getZ()
-            );
-
-            LOGGER.info(
+            LOGGER.debug(
                     "[Route] Door type={} pos=({}, {}) locked={} fairy={} block={}",
-                    door.getType(),
-                    door.getPos().getX(),
-                    door.getPos().getZ(),
+                    type,
+                    pos.getX(),
+                    pos.getZ(),
                     locked,
                     fairy,
-                    player.level().getBlockState(pos)
+                    level.getBlockState(pos)
             );
         }
 

@@ -3,6 +3,11 @@ package com.nico.client.dungeon;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 public final class DungeonDoorScanner {
 
@@ -13,6 +18,61 @@ public final class DungeonDoorScanner {
      * BSD-3-Clause license:
      * see third_party/odin.
      */
+
+    public List<Door> getDoorsForRoom(Level level, DungeonLayoutScanner.Layout layout, DungeonRoom room) {
+        Map<BlockPos, Door> doors = new LinkedHashMap<>();
+
+        for (DungeonGrid.Tile tile : room.tiles()) {
+            for (DungeonGrid.Direction direction : DungeonGrid.Direction.values()) {
+                DungeonGrid.Tile neighbor = tile.offset(direction);
+                if (!neighbor.isValid()) continue;
+
+                // Separator inside one multi-tile room, not a door.
+                if (room.contains(neighbor)) continue;
+
+                BlockPos pos = getDoorPosition(tile, neighbor);
+                if (pos == null || !level.hasChunkAt(pos)) continue;
+
+                BlockState state = level.getBlockState(pos);
+                boolean specialDoor = state.is(Blocks.COAL_BLOCK) || state.is(Blocks.RED_TERRACOTTA);
+                if (!specialDoor && !isDoorwayBetween(level, tile, neighbor)) continue;
+
+                DungeonRoom otherRoom = layout.roomAt(neighbor);
+                doors.putIfAbsent(pos, new Door(pos, room, otherRoom));
+            }
+        }
+
+        return List.copyOf(doors.values());
+    }
+
+    public Door findConnectingDoor(Level level, DungeonLayoutScanner.Layout layout, DungeonRoom first, DungeonRoom second) {
+        if (first == null || second == null) return null;
+
+        for (Door door : getDoorsForRoom(level, layout, first)) {
+            if (second.equals(door.otherRoom())) {
+                return door;
+            }
+        }
+
+        return null;
+    }
+
+    public Type getType(Level level, Door door) {
+        if (door == null || !level.hasChunkAt(door.pos())) {
+            return Type.NORMAL;
+        }
+
+        BlockState state = level.getBlockState(door.pos());
+        if (state.is(Blocks.COAL_BLOCK)) return Type.WITHER;
+        if (state.is(Blocks.RED_TERRACOTTA)) return Type.BLOOD;
+        return Type.NORMAL;
+    }
+
+    public boolean isClosedWitherDoor(Level level, Door door) {
+        return door != null
+                && level.hasChunkAt(door.pos())
+                && level.getBlockState(door.pos()).is(Blocks.COAL_BLOCK);
+    }
 
     public boolean hasClosedWitherDoor(Level level, DungeonRoom room) {
         for (DungeonGrid.Tile tile : room.tiles()) {
@@ -36,7 +96,7 @@ public final class DungeonDoorScanner {
                 DungeonGrid.Tile neighbor = tile.offset(direction);
                 if (!second.contains(neighbor)) continue;
 
-                if (isDoorwayBetween(level, tile, neighbor)) return true;
+                if (isDoorwayBetween(level, tile, neighbor) || isSpecialDoorBetween(level, tile, neighbor)) return true;
             }
         }
 
@@ -79,5 +139,21 @@ public final class DungeonDoorScanner {
 
         return new BlockPos(x, DOOR_Y, z);
     }
+
+    private boolean isSpecialDoorBetween(Level level, DungeonGrid.Tile first, DungeonGrid.Tile second) {
+        BlockPos pos = getDoorPosition(first, second);
+        if (pos == null || !level.hasChunkAt(pos)) return false;
+
+        BlockState state = level.getBlockState(pos);
+        return state.is(Blocks.COAL_BLOCK) || state.is(Blocks.RED_TERRACOTTA);
+    }
+
+    public enum Type {
+        NORMAL,
+        WITHER,
+        BLOOD
+    }
+
+    public record Door(BlockPos pos, DungeonRoom room, DungeonRoom otherRoom) { }
 
 }
