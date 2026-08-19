@@ -4,6 +4,13 @@ import com.google.gson.JsonObject;
 import com.nico.client.utils.BazaarService;
 import com.google.gson.JsonParser;
 import com.nico.client.wiki.*;
+<<<<<<< Updated upstream
+=======
+import com.nico.client.utils.tradeprot.WikiAuctionHouseEnricher;
+import com.nico.client.utils.tradeprot.WikiAuctionHouseService;
+import com.nico.client.utils.tradeprot.WikiBazaarEnricher;
+import com.nico.client.utils.tradeprot.WikiBazaarService;
+>>>>>>> Stashed changes
 import net.minecraft.world.item.ItemStack;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
