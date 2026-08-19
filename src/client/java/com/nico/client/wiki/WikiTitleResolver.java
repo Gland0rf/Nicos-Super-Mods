@@ -71,7 +71,36 @@ public final class WikiTitleResolver {
         });
     }
 
+    /**
+     * Resolves an unformatted registry display name back to its Skyblock internal Item ID.
+     * This is useful for Wiki templates that list material names but omit the ID's needed by
+     * the bazaar API.
+     */
+    public static CompletableFuture<String> resolveInternalItemId(String displayName) {
+        String wanted = normalizeSearchText(displayName);
+        if (wanted.isBlank()) return CompletableFuture.completedFuture("");
 
+        return ensureRegistryLoaded()
+                .thenApply(ignored -> {
+                    String suffixId = "";
+                    int suffixLength = -1;
+                    for (Map.Entry<String, String> entry : ITEM_NAMES.entrySet()) {
+                        String candidate = normalizeSearchText(entry.getValue());
+                        if (candidate.equals(wanted)) {
+                            return entry.getKey();
+                        }
+
+                        // Conservative fallback for a displayed variant that
+                        // contains a registry name as its complete suffix.
+                        if (wanted.endsWith(" " + candidate) && candidate.length() > suffixLength) {
+                            suffixId = entry.getKey();
+                            suffixLength = candidate.length();
+                        }
+                    }
+                    return suffixId;
+                })
+                .exceptionally(throwable -> "");
+    }
 
     private static String registrySuffixMatch(String displayName) {
         String visible = normalizeSearchText(displayName);

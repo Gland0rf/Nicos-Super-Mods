@@ -225,7 +225,7 @@ public class RoomStackingDetector {
 
      private static Map<String, List<Player>> getDungeonPlayersByRoom(Minecraft mc) {
         Map<String, List<Player>> playersByRoom = new HashMap<>();
-        Set<String> teammateNames = NsmClientCommands.getDungeonTeammateNames();
+        Set<String> teammateNames = DungeonTeammateScanner.getDungeonTeammateNames();
 
         for (Player player : mc.level.players()) {
             String playerName = player.getName().getString();

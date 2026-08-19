@@ -307,12 +307,10 @@ public class LagMonitorService {
 
     private static void sendSummary(Minecraft client, LagSessionSummary summary) {
         if (client == null || client.player == null || summary == null) {
-            System.out.println("[NSM Lag][Debug] Summary send skipped because client/player/summary is null");
             return;
         }
 
         var lines = summary.compactChatLines();
-        System.out.println("[NSM Lag][Debug] Sending " + lines.size() + " summary chat lines");
         for (var line : lines) {
             client.getInstance().gui.getChat().addClientSystemMessage(line);
         }

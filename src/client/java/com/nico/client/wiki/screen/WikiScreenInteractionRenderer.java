@@ -131,6 +131,20 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
             return;
         }
 
+        /*
+         * Item/minetip hover text should win over the generic image-license
+         * tooltip for tiny inline icons. Standalone images still fall through
+         * to their source/license tooltip below.
+         */
+        for (int index = textHoverHitboxes.size() - 1; index >= 0; index--) {
+            TextHoverHitbox candidate = textHoverHitboxes.get(index);
+            if (!candidate.contains(mouseX, mouseY)) {
+                continue;
+            }
+            renderTooltip(graphics, List.of(candidate.tooltip()), mouseX, mouseY);
+            return;
+        }
+
         for (int index = imageHitboxes.size() - 1; index >= 0; index--) {
             ImageHitbox candidate = imageHitboxes.get(index);
             if (!candidate.contains(mouseX, mouseY)) {
@@ -138,15 +152,6 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
             }
             WikiImageTextureCache.Snapshot snapshot = WikiImageTextureCache.request(candidate.image());
             renderTooltip(graphics, buildImageTooltipLines(candidate.image(), snapshot), mouseX, mouseY);
-            return;
-        }
-
-        for (int index = textHoverHitboxes.size() - 1; index >= 0; index--) {
-            TextHoverHitbox candidate = textHoverHitboxes.get(index);
-            if (!candidate.contains(mouseX, mouseY)) {
-                continue;
-            }
-            renderTooltip(graphics, List.of(candidate.tooltip()), mouseX, mouseY);
             return;
         }
     }

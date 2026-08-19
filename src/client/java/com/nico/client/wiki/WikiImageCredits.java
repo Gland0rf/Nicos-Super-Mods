@@ -71,7 +71,11 @@ public record WikiImageCredits(
         if (!usageTerms.isBlank()) {
             return usageTerms;
         }
-        return metadataAvailable ? "Not specified in metadata" : "See the Wiki file page";
+        // MediaWiki extmetadata does not expose every custom file-license
+        // template used by the SkyBlock Wiki. Avoid implying that a file has
+        // no terms; the file-description page remains the authoritative place
+        // to check the creator/source/license template.
+        return "See the Wiki file page for terms";
     }
 
     public String creatorLabel() {
