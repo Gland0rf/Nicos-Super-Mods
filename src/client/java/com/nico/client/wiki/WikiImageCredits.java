@@ -1,8 +1,23 @@
 package com.nico.client.wiki;
 
 import java.net.URI;
+import java.util.Locale;
 import java.util.Objects;
 
+/**
+ * Metadata needed to credit a wiki image and expose its source and license information in the UI.
+ * @param fileTitle
+ * @param filePageUrl
+ * @param originalFileUrl
+ * @param licenseShortName
+ * @param licenseUrl
+ * @param artist
+ * @param credit
+ * @param usageTerms
+ * @param attribution
+ * @param source
+ * @param metadataAvailable
+ */
 public record WikiImageCredits(
         String fileTitle,
         String filePageUrl,
@@ -74,6 +89,91 @@ public record WikiImageCredits(
             return credit;
         }
         return "";
+    }
+
+    /**
+     * Returns whether the resolved metadata gives us an explicitly reusable license for in-game display.
+     *
+     * <p>This intentionally uses an allowlist rather than trying to enumerate every restricted license.
+     * Unknown licenses, permission-only notices, and proprietary game-asset licenses remain hidden until
+     * their terms have been verified for this use. The Creative Commons non-commercial variants are allowed
+     */
+    public boolean permitsInGameDisplay() {
+        String evidence = (licenseShortName + " " + usageTerms).toLowerCase(Locale.ROOT);
+        if (containsBlockingMarker(evidence)) {
+            return false;
+        }
+
+        String license = licenseShortName.isBlank() ? usageTerms : licenseShortName;
+        if (license.isBlank()) {
+            return false;
+        }
+
+        boolean foundReusableLicense = false;
+        for (String part : license.split("\\s+\\+\\s+")) {
+            String normalized = normalizeLicense(part);
+            if (normalized.isBlank() || isNeutralLicenseNote(normalized)) {
+                continue;
+            }
+            if (!isExplicitlyReusableLicense(normalized)) {
+                return false;
+            }
+            foundReusableLicense = true;
+        }
+        return foundReusableLicense;
+    }
+
+    private static boolean containsBlockingMarker(String value) {
+        return value.contains("fair use")
+            || value.contains("fair-use")
+            || value.contains("fairuse")
+            || value.contains("non-free")
+            || value.contains("non free")
+            || value.contains("all rights reserved")
+            || value.contains("mojang")
+            || value.contains("hypixel copyright")
+            || value.contains("skyblockresourcepack")
+            || value.contains("skyblock resource pack");
+    }
+
+    private static boolean isNeutralLicenseNote(String value) {
+        return value.equals("from wikimedia (see file page)")
+            || value.equals("used with permission");
+    }
+
+    private static boolean isExplicitlyReusableLicense(String value) {
+        if (value.equals("site license")) {
+            // Current wiki revisions are CC BY-NC-SA 3.0; older revisions are CC BY-SA 3.0.
+            return true;
+        }
+        if (value.equals("public domain") || value.startsWith("public domain ")) {
+            return true;
+        }
+        if (value.startsWith("cc0") || value.contains("creative commons zero")) {
+            return true;
+        }
+        if (value.startsWith("cc by") || value.startsWith("cc-by")) {
+            return !hasNoDerivativesRestriction(value);
+        }
+        if (value.startsWith("creative commons attribution")) {
+            return !hasNoDerivativesRestriction(value);
+        }
+        return false;
+    }
+
+    private static boolean hasNoDerivativesRestriction(String value) {
+        return value.contains("-nd")
+            || value.contains(" nd")
+            || value.contains("no derivative")
+            || value.contains("no-derivative")
+            || value.contains("noderivative");
+    }
+
+    private static String normalizeLicense(String value) {
+        return clean(value)
+            .toLowerCase(Locale.ROOT)
+            .replace('\u2013', '-')
+            .replace('\u2014', '-');
     }
 
     public URI filePageUri() {

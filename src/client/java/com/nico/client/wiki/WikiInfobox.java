@@ -3,6 +3,11 @@ package com.nico.client.wiki;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Structured article infobox, including nested tab panels and item-slot strips.
+ * @param title
+ * @param entries
+ */
 public record WikiInfobox(String title, List<Entry> entries) {
     public WikiInfobox {
         title = Objects.requireNonNullElse(title, "").trim();
@@ -21,9 +26,23 @@ public record WikiInfobox(String title, List<Entry> entries) {
         if (label == null || label.isBlank()) {
             return "";
         }
-        for (Entry entry : entries) {
+        return findTextValue(entries, label);
+    }
+
+    private static String findTextValue(List<Entry> source, String label) {
+        for (Entry entry : source) {
             if (entry instanceof Row row && row.label().plainText().equalsIgnoreCase(label)) {
                 return row.value().plainText();
+            }
+            if (entry instanceof PanelTabs tabs && !tabs.sections().isEmpty()) {
+                int active = Math.max(0, Math.min(tabs.activeIndex(), tabs.sections().size() - 1));
+                String value = findTextValue(tabs.sections().get(active), label);
+                if (!value.isBlank()) return value;
+                for (int index = 0; index < tabs.sections().size(); index++) {
+                    if (index == active) continue;
+                    value = findTextValue(tabs.sections().get(index), label);
+                    if (!value.isBlank()) return value;
+                }
             }
         }
         return "";
@@ -44,12 +63,23 @@ public record WikiInfobox(String title, List<Entry> entries) {
         }
     }
 
-    public record PanelTabs(List<String> labels, int activeIndex) implements Entry {
+    public record PanelTabs(
+            List<String> labels,
+            int activeIndex,
+            List<List<Entry>> sections
+    ) implements Entry {
         public PanelTabs {
             labels = labels == null ? List.of() : labels.stream()
                     .map(value -> Objects.requireNonNullElse(value, "").trim())
                     .toList();
+            sections = sections == null ? List.of() : sections.stream()
+                    .map(section -> section == null ? List.<Entry>of() : List.copyOf(section))
+                    .toList();
             activeIndex = labels.isEmpty() ? 0 : Math.max(0, Math.min(activeIndex, labels.size() - 1));
+        }
+
+        public PanelTabs(List<String> labels, int activeIndex) {
+            this(labels, activeIndex, List.of());
         }
     }
 

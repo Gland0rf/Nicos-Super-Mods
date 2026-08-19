@@ -3,6 +3,13 @@ package com.nico.client.wiki;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * A normalized 3x3 Minecraft crafting recipe parsed from the wiki's MCUI widget markup.
+ * @param inputs
+ * @param output
+ * @param shapeless
+ * @param fixed
+ */
 public record WikiCraftingGrid(List<WikiItemSlot> inputs, WikiItemSlot output, boolean shapeless, boolean fixed) {
     public static final int INPUT_SLOT_COUNT = 9;
 

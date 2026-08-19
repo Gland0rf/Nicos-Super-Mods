@@ -6,7 +6,7 @@ import com.nico.client.inventoryLayouts.core.InventoryLayoutSlot;
 import com.nico.client.inventoryLayouts.storage.InventoryLayoutMatcher;
 import com.nico.client.inventoryLayouts.storage.SlotMatchState;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.Slot;
@@ -30,7 +30,7 @@ public class InventoryLayoutOverlay {
 
     public static void render(
             InventoryScreen screen,
-            GuiGraphics graphics,
+            GuiGraphicsExtractor graphics,
             int mouseX,
             int mouseY,
             InventoryLayoutManager manager
@@ -89,7 +89,7 @@ public class InventoryLayoutOverlay {
     }
 
     private static void renderSlotState(
-            GuiGraphics graphics,
+            GuiGraphicsExtractor graphics,
             int x,
             int y,
             SlotMatchState state,
@@ -125,7 +125,7 @@ public class InventoryLayoutOverlay {
     }
 
     private static void renderExpectedGhost(
-            GuiGraphics graphics,
+            GuiGraphicsExtractor graphics,
             int x,
             int y,
             InventoryLayoutSlot expected,
@@ -147,7 +147,7 @@ public class InventoryLayoutOverlay {
     }
 
     private static void renderStatusPanel(
-            GuiGraphics graphics,
+            GuiGraphicsExtractor graphics,
             InventoryScreen screen,
             InventoryLayoutManager manager,
             Minecraft minecraft
@@ -168,8 +168,8 @@ public class InventoryLayoutOverlay {
         int panelY = top + 50;
         graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 30, 0xCC101218);
         graphics.fill(panelX, panelY, panelX + 2, panelY + 30, 0xFF55CCFF);
-        graphics.drawString(minecraft.font, lineOne, panelX + 6, panelY + 5, 0xFFFFFFFF, true);
-        graphics.drawString(minecraft.font, lineTwo, panelX + 6, panelY + 17, 0xFFCCCCCC, true);
+        graphics.text(minecraft.font, lineOne, panelX + 6, panelY + 5, 0xFFFFFFFF, true);
+        graphics.text(minecraft.font, lineTwo, panelX + 6, panelY + 17, 0xFFCCCCCC, true);
     }
 
     private static int getPlayerInventorySlot(InventoryScreen screen, Slot slot) {

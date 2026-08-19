@@ -299,7 +299,7 @@ public class LagMonitorService {
 
         try {
             client.keyboardHandler.setClipboard("[NSM] Total loss by TPS: " + summary.tpsLossClipboardText());
-            client.player.displayClientMessage(summary.clipboardConfirmationLine(), false);
+            client.getInstance().gui.getChat().addClientSystemMessage(summary.clipboardConfirmationLine());
         } catch (RuntimeException exception) {
             System.err.println("[NSM Lag] Could not copy TPS loss: " + exception.getMessage());
         }
@@ -312,7 +312,7 @@ public class LagMonitorService {
 
         var lines = summary.compactChatLines();
         for (var line : lines) {
-            client.player.displayClientMessage(line, false);
+            client.getInstance().gui.getChat().addClientSystemMessage(line);
         }
     }
 

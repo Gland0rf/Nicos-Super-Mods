@@ -23,15 +23,14 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-/** Builds the immutable render-entry list from the Wiki model. */
-abstract class WikiScreenLayout extends WikiScreenActions {
-    private static final Pattern INLINE_TOKEN_PATTERN = Pattern.compile("\\n|[\\t\\x0B\\f\\r ]+|\\S+");
-    private static final int INLINE_IMAGE_HEIGHT = LINE_HEIGHT;
-    private static final int INLINE_IMAGE_MAX_WIDTH = LINE_HEIGHT + 3;
-
+/**
+ * Builds the page-level render-entry list from the parsed wiki model.
+ *
+ * <p>This layer owns document flow (title, notices, infobox, table of content, and block ordering);
+ * lower-level table, content, and text measurement helpers live in {@link WikiScreenLayoutSupport}.</p>
+ */
+abstract class WikiScreenLayout extends WikiScreenLayoutSupport {
     protected WikiScreenLayout(Screen parent, ItemStack itemStack) {
         super(parent, itemStack);
     }
@@ -44,6 +43,8 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         tocHitboxes.clear();
         slotHitboxes.clear();
         forgingTreeHitboxes.clear();
+        inlineImages.clear();
+        nextInlineImageId = 0;
         nextTabGroup = 0;
         if (page == null) {
             return;
@@ -108,20 +109,62 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         boolean tocInserted = false;
         int headingIndex = 0;
 
+        // Tracks a MediaWiki-style image floating on the right side.
+        int floatingImageBottom = articleY;
+        int floatingImageWidth = 0;
+
         for (int blockIndex = firstColumnBlock; blockIndex < page.blocks().size(); blockIndex++) {
             WikiBlock block = page.blocks().get(blockIndex);
+
+            // MediaWiki right-aligned thumbnails should float beside the article text
+            // rather than pushing everything below a huge image.
+            if (block instanceof WikiBlock.Image image
+                    && image.floatRight()
+                    && !(wide && articleY < infoboxBottom)) {
+                int maxFloatWidth = Math.min(220, Math.max(120, fullContentWidth * 28 / 100));
+                int imageWidth = preferredImageWidth(image.image(), maxFloatWidth, maxFloatWidth);
+                int floatY = Math.max(articleY, floatingImageBottom);
+                int floatX = articleX + fullContentWidth - imageWidth;
+                int bottom = layoutBlock(image, floatX, floatY, imageWidth);
+
+                floatingImageBottom = bottom;
+                floatingImageWidth = imageWidth + COLUMN_GAP;
+                continue;
+            }
+
+            int currentArticleWidth = wide && articleY < infoboxBottom ? articleWidth : fullContentWidth;
+            if (articleY < floatingImageBottom) {
+                currentArticleWidth = Math.max(MIN_ARTICLE_WIDTH, currentArticleWidth - floatingImageWidth);
+            } else {
+                floatingImageWidth = 0;
+            }
+
+            // Very wide data tables are unreadable when squeezed beside the
+            // floating infobox. If the float is about to end, clear it and let
+            // the table use the full article width, matching normal CSS float
+            // behavior much more closely.
+            if (wide
+                    && articleWidth < infoboxBottom
+                    && block instanceof WikiBlock.Table table
+                    && table.columnCount() >= 5
+                    && currentArticleWidth < 520) {
+                articleY = infoboxBottom + 8;
+                currentArticleWidth = fullContentWidth;
+            }
+
             if (block instanceof WikiBlock.Heading) {
                 if (!tocInserted && tocItems.size() >= 2) {
-                    articleY = layoutToc(tocItems, articleX, articleY, articleWidth);
+                    articleY = layoutToc(tocItems, articleX, articleY, currentArticleWidth);
                     tocInserted = true;
+                    currentArticleWidth = wide && articleY < infoboxBottom ? articleWidth : fullContentWidth;
                 }
                 if (headingIndex < tocItems.size()) {
                     tocItems.get(headingIndex++).targetY = articleY;
                 }
             }
-            articleY = layoutBlock(block, articleX, articleY, articleWidth);
+            articleY = layoutBlock(block, articleX, articleY, currentArticleWidth);
         }
-        documentHeight = Math.max(articleY, infoboxBottom) + 16;
+        documentHeight = Math.max(Math.max(articleY, infoboxBottom), floatingImageBottom) + 16;
         updateMaxScroll();
         lastAnimationStep = animationStep();
     }
@@ -145,13 +188,18 @@ abstract class WikiScreenLayout extends WikiScreenActions {
                     }
                 }
             }
+            if (block instanceof WikiBlock.UiGroup group) {
+                for (WikiBlock.UiGroup.Panel panel : group.panels()) {
+                    if (containsWideTable(panel.blocks())) return true;
+                }
+            }
         }
         return false;
     }
 
     protected int layoutPageTitle(int x, int y, int width) {
         MutableComponent title = Component.literal(page.title()).withStyle(ChatFormatting.WHITE, ChatFormatting.BOLD);
-        List<FormattedCharSequence> titleLines = font.split(title, width);
+        List<FormattedCharSequence> titleLines = splitWikiText(title, width);
         int h = Math.max(18, titleLines.size() * 13 + 5);
         entries.add(new RenderEntry(Kind.PAGE_TITLE, x, y, width, h,
                 List.of(new Cell(0, 0, width, titleLines)), 0, null));
@@ -216,7 +264,7 @@ abstract class WikiScreenLayout extends WikiScreenActions {
             int indent = Math.max(0, Math.min(2, item.level - 2)) * 13;
             MutableComponent label = Component.literal(item.number + " " + item.title)
                     .withStyle(ChatFormatting.AQUA);
-            List<FormattedCharSequence> lines = font.split(label, Math.max(50, tocWidth - 14 - indent));
+            List<FormattedCharSequence> lines = splitWikiText(label, Math.max(50, tocWidth - 14 - indent));
             int height = Math.max(18, lines.size() * LINE_HEIGHT + 5);
             entries.add(new RenderEntry(
                     Kind.TOC_ROW,
@@ -236,7 +284,7 @@ abstract class WikiScreenLayout extends WikiScreenActions {
 
     protected int layoutInfobox(int x, int y, int width) {
         String title = page.infobox().title().isBlank() ? page.title() : page.infobox().title();
-        List<FormattedCharSequence> titleLines = font.split(
+        List<FormattedCharSequence> titleLines = splitWikiText(
                 Component.literal(title).withStyle(ChatFormatting.WHITE, ChatFormatting.BOLD),
                 width - 16
         );
@@ -246,7 +294,15 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         findTargets.add(new FindTarget(title, x, y, width, titleHeight));
         y += titleHeight;
 
-        List<WikiInfobox.Entry> infoboxEntries = page.infobox().entries();
+        return layoutInfoboxEntries(page.infobox().entries(), x, y, width);
+    }
+
+    protected int layoutInfoboxEntries(
+            List<WikiInfobox.Entry> infoboxEntries,
+            int x,
+            int y,
+            int width
+    ) {
         for (int entryIndex = 0; entryIndex < infoboxEntries.size(); entryIndex++) {
             WikiInfobox.Entry entry = infoboxEntries.get(entryIndex);
             if (entry instanceof WikiInfobox.Image image) {
@@ -260,11 +316,36 @@ abstract class WikiScreenLayout extends WikiScreenActions {
                 entries.add(new RenderEntry(Kind.INFOBOX_SLOTS, x, y, width, h, List.of(), 0, strip));
                 y += h;
             } else if (entry instanceof WikiInfobox.PanelTabs tabs) {
+                if (tabs.labels().isEmpty()) continue;
+
+                int groupId = nextTabGroup++;
+                int selected = selectedTabs.getOrDefault(groupId, tabs.activeIndex());
+                selected = Math.max(0, Math.min(selected, tabs.labels().size() - 1));
+                selectedTabs.put(groupId, selected);
+
                 int h = 20;
-                entries.add(new RenderEntry(Kind.INFOBOX_TABS, x, y, width, h, List.of(), tabs.activeIndex(), tabs));
+                WikiInfobox.PanelTabs renderedTabs = new WikiInfobox.PanelTabs(
+                        tabs.labels(),
+                        selected,
+                        tabs.sections()
+                );
+                entries.add( new RenderEntry(
+                        Kind.INFOBOX_TABS,
+                        x,
+                        y,
+                        width,
+                        h,
+                        List.of(),
+                        groupId,
+                        renderedTabs
+                ));
                 y += h;
+
+                if (!tabs.sections().isEmpty() && selected < tabs.sections().size()) {
+                    y = layoutInfoboxEntries(tabs.sections().get(selected), x, y, width);
+                }
             } else if (entry instanceof WikiInfobox.Header header) {
-                List<FormattedCharSequence> lines = font.split(toComponent(header.text()), width - 12);
+                List<FormattedCharSequence> lines = splitWikiText(toComponent(header.text()), width - 12);
                 int h = Math.max(18, lines.size() * LINE_HEIGHT + 6);
                 entries.add(new RenderEntry(Kind.INFOBOX_HEADER, x, y, width, h,
                         List.of(new Cell(6, 3, width - 12, lines)), 0, null));
@@ -295,11 +376,11 @@ abstract class WikiScreenLayout extends WikiScreenActions {
                             int actualWidth = index == groupColumns - 1
                                     ? width - index * cellWidth
                                     : cellWidth;
-                            List<FormattedCharSequence> labelLines = font.split(
+                            List<FormattedCharSequence> labelLines = splitWikiText(
                                     toComponent(property.label()).withStyle(ChatFormatting.BOLD),
                                     Math.max(20, actualWidth - 10)
                             );
-                            List<FormattedCharSequence> valueLines = font.split(
+                            List<FormattedCharSequence> valueLines = splitWikiText(
                                     toComponent(property.value().text()),
                                     Math.max(20, actualWidth - 10)
                             );
@@ -330,8 +411,8 @@ abstract class WikiScreenLayout extends WikiScreenActions {
                 }
 
                 int labelWidth = Math.min(90, Math.max(68, width / 3));
-                List<FormattedCharSequence> label = font.split(toComponent(row.label()), labelWidth - 8);
-                List<FormattedCharSequence> value = font.split(toComponent(row.value().text()), width - labelWidth - 10);
+                List<FormattedCharSequence> label = splitWikiText(toComponent(row.label()), labelWidth - 8);
+                List<FormattedCharSequence> value = splitWikiText(toComponent(row.value().text()), width - labelWidth - 10);
                 int lines = Math.max(label.size(), value.size());
                 int h = Math.max(17, lines * LINE_HEIGHT + 6);
                 entries.add(new RenderEntry(Kind.INFOBOX_ROW, x, y, width, h, List.of(
@@ -364,7 +445,7 @@ abstract class WikiScreenLayout extends WikiScreenActions {
     protected int layoutBlockInternal(WikiBlock block, int x, int y, int width) {
         if (block instanceof WikiBlock.Heading heading) {
             MutableComponent component = toComponent(heading.text()).withStyle(ChatFormatting.BOLD);
-            List<FormattedCharSequence> lines = font.split(component, width - (heading.level() > 2 ? 6 : 0));
+            List<FormattedCharSequence> lines = splitWikiText(component, width - (heading.level() > 2 ? 6 : 0));
             int h = Math.max(18, lines.size() * LINE_HEIGHT + 7);
             entries.add(new RenderEntry(heading.level() == 2 ? Kind.H2 : Kind.H3, x, y + 4, width, h,
                     List.of(new Cell(heading.level() > 2 ? 6 : 0, 0, width - 6, lines)), 0, null));
@@ -377,7 +458,7 @@ abstract class WikiScreenLayout extends WikiScreenActions {
             int iconHeight = icon.isEmpty() ? 0 : imageBoxHeight(icon, iconWidth, 32, 48);
             int textOffset = iconWidth == 0 ? 10 : iconWidth + 18;
             int textWidth = Math.max(40, width - textOffset - 10);
-            List<FormattedCharSequence> lines = font.split(toComponent(content.text()), textWidth);
+            List<FormattedCharSequence> lines = splitWikiText(toComponent(content.text()), textWidth);
             int textHeight = Math.max(LINE_HEIGHT, lines.size() * LINE_HEIGHT);
             int height = Math.max(42, Math.max(textHeight, iconHeight) + 16);
             entries.add(new RenderEntry(
@@ -402,7 +483,7 @@ abstract class WikiScreenLayout extends WikiScreenActions {
             int indent = 12 + Math.min(item.depth(), 5) * 12;
             MutableComponent prefix = Component.literal(item.ordered() ? "1. " : "\u2022 ").withStyle(ChatFormatting.GRAY);
             MutableComponent text = prefix.append(toComponent(item.content().text()));
-            List<FormattedCharSequence> lines = font.split(text, Math.max(50, width - indent));
+            List<FormattedCharSequence> lines = splitWikiText(text, Math.max(50, width - indent));
             int h = Math.max(LINE_HEIGHT, lines.size() * LINE_HEIGHT);
             entries.add(new RenderEntry(Kind.TEXT, x + indent, y, width - indent, h,
                     List.of(new Cell(0, 0, width - indent, lines)), 0, null));
@@ -414,13 +495,16 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         if (block instanceof WikiBlock.TabGroup tabs) {
             return layoutTabs(tabs, x, y, width);
         }
+        if (block instanceof WikiBlock.UiGroup uiGroup) {
+            return layoutUiGroup(uiGroup, x, y, width);
+        }
         if (block instanceof WikiBlock.Crafting crafting) {
             return layoutCrafting(crafting.grid(), x, y, width);
         }
         if (block instanceof WikiBlock.Image image) {
-            int imageWidth = preferredImageWidth(image.image(), width, 300);
+            int imageWidth = preferredImageWidth(image.image(), width, 220);
             int captionHeight = image.caption().isBlank() ? 0 : LINE_HEIGHT + 6;
-            int h = imageBoxHeight(image.image(), imageWidth - 8, 36, 160) + captionHeight + 8;
+            int h = imageBoxHeight(image.image(), imageWidth - 8, 32, 140) + captionHeight + 8;
             entries.add(new RenderEntry(Kind.IMAGE, x, y, imageWidth, h, List.of(), captionHeight, image));
             return y + h + 8;
         }
@@ -502,7 +586,7 @@ abstract class WikiScreenLayout extends WikiScreenActions {
             String toggleLabel = expanded ? "[Collapse]" : "[Expand]";
             int toggleWidth = toggleable ? font.width(toggleLabel) : 0;
             int availableWidth = Math.max(40, width - textXOffset);
-            int naturalTextWidth = font.width(component);
+            int naturalTextWidth = wikiTextWidth(component);
             int toggleXOffset;
             int textWidth;
             if (!toggleable) {
@@ -516,7 +600,7 @@ abstract class WikiScreenLayout extends WikiScreenActions {
                 textWidth = Math.max(40, toggleXOffset - textXOffset - 6);
             }
 
-            List<FormattedCharSequence> lines = font.split(component, textWidth);
+            List<FormattedCharSequence> lines = splitWikiText(component, textWidth);
             int rowHeight = Math.max(iconSize, lines.size() * LINE_HEIGHT) + 2;
 
             int rowStart = yOffset;
@@ -560,493 +644,19 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         return yOffset;
     }
 
-    protected static void appendForgingSearchText(
-            List<WikiForgingTree.Node> nodes,
-            StringBuilder result
-    ) {
-        for (WikiForgingTree.Node node : nodes) {
-            String text = searchableContent(node.content());
-            if (!text.isBlank()) {
-                if (!result.isEmpty()) {
-                    result.append(' ');
-                }
-                result.append(text);
-            }
-            appendForgingSearchText(node.children(), result);
-        }
-    }
+    protected int layoutUiGroup(WikiBlock.UiGroup group, int x, int y, int width) {
+        if (group.panels().isEmpty()) return y;
 
-    protected int layoutContent(WikiContent content, int x, int y, int width, boolean compact) {
-        if (!content.text().isBlank()) {
-            if (hasInlineImages(content.text())) {
-                InlineTextLayout inlineText = layoutInlineText(content.text(), width);
-                int h = inlineText.height();
-                entries.add(new RenderEntry(Kind.TEXT, x, y, width, h,
-                        List.of(), 0, inlineText));
-                y += h + (compact ? 3 : 7);
-            } else {
-                List<FormattedCharSequence> lines = font.split(toComponent(content.text()), width);
-                int h = Math.max(LINE_HEIGHT, lines.size() * LINE_HEIGHT);
-                entries.add(new RenderEntry(Kind.TEXT, x, y, width, h,
-                        List.of(new Cell(0, 0, width, lines)), 0, null));
-                y += h + (compact ? 3 : 7);
-            }
-        }
-        if (!content.itemSlots().isEmpty()) {
-            int h = Math.max(27, ((content.itemSlots().size() + 8) / 9) * 23 + 4);
-            entries.add(new RenderEntry(Kind.SLOT_STRIP, x, y, width, h, List.of(), 0, content.itemSlots()));
-            y += h + 5;
-        }
-        WikiCraftingGrid activeGrid = activeCraftingGrid(content.craftingGrids());
-        if (activeGrid != null) {
-            y = layoutCrafting(activeGrid, x, y, width);
-        }
-        for (WikiImage image : content.images()) {
-            int imageWidth = preferredImageWidth(image, width, 260);
-            int h = imageBoxHeight(image, imageWidth - 8, 32, 140) + 8;
-            entries.add(new RenderEntry(Kind.IMAGE, x, y, imageWidth, h, List.of(), 0, image));
-            y += h + 6;
-        }
-        return y;
-    }
+        int selectionKey = uiSelectionKey(group.key());
+        int selected = selectedTabs.getOrDefault(selectionKey, group.initiallySelectedIndex());
+        selected = Math.max(0, Math.min(selected, group.panels().size() - 1));
+        selectedTabs.put(selectionKey, selected);
 
-    protected static long animationStep() {
-        return System.currentTimeMillis() / ANIMATION_PERIOD_MILLIS;
-    }
-
-    protected static int animationIndex(int size) {
-        return size <= 1 ? 0 : (int) Math.floorMod(animationStep(), size);
-    }
-
-    protected static WikiCraftingGrid activeCraftingGrid(List<WikiCraftingGrid> grids) {
-        if (grids == null || grids.isEmpty()) {
-            return null;
+        int start = y;
+        for (WikiBlock block : group.panels().get(selected).blocks()) {
+            start = layoutBlock(block, x, start, width);
         }
-        return grids.get(animationIndex(grids.size()));
-    }
-
-    protected static WikiItemSlot.Frame displayedFrame(WikiItemSlot slot) {
-        if (slot == null || slot.frames().isEmpty()) {
-            return WikiItemSlot.Frame.empty();
-        }
-        int index = Math.floorMod(slot.activeFrameIndex() + animationIndex(slot.frames().size()), slot.frames().size());
-        return slot.frames().get(index);
-    }
-
-    protected static int preferredImageWidth(WikiImage image, int availableWidth, int maximumWidth) {
-        int cap = Math.max(1, Math.min(availableWidth, maximumWidth));
-        if (image == null || image.isEmpty() || image.declaredWidth() <= 0) {
-            return cap;
-        }
-        return Math.max(16, Math.min(cap, image.declaredWidth()));
-    }
-
-    protected static int imageBoxHeight(WikiImage image, int maxWidth, int minimum, int maximum) {
-        if (image == null || image.isEmpty()) {
-            return minimum;
-        }
-        int sourceWidth = image.declaredWidth();
-        int sourceHeight = image.declaredHeight();
-        if (sourceWidth <= 0 || sourceHeight <= 0) {
-            return Math.min(maximum, Math.max(minimum, maxWidth * 3 / 5));
-        }
-        int scaled = (int) Math.round((double) Math.max(1, maxWidth) * sourceHeight / sourceWidth);
-        return Math.max(minimum, Math.min(maximum, scaled));
-    }
-
-    protected int layoutTable(WikiBlock.Table table, int x, int y, int width) {
-        int rowCount = table.rows().size();
-        int columns = Math.max(1, Math.min(8, table.columnCount()));
-        if (rowCount == 0) {
-            return y;
-        }
-
-        int[] widths = columnWidthsForTable(table, width, columns);
-        boolean[][] occupied = new boolean[rowCount][columns];
-        List<TableCellLayout> placedCells = new ArrayList<>();
-        boolean[] headerRows = new boolean[rowCount];
-
-        for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-            WikiBlock.Table.Row row = table.rows().get(rowIndex);
-            boolean allHeader = !row.cells().isEmpty();
-            int searchColumn = 0;
-
-            for (WikiBlock.Table.Cell source : row.cells()) {
-                while (searchColumn < columns && occupied[rowIndex][searchColumn]) {
-                    searchColumn++;
-                }
-                if (searchColumn >= columns) {
-                    break;
-                }
-
-                int columnSpan = Math.max(1, Math.min(source.columnSpan(), columns - searchColumn));
-                int rowSpan = Math.max(1, Math.min(source.rowSpan(), rowCount - rowIndex));
-                int cellWidth = sum(widths, searchColumn, searchColumn + columnSpan);
-                int innerWidth = Math.max(20, cellWidth - 14);
-                InlineTextLayout inlineText = hasInlineImages(source.content().text())
-                        ? layoutInlineText(source.content().text(), innerWidth)
-                        : null;
-                List<FormattedCharSequence> lines = inlineText == null
-                        ? font.split(toComponent(source.content().text()), innerWidth)
-                        : List.of();
-                int textHeight = inlineText == null
-                        ? lines.size() * LINE_HEIGHT
-                        : inlineText.height();
-                int contentHeight = tableCellContentHeight(source.content(), innerWidth, textHeight);
-
-                placedCells.add(new TableCellLayout(
-                        rowIndex,
-                        searchColumn,
-                        rowSpan,
-                        columnSpan,
-                        source.header(),
-                        lines,
-                        inlineText,
-                        source.content(),
-                        contentHeight
-                ));
-
-                for (int coveredRow = rowIndex; coveredRow < rowIndex + rowSpan; coveredRow++) {
-                    for (int coveredColumn = searchColumn;
-                         coveredColumn < searchColumn + columnSpan;
-                         coveredColumn++) {
-                        occupied[coveredRow][coveredColumn] = true;
-                    }
-                }
-
-                allHeader &= source.header();
-                searchColumn += columnSpan;
-            }
-            headerRows[rowIndex] = allHeader;
-        }
-
-        int[] rowHeights = new int[rowCount];
-        java.util.Arrays.fill(rowHeights, 22);
-
-        for (TableCellLayout cell : placedCells) {
-            if (cell.rowSpan() == 1) {
-                rowHeights[cell.row()] = Math.max(rowHeights[cell.row()], cell.contentHeight() + 12);
-            }
-        }
-
-        for (TableCellLayout cell : placedCells) {
-            if (cell.rowSpan() <= 1) {
-                continue;
-            }
-            int currentHeight = sum(rowHeights, cell.row(), cell.row() + cell.rowSpan());
-            int requiredHeight = cell.contentHeight() + 12;
-            if (currentHeight < requiredHeight) {
-                rowHeights[cell.row() + cell.rowSpan() - 1] += requiredHeight - currentHeight;
-            }
-        }
-
-        int[] rowTops = new int[rowCount + 1];
-        for (int row = 0; row < rowCount; row++) {
-            rowTops[row + 1] = rowTops[row] + rowHeights[row];
-        }
-
-        List<RenderedTableCell> renderedCells = new ArrayList<>(placedCells.size());
-        for (TableCellLayout cell : placedCells) {
-            renderedCells.add(new RenderedTableCell(
-                    sum(widths, 0, cell.column()),
-                    rowTops[cell.row()],
-                    sum(widths, cell.column(), cell.column() + cell.columnSpan()),
-                    rowTops[cell.row() + cell.rowSpan()] - rowTops[cell.row()],
-                    cell.header(),
-                    cell.lines(),
-                    cell.inlineText(),
-                    cell.content()
-            ));
-        }
-
-        int totalHeight = rowTops[rowCount];
-        entries.add(new RenderEntry(
-                Kind.TABLE,
-                x,
-                y,
-                width,
-                totalHeight,
-                List.of(),
-                0,
-                new TableLayout(rowHeights, headerRows, renderedCells)
-        ));
-        return y + totalHeight + 9;
-    }
-
-    protected int tableCellContentHeight(WikiContent content, int width, int textHeight) {
-        int height = Math.max(0, textHeight);
-        boolean hasPrevious = textHeight > 0;
-
-        if (!content.itemSlots().isEmpty()) {
-            int step = compactSlotStep(width);
-            int perRow = Math.max(1, width / step);
-            int rows = (content.itemSlots().size() + perRow - 1) / perRow;
-            height += (hasPrevious ? 3 : 0) + rows * step;
-            hasPrevious = true;
-        }
-
-        if (!content.craftingGrids().isEmpty()) {
-            height += (hasPrevious ? 3 : 0) + compactCraftingHeight(width);
-            hasPrevious = true;
-        }
-
-        for (WikiImage image : content.images()) {
-            height += (hasPrevious ? 3 : 0) + imageBoxHeight(image, width, 18, 46);
-            hasPrevious = true;
-        }
-
-        return Math.max(LINE_HEIGHT, height);
-    }
-
-    protected static String searchableText(WikiBlock block) {
-        if (block instanceof WikiBlock.Heading heading) {
-            return heading.text().plainText();
-        }
-        if (block instanceof WikiBlock.MessageBox messageBox) {
-            return searchableContent(messageBox.content());
-        }
-        if (block instanceof WikiBlock.Paragraph paragraph) {
-            return searchableContent(paragraph.content());
-        }
-        if (block instanceof WikiBlock.ListItem item) {
-            return searchableContent(item.content());
-        }
-        if (block instanceof WikiBlock.ForgingTree forgingTree) {
-            StringBuilder result = new StringBuilder();
-            appendForgingSearchText(forgingTree.tree().roots(), result);
-            return result.toString();
-        }
-        if (block instanceof WikiBlock.Table table) {
-            StringBuilder result = new StringBuilder();
-            for (WikiBlock.Table.Row row : table.rows()) {
-                for (WikiBlock.Table.Cell cell : row.cells()) {
-                    if (!result.isEmpty()) result.append(' ');
-                    result.append(searchableContent(cell.content()));
-                }
-            }
-            return result.toString();
-        }
-        if (block instanceof WikiBlock.TabGroup tabs) {
-            StringBuilder result = new StringBuilder();
-            for (WikiBlock.TabGroup.Tab tab : tabs.tabs()) {
-                if (!result.isEmpty()) result.append(' ');
-                result.append(tab.title());
-            }
-            return result.toString();
-        }
-        if (block instanceof WikiBlock.Crafting crafting) {
-            StringBuilder result = new StringBuilder();
-            for (WikiItemSlot slot : crafting.grid().inputs()) {
-                if (!slot.isEmpty()) result.append(' ').append(slot.activeFrame().displayName());
-            }
-            if (!crafting.grid().output().isEmpty()) {
-                result.append(' ').append(crafting.grid().output().activeFrame().displayName());
-            }
-            return result.toString().trim();
-        }
-        if (block instanceof WikiBlock.Image image) {
-            return image.image().displayName() + " " + image.caption().plainText();
-        }
-        return "";
-    }
-
-    protected static String searchableContent(WikiContent content) {
-        if (content == null) {
-            return "";
-        }
-        StringBuilder result = new StringBuilder(content.text().plainText());
-        for (WikiItemSlot slot : content.itemSlots()) {
-            for (WikiItemSlot.Frame frame : slot.frames()) {
-                if (!frame.displayName().isBlank()) {
-                    if (!result.isEmpty()) result.append(' ');
-                    result.append(frame.displayName());
-                }
-                if (!frame.tooltipText().isBlank()) {
-                    if (!result.isEmpty()) result.append(' ');
-                    result.append(frame.tooltipText());
-                }
-            }
-        }
-        for (WikiCraftingGrid grid : content.craftingGrids()) {
-            for (WikiItemSlot slot : grid.inputs()) {
-                if (!slot.isEmpty()) {
-                    if (!result.isEmpty()) result.append(' ');
-                    result.append(slot.activeFrame().displayName());
-                }
-            }
-            if (!grid.output().isEmpty()) {
-                if (!result.isEmpty()) result.append(' ');
-                result.append(grid.output().activeFrame().displayName());
-            }
-        }
-        for (WikiImage image : content.images()) {
-            if (!image.displayName().isBlank()) {
-                if (!result.isEmpty()) result.append(' ');
-                result.append(image.displayName());
-            }
-        }
-        return result.toString();
-    }
-
-    protected static boolean hasInlineImages(WikiText text) {
-        if (text == null) {
-            return false;
-        }
-        for (WikiText.Span span : text.spans()) {
-            if (span.hasInlineImage()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Minecraft's normal Font#split can only lay out glyphs, so image spans
-     * need a tiny rich-text layout of their own. Text still uses normal
-     * Minecraft Components/styles; images simply reserve their actual place
-     * in the line and are drawn by the widget renderer.
-     */
-    protected InlineTextLayout layoutInlineText(WikiText text, int maxWidth) {
-        int width = Math.max(20, maxWidth);
-        List<InlineRun> runs = new ArrayList<>();
-        int cursorX = 0;
-        int cursorY = 0;
-
-        for (WikiText.Span span : text.spans()) {
-            if (span.hasInlineImage()) {
-                WikiImage image = span.inlineImage();
-                int imageHeight = INLINE_IMAGE_HEIGHT;
-                int imageWidth = image.declaredWidth() > 0 && image.declaredHeight() > 0
-                        ? Math.max(1, (int) Math.round(
-                        (double) imageHeight * image.declaredWidth() / image.declaredHeight()))
-                        : imageHeight;
-                imageWidth = Math.min(INLINE_IMAGE_MAX_WIDTH, imageWidth);
-
-                if (cursorX > 0 && cursorX + imageWidth > width) {
-                    cursorX = 0;
-                    cursorY += LINE_HEIGHT;
-                }
-
-                runs.add(new InlineRun(
-                        cursorX,
-                        cursorY,
-                        imageWidth,
-                        imageHeight,
-                        null,
-                        image,
-                        span.isLink() ? resolveHref(span.href()) : null,
-                        spanTooltip(span)
-                ));
-                cursorX += imageWidth;
-                continue;
-            }
-
-            Matcher matcher = INLINE_TOKEN_PATTERN.matcher(span.text());
-            while (matcher.find()) {
-                String token = matcher.group();
-                if (token.equals("\n")) {
-                    cursorX = 0;
-                    cursorY += LINE_HEIGHT;
-                    continue;
-                }
-                boolean whitespace = token.isBlank();
-                if (whitespace) {
-                    token = " ";
-                    if (cursorX == 0) {
-                        continue;
-                    }
-                }
-
-                MutableComponent component = componentForSpan(span, token);
-                FormattedCharSequence visual = component.getVisualOrderText();
-                int tokenWidth = font.width(visual);
-
-                if (whitespace && cursorX + tokenWidth > width) {
-                    cursorX = 0;
-                    cursorY += LINE_HEIGHT;
-                    continue;
-                }
-
-                if (!whitespace && cursorX > 0 && cursorX + tokenWidth > width) {
-                    cursorX = 0;
-                    cursorY += LINE_HEIGHT;
-                }
-
-                if (!whitespace && tokenWidth > width) {
-                    List<FormattedCharSequence> pieces = font.split(component, width);
-                    for (int pieceIndex = 0; pieceIndex < pieces.size(); pieceIndex++) {
-                        FormattedCharSequence piece = pieces.get(pieceIndex);
-                        if (cursorX > 0) {
-                            cursorX = 0;
-                            cursorY += LINE_HEIGHT;
-                        }
-                        int pieceWidth = font.width(piece);
-                        runs.add(new InlineRun(
-                                0, cursorY, pieceWidth, LINE_HEIGHT, piece,
-                                WikiImage.empty(), null, null
-                        ));
-                        cursorX = pieceWidth;
-                        if (pieceIndex + 1 < pieces.size()) {
-                            cursorX = 0;
-                            cursorY += LINE_HEIGHT;
-                        }
-                    }
-                    continue;
-                }
-
-                runs.add(new InlineRun(
-                        cursorX, cursorY, tokenWidth, LINE_HEIGHT, visual,
-                        WikiImage.empty(), null, null
-                ));
-                cursorX += tokenWidth;
-            }
-        }
-
-        int height = cursorY + LINE_HEIGHT;
-        return new InlineTextLayout(runs, height);
-    }
-
-    protected MutableComponent componentForSpan(WikiText.Span span, String visibleText) {
-        MutableComponent part = Component.literal(visibleText);
-        part.withStyle(spanFormatting(span));
-        if (span.bold()) {
-            part.withStyle(ChatFormatting.BOLD);
-        }
-        if (span.italic()) {
-            part.withStyle(ChatFormatting.ITALIC);
-        }
-        if (span.isLink()) {
-            URI uri = resolveHref(span.href());
-            if (uri != null) {
-                part.withStyle(style -> style
-                        .withClickEvent(new ClickEvent.OpenUrl(uri))
-                        .withUnderlined(true));
-            }
-        }
-        Component tooltip = spanTooltip(span);
-        if (tooltip != null) {
-            part.withStyle(style -> style.withHoverEvent(new HoverEvent.ShowText(tooltip)));
-        }
-        return part;
-    }
-
-    protected Component spanTooltip(WikiText.Span span) {
-        if (span == null || !span.isHoverable()) {
-            return null;
-        }
-        MutableComponent tooltip = Component.empty();
-        if (!span.hoverTitle().isBlank()) {
-            tooltip.append(WikiScreenInteractionRenderer.parseLegacyFormatting(
-                    span.hoverTitle(), ChatFormatting.AQUA));
-        }
-        if (!span.hoverText().isBlank()) {
-            if (!span.hoverTitle().isBlank()) {
-                tooltip.append(Component.literal("\n"));
-            }
-            tooltip.append(WikiScreenInteractionRenderer.parseLegacyFormatting(
-                    span.hoverText(), ChatFormatting.GRAY));
-        }
-        return tooltip;
+        return start;
     }
 
     protected int layoutTabs(WikiBlock.TabGroup group, int x, int y, int width) {
@@ -1083,91 +693,6 @@ abstract class WikiScreenLayout extends WikiScreenActions {
         entries.add(new RenderEntry(Kind.TAB_BORDER, x, contentY, width, contentHeight, List.of(), 0, null));
         return contentY + contentHeight + 9;
     }
-
-    protected int layoutCrafting(WikiCraftingGrid grid, int x, int y, int width) {
-        int cardWidth = Math.min(width, 284);
-        int h = 111;
-        entries.add(new RenderEntry(Kind.CRAFTING, x, y, cardWidth, h, List.of(), 0, grid));
-        return y + h + 9;
-    }
-
-    protected static ChatFormatting spanFormatting(WikiText.Span span) {
-        if (span.isLink()) {
-            return ChatFormatting.AQUA;
-        }
-
-        String classes = span.cssClasses().toLowerCase(Locale.ROOT);
-        if (containsCssMarker(classes, "very-special")
-                || containsCssMarker(classes, "special")
-                || containsCssMarker(classes, "negative")
-                || containsCssMarker(classes, "error")
-                || containsCssMarker(classes, "no")) {
-            return ChatFormatting.RED;
-        }
-        if (containsCssMarker(classes, "mythic")) {
-            return ChatFormatting.LIGHT_PURPLE;
-        }
-        if (containsCssMarker(classes, "legendary")
-                || containsCssMarker(classes, "orange")) {
-            return ChatFormatting.GOLD;
-        }
-        if (containsCssMarker(classes, "epic")
-                || containsCssMarker(classes, "purple")) {
-            return ChatFormatting.DARK_PURPLE;
-        }
-        if (containsCssMarker(classes, "uncommon")
-                || containsCssMarker(classes, "positive")
-                || containsCssMarker(classes, "success")
-                || containsCssMarker(classes, "yes")
-                || containsCssMarker(classes, "green")) {
-            return ChatFormatting.GREEN;
-        }
-        if (containsCssMarker(classes, "divine")
-                || containsCssMarker(classes, "aqua")
-                || containsCssMarker(classes, "cyan")) {
-            return ChatFormatting.AQUA;
-        }
-        if (containsCssMarker(classes, "rare")
-                || containsCssMarker(classes, "blue")) {
-            return ChatFormatting.BLUE;
-        }
-        if (containsCssMarker(classes, "muted")
-                || containsCssMarker(classes, "gray")
-                || containsCssMarker(classes, "grey")) {
-            return ChatFormatting.GRAY;
-        }
-        if (containsCssMarker(classes, "warning")
-                || containsCssMarker(classes, "yellow")) {
-            return ChatFormatting.YELLOW;
-        }
-        return ChatFormatting.WHITE;
-    }
-
-    private static boolean containsCssMarker(String classes, String marker) {
-        if (classes == null || classes.isBlank() || marker == null || marker.isBlank()) {
-            return false;
-        }
-        for (String token : classes.split("\\s+")) {
-            if (token.equals(marker)
-                    || token.endsWith("-" + marker)
-                    || token.startsWith(marker + "-")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    protected MutableComponent toComponent(WikiText text) {
-        MutableComponent result = Component.empty();
-        for (WikiText.Span span : text.spans()) {
-            if (span.hasInlineImage()) {
-                continue;
-            }
-            result.append(componentForSpan(span, span.text()));
-        }
-        return result;
-    }
-
 
     protected void updateMaxScroll() {
         int visible = Math.max(1, height - HEADER_HEIGHT - BROWSER_TAB_HEIGHT - TOOLBAR_HEIGHT - FOOTER_HEIGHT - 15);

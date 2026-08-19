@@ -54,7 +54,7 @@ public class InventoryLayoutsFeature {
             // Screen-specific Fabric events are recreated when a screen is initialized.
             // Reattach this listener every time, including when returning from the
             // layouts menu to the same InventoryScreen instance.
-            ScreenEvents.afterRender(screen).register((renderedScreen, graphics, mouseX, mouseY, tickDelta) -> {
+            ScreenEvents.afterExtract(screen).register((renderedScreen, graphics, mouseX, mouseY, tickDelta) -> {
                 if (renderedScreen instanceof InventoryScreen renderedInventoryScreen) {
                     InventoryLayoutOverlay.render(
                             renderedInventoryScreen,
@@ -82,7 +82,7 @@ public class InventoryLayoutsFeature {
     private static void addInventoryLayoutsButton(InventoryScreen screen) {
         ButtonBounds bounds = getButtonBounds(screen);
 
-        Screens.getButtons(screen).add(
+        Screens.getWidgets(screen).add(
                 Button.builder(
                                 Component.literal(MANAGER.activeLayout() == null ? "Layouts" : "Layouts *"),
                                 button -> Minecraft.getInstance().setScreen(

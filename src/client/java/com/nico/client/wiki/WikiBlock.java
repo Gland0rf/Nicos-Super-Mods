@@ -3,6 +3,12 @@ package com.nico.client.wiki;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * A block-level element in a parsed wiki article
+ *
+ * <p>The parser converts supported MediaWiki structures into this model so rendering code does not
+ * need to retain or understand Jsoup elements.</p>
+ */
 public sealed interface WikiBlock permits
         WikiBlock.Heading,
         WikiBlock.MessageBox,
@@ -11,6 +17,7 @@ public sealed interface WikiBlock permits
         WikiBlock.ForgingTree,
         WikiBlock.Table,
         WikiBlock.TabGroup,
+        WikiBlock.UiGroup,
         WikiBlock.Crafting,
         WikiBlock.Image,
         WikiBlock.HorizontalRule {
@@ -102,16 +109,38 @@ public sealed interface WikiBlock permits
         }
     }
 
+    /** A MediaWiki SkyBlock UI group switched by invslot classes. */
+    record UiGroup(String key, List<Panel> panels, int initiallySelectedIndex) implements WikiBlock {
+        public UiGroup {
+            key = Objects.requireNonNullElse(key, "").trim();
+            panels = panels == null ? List.of() : List.copyOf(panels);
+            initiallySelectedIndex = panels.isEmpty()
+                    ? 0
+                    : Math.max(0, Math.min(initiallySelectedIndex, panels.size() - 1));
+        }
+
+        public record Panel(String id, List<WikiBlock> blocks) {
+            public Panel {
+                id = Objects.requireNonNullElse(id, "").trim();
+                blocks = blocks == null ? List.of() : List.copyOf(blocks);
+            }
+        }
+    }
+
     record Crafting(WikiCraftingGrid grid) implements WikiBlock {
         public Crafting {
             grid = grid == null ? WikiCraftingGrid.empty() : grid;
         }
     }
 
-    record Image(WikiImage image, WikiText caption) implements WikiBlock {
+    record Image(WikiImage image, WikiText caption, boolean floatRight) implements WikiBlock {
         public Image {
             image = image == null ? WikiImage.empty() : image;
             caption = caption == null ? WikiText.empty() : caption;
+        }
+
+        public Image(WikiImage image, WikiText caption) {
+            this(image, caption, false);
         }
     }
 

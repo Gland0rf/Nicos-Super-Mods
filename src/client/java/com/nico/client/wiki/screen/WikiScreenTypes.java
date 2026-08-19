@@ -76,38 +76,6 @@ record MessageBoxLayout(
     }
 }
 
-/**
- * One run inside rich inline text. Exactly one of text/image is populated.
- * Offsets are relative to the owning text box.
- */
-record InlineRun(
-        int xOffset,
-        int yOffset,
-        int width,
-        int height,
-        FormattedCharSequence text,
-        WikiImage image,
-        URI uri,
-        Component tooltip
-) {
-    InlineRun {
-        image = image == null ? WikiImage.empty() : image;
-        width = Math.max(0, width);
-        height = Math.max(0, height);
-    }
-
-    boolean isImage() {
-        return !image.isEmpty();
-    }
-}
-
-record InlineTextLayout(List<InlineRun> runs, int height) {
-    InlineTextLayout {
-        runs = runs == null ? List.of() : List.copyOf(runs);
-        height = Math.max(WikiScreenBase.LINE_HEIGHT, height);
-    }
-}
-
 record ForgingTreeRow(
         int yOffset,
         int height,
@@ -146,7 +114,6 @@ record TableCellLayout(
         int columnSpan,
         boolean header,
         List<FormattedCharSequence> lines,
-        InlineTextLayout inlineText,
         WikiContent content,
         int contentHeight
 ) {
@@ -163,8 +130,8 @@ record RenderedTableCell(
         int height,
         boolean header,
         List<FormattedCharSequence> lines,
-        InlineTextLayout inlineText,
-        WikiContent content
+        WikiContent content,
+        int contentHeight
 ) {
     RenderedTableCell {
         lines = lines == null ? List.of() : List.copyOf(lines);

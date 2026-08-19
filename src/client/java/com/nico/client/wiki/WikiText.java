@@ -4,6 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Immutable article model passed from the scraper/parser layer to the Minecraft screen.
+ * @param spans
+ */
 public record WikiText(List<Span> spans) {
     public WikiText {
         spans = spans == null ? List.of() : List.copyOf(spans);
@@ -17,34 +21,18 @@ public record WikiText(List<Span> spans) {
         if (text == null || text.isBlank()) {
             return empty();
         }
-
-        return new WikiText(List.of(
-                new Span(
-                        text,
-                        "",
-                        false,
-                        false,
-                        "",
-                        "",
-                        "",
-                        WikiImage.empty()
-                )
-        ));
+        return new WikiText(List.of(new Span(text, "", false, false, "", "", "")));
     }
 
     public boolean isBlank() {
-        return spans.stream().allMatch(span ->
-                span.text().isBlank() && !span.hasInlineImage()
-        );
+        return spans.stream().allMatch(span -> span.text().isBlank() && span.inlineImage().isEmpty());
     }
 
     public String plainText() {
         StringBuilder result = new StringBuilder();
-
         for (Span span : spans) {
             result.append(span.text());
         }
-
         return result.toString().trim();
     }
 
@@ -52,17 +40,12 @@ public record WikiText(List<Span> spans) {
         if (other == null || other.isBlank()) {
             return this;
         }
-
         if (isBlank()) {
             return other;
         }
-
-        List<Span> result =
-                new ArrayList<>(spans.size() + other.spans().size());
-
+        List<Span> result = new ArrayList<>(spans.size() + other.spans().size());
         result.addAll(spans);
         result.addAll(other.spans());
-
         return new WikiText(mergeAdjacent(result));
     }
 
@@ -72,51 +55,28 @@ public record WikiText(List<Span> spans) {
 
     private static List<Span> mergeAdjacent(List<Span> source) {
         List<Span> result = new ArrayList<>();
-
         for (Span span : source) {
-            if (span == null) {
+            if (span == null || span.text().isEmpty()) {
                 continue;
             }
-
-            /*
-             * An image span often has no text, but it must not be discarded.
-             */
-            if (span.text().isEmpty() && !span.hasInlineImage()) {
-                continue;
-            }
-
             if (!result.isEmpty()) {
                 Span previous = result.get(result.size() - 1);
-
-                /*
-                 * Never merge inline-image spans with neighboring text.
-                 * Their exact position in the text flow matters.
-                 */
-                if (!previous.hasInlineImage()
-                        && !span.hasInlineImage()
-                        && previous.sameFormatting(span)) {
-
-                    result.set(
-                            result.size() - 1,
-                            new Span(
-                                    previous.text() + span.text(),
-                                    previous.href(),
-                                    previous.bold(),
-                                    previous.italic(),
-                                    previous.cssClasses(),
-                                    previous.hoverTitle(),
-                                    previous.hoverText(),
-                                    WikiImage.empty()
-                            )
-                    );
-
+                if (!previous.hasInlineImage() && !span.hasInlineImage() && previous.sameFormatting(span)) {
+                    result.set(result.size() - 1, new Span(
+                            previous.text() + span.text(),
+                            previous.href(),
+                            previous.bold(),
+                            previous.italic(),
+                            previous.cssClasses(),
+                            previous.hoverTitle(),
+                            previous.hoverText(),
+                            WikiImage.empty()
+                    ));
                     continue;
                 }
             }
-
             result.add(span);
         }
-
         return List.copyOf(result);
     }
 
@@ -136,57 +96,17 @@ public record WikiText(List<Span> spans) {
             cssClasses = Objects.requireNonNullElse(cssClasses, "").trim();
             hoverTitle = Objects.requireNonNullElse(hoverTitle, "").trim();
             hoverText = Objects.requireNonNullElse(hoverText, "").trim();
-
-            if (inlineImage == null) {
-                inlineImage = WikiImage.empty();
-            }
+            inlineImage = inlineImage == null ? WikiImage.empty() : inlineImage;
         }
 
-        /**
-         * Backwards-compatible constructor for code that existed before
-         * inline-image support.
-         */
-        public Span(
-                String text,
-                String href,
-                boolean bold,
-                boolean italic,
-                String cssClasses,
-                String hoverTitle,
-                String hoverText
-        ) {
-            this(
-                    text,
-                    href,
-                    bold,
-                    italic,
-                    cssClasses,
-                    hoverTitle,
-                    hoverText,
-                    WikiImage.empty()
-            );
+        /** Backwards-compatible constructor for existing rich-text call sites. */
+        public Span(String text, String href, boolean bold, boolean italic, String cssClasses, String hoverTitle, String hoverText) {
+            this(text, href, bold, italic, cssClasses, hoverTitle, hoverText, WikiImage.empty());
         }
 
-        /**
-         * Older backwards-compatible constructor.
-         */
-        public Span(
-                String text,
-                String href,
-                boolean bold,
-                boolean italic,
-                String cssClasses
-        ) {
-            this(
-                    text,
-                    href,
-                    bold,
-                    italic,
-                    cssClasses,
-                    "",
-                    "",
-                    WikiImage.empty()
-            );
+        /** Backwards-compatible constructor for existing call sites. */
+        public Span(String text, String href, boolean bold, boolean italic, String cssClasses) {
+            this(text, href, bold, italic, cssClasses, "", "", WikiImage.empty());
         }
 
         public boolean isLink() {
@@ -194,29 +114,22 @@ public record WikiText(List<Span> spans) {
         }
 
         public boolean isHoverable() {
-            return !hoverTitle.isBlank()
-                    || !hoverText.isBlank();
+            return !hoverTitle.isBlank() || !hoverText.isBlank();
         }
 
-        /**
-         * True when this span represents an image that should be drawn
-         * directly inside the surrounding text.
-         */
         public boolean hasInlineImage() {
-            return inlineImage != null
-                    && !inlineImage.isEmpty();
+            return inlineImage != null && !inlineImage.isEmpty();
         }
 
         private boolean sameFormatting(Span other) {
             return other != null
-                    && !hasInlineImage()
-                    && !other.hasInlineImage()
                     && href.equals(other.href)
                     && bold == other.bold
                     && italic == other.italic
                     && cssClasses.equals(other.cssClasses)
                     && hoverTitle.equals(other.hoverTitle)
-                    && hoverText.equals(other.hoverText);
+                    && hoverText.equals(other.hoverText)
+                    && inlineImage.equals(other.inlineImage);
         }
     }
 }

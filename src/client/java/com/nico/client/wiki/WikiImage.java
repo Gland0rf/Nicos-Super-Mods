@@ -2,6 +2,14 @@ package com.nico.client.wiki;
 
 import java.util.Objects;
 
+/**
+ * Lightweight image reference retained by the parsed model before texture download and decoding.
+ * @param url
+ * @param altText
+ * @param title
+ * @param declaredWidth
+ * @param declaredHeight
+ */
 public record WikiImage(String url, String altText, String title, int declaredWidth, int declaredHeight) {
     public WikiImage {
         url = Objects.requireNonNullElse(url, "").trim();

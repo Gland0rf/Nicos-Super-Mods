@@ -1,11 +1,7 @@
 package com.nico.client.wiki.service;
 
 import com.google.gson.JsonObject;
-import com.nico.client.wiki.WikiBlock;
-import com.nico.client.wiki.WikiHtmlContract;
-import com.nico.client.wiki.WikiHttp;
-import com.nico.client.wiki.WikiImage;
-import com.nico.client.wiki.WikiText;
+import com.nico.client.wiki.*;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
@@ -21,6 +17,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Shared parsing and HTTP helpers used by the wiki service pipeline.
+ *
+ * <p>Parser subclasses inherit these utilities so URL normalization, rich-text extraction,
+ * ignored-element handling, and MediaWiki API requests follow the same rules throughout the scraper.</p>
+ */
 public class WikiServiceSupport {
     protected static final String WIKI_API_ENDPOINT = "https://hypixelskyblock.minecraft.wiki/api.php";
     protected static final String WIKI_BASE = "https://hypixelskyblock.minecraft.wiki";
@@ -47,6 +49,14 @@ public class WikiServiceSupport {
         return result.replace(" ", "%20");
     }
 
+    protected static String inlineImagePlaceholder(WikiImage image) {
+        // Keep every inline icon in the same three-space text slot. The
+        // renderer adds a one-pixel gutter on both sides of the actual image,
+        // so the icon cannot touch the previous/next glyph and the spacing
+        // stays consistent regardless of the source image dimensions.
+        return "\u00A0\u00A0\u00A0";
+    }
+
     protected static WikiText parseStyledText(Element element) {
         Element clone = element.clone();
         removeIgnoredElements(clone);
@@ -55,7 +65,7 @@ public class WikiServiceSupport {
         trimSpans(spans);
         List<WikiText.Span> result = new ArrayList<>();
         for (MutableSpan span : spans) {
-            if (!span.text.isEmpty() || !span.inlineImage.isEmpty()) {
+            if (!span.text.isEmpty()) {
                 result.add(new WikiText.Span(
                         span.text,
                         span.href,
@@ -88,14 +98,56 @@ public class WikiServiceSupport {
         if (!(node instanceof Element element)) {
             return;
         }
-
         String tag = element.tagName();
+
+        if (element.hasClass(WikiHtmlContract.INVENTORY_SLOT)
+                && WikiContentParser.isInlineInventorySlot(element)) {
+            WikiItemSlot slot = WikiContentParser.parseItemSlot(element);
+            WikiItemSlot.Frame frame = slot.activeFrame();
+            if (!frame.image().isEmpty()) {
+                spans.add(new MutableSpan(
+                        inlineImagePlaceholder(frame.image()),
+                        firstNonBlank(frame.link(), href),
+                        bold,
+                        italic,
+                        cssClasses,
+                        firstNonBlank(frame.tooltipTitle(), frame.displayName(), hoverText),
+                        firstNonBlank(frame.tooltipText(), hoverText),
+                        frame.image()
+                ));
+            }
+            return;
+        }
+
         if (tag.equals("script") || tag.equals("style") || tag.equals("noscript")
                 || tag.equals("svg") || tag.equals("canvas")) {
             return;
         }
+        if (tag.equals("img")) {
+            WikiImage image = WikiContentParser.parseImage(element);
+            if (!image.isEmpty() && WikiContentParser.isInlineWikiIcon(element, image)) {
+                String imageHoverTitle = firstNonBlank(
+                        hoverTitle,
+                        normalizePlainHoverAttribute(element.attr("title")),
+                        normalizePlainHoverAttribute(element.attr("alt"))
+                );
+
+                spans.add(new MutableSpan(
+                        inlineImagePlaceholder(image),
+                        href,
+                        bold,
+                        italic,
+                        cssClasses,
+                        imageHoverTitle,
+                        hoverText,
+                        image
+                ));
+            }
+            return;
+        }
+
         if (tag.equals("br")) {
-            appendHardBreak(spans, href, bold, italic, cssClasses, hoverTitle, hoverText);
+            appendText(spans, "\n", href, bold, italic, cssClasses, hoverTitle, hoverText);
             return;
         }
 
@@ -110,62 +162,6 @@ public class WikiServiceSupport {
         String nextHoverTitle = firstNonBlank(mineTipTitle, hoverTitle);
         String nextHoverText = firstNonBlank(mineTipText, browserTitle, hoverText);
 
-        /*
-         * Inventory slots and ordinary <img> tags also appear inside prose on
-         * the live Wiki. Keep those at their exact text position instead of
-         * flattening them into a separate slot/image strip after the paragraph.
-         */
-        if (element.hasClass(WikiHtmlContract.INVENTORY_SLOT)) {
-            Element frame = element.getElementsByClass(WikiHtmlContract.INVENTORY_SLOT_ITEM).first();
-            Element source = frame == null ? element : frame;
-            Element image = source.getElementsByClass(WikiHtmlContract.INVENTORY_SLOT_ITEM_IMAGE).first();
-            if (image != null && !image.tagName().equals("img")) {
-                image = image.selectFirst("img");
-            }
-            if (image == null) {
-                image = source.selectFirst("img");
-            }
-            Element anchor = source.tagName().equals("a") ? source : source.selectFirst("a[href]");
-            String slotHref = anchor == null ? nextHref : firstNonBlank(absoluteUrl(anchor, "href"), nextHref);
-            String slotTitle = firstNonBlank(
-                    normalizeMineTipAttribute(source.attr("data-minetip-title")),
-                    normalizeMineTipAttribute(element.attr("data-minetip-title")),
-                    nextHoverTitle
-            );
-            String slotText = firstNonBlank(
-                    normalizeMineTipAttribute(source.attr("data-minetip-text")),
-                    normalizeMineTipAttribute(element.attr("data-minetip-text")),
-                    nextHoverText
-            );
-            if (image != null) {
-                appendInlineImage(
-                        spans,
-                        parseWikiImage(image),
-                        slotHref,
-                        nextBold,
-                        nextItalic,
-                        nextClasses,
-                        slotTitle,
-                        slotText
-                );
-            }
-            return;
-        }
-
-        if (tag.equals("img")) {
-            appendInlineImage(
-                    spans,
-                    parseWikiImage(element),
-                    nextHref,
-                    nextBold,
-                    nextItalic,
-                    nextClasses,
-                    nextHoverTitle,
-                    nextHoverText
-            );
-            return;
-        }
-
         for (Node child : element.childNodes()) {
             appendNodeText(
                     child,
@@ -178,57 +174,9 @@ public class WikiServiceSupport {
                     nextHoverText
             );
         }
-        if (tag.equals("li")) {
-            appendHardBreak(spans, href, bold, italic, cssClasses, hoverTitle, hoverText);
-        } else if (tag.equals("p") || tag.equals("dd") || tag.equals("dt") || tag.equals("div")) {
+        if (tag.equals("p") || tag.equals("li") || tag.equals("dd") || tag.equals("dt") || tag.equals("div")) {
             appendText(spans, " ", href, bold, italic, cssClasses, hoverTitle, hoverText);
         }
-    }
-
-    protected static void appendHardBreak(
-            List<MutableSpan> spans,
-            String href,
-            boolean bold,
-            boolean italic,
-            String cssClasses,
-            String hoverTitle,
-            String hoverText
-    ) {
-        if (spans.isEmpty()) {
-            return;
-        }
-        MutableSpan previous = spans.get(spans.size() - 1);
-        if (previous.inlineImage.isEmpty()
-                && previous.sameFormat(href, bold, italic, cssClasses, hoverTitle, hoverText)) {
-            previous.text = previous.text.stripTrailing() + "\n";
-            return;
-        }
-        spans.add(new MutableSpan("\n", href, bold, italic, cssClasses, hoverTitle, hoverText));
-    }
-
-    protected static void appendInlineImage(
-            List<MutableSpan> spans,
-            WikiImage image,
-            String href,
-            boolean bold,
-            boolean italic,
-            String cssClasses,
-            String hoverTitle,
-            String hoverText
-    ) {
-        if (image == null || image.isEmpty()) {
-            return;
-        }
-        spans.add(new MutableSpan(
-                "",
-                href,
-                bold,
-                italic,
-                cssClasses,
-                hoverTitle,
-                hoverText,
-                image
-        ));
     }
 
     protected static void appendText(
@@ -244,12 +192,22 @@ public class WikiServiceSupport {
         if (raw == null || raw.isEmpty()) {
             return;
         }
-        String text = raw.replace('\u00a0', ' ').replaceAll("\\s+", " ");
+        String text = raw.replace('\u00a0', ' ')
+                .replaceAll("[\\t\\x0B\\f\\r ]+", " ")
+                .replaceAll(" *\\n *", "\n");
+
         if (spans.isEmpty()) {
             text = text.stripLeading();
         } else {
             MutableSpan previous = spans.get(spans.size() - 1);
-            if (previous.inlineImage.isEmpty() && previous.text.endsWith(" ") && text.startsWith(" ")) {
+            if (!previous.inlineImage.isEmpty() && text.startsWith(" ")) {
+                // The inline-image placeholder already provides the visual gap.
+                // Removing this normal space also prevents a wrap opportunity
+                // between the icon and its label.
+                text = text.substring(1);
+            } else if (previous.text.endsWith(" ") && text.startsWith(" ")
+                    || (previous.text.endsWith("\n") && text.startsWith(" "))
+                    || (previous.text.endsWith(" ") && text.startsWith("\n"))) {
                 text = text.substring(1);
             }
         }
@@ -264,110 +222,7 @@ public class WikiServiceSupport {
                 return;
             }
         }
-        spans.add(new MutableSpan(text, href, bold, italic, cssClasses, hoverTitle, hoverText));
-    }
-
-    protected static WikiImage parseWikiImage(Element image) {
-        if (image == null) {
-            return WikiImage.empty();
-        }
-
-        String url = bestImageCandidate(firstNonBlank(
-                image.attr("data-srcset"),
-                image.attr("srcset")
-        ));
-        if (url.isBlank()) {
-            url = firstNonBlank(
-                    image.attr("data-src"),
-                    image.attr("data-lazy-src"),
-                    image.attr("src")
-            );
-        }
-        url = normalizeImageUrl(image, url);
-
-        /*
-         * declaredWidth/declaredHeight describe how large the image is meant
-         * to appear in the article, not the original uploaded file size.
-         * MediaWiki's data-file-width can be hundreds of pixels even when an
-         * item icon is rendered at 20px. Using it here was why tiny inline
-         * icons became huge standalone images in-game.
-         */
-        int width = parsePositiveInt(firstNonBlank(
-                image.attr("width"),
-                image.attr("data-width"),
-                cssPixelDimension(image.attr("style"), "width")
-        ), 0);
-        int height = parsePositiveInt(firstNonBlank(
-                image.attr("height"),
-                image.attr("data-height"),
-                cssPixelDimension(image.attr("style"), "height")
-        ), 0);
-
-        return new WikiImage(url, image.attr("alt"), image.attr("title"), width, height);
-    }
-
-    protected static String cssPixelDimension(String style, String property) {
-        if (style == null || style.isBlank() || property == null || property.isBlank()) {
-            return "";
-        }
-        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
-                "(?i)(?:^|;)\\s*" + java.util.regex.Pattern.quote(property)
-                        + "\\s*:\\s*([0-9]+(?:\\.[0-9]+)?)px"
-        ).matcher(style);
-        if (!matcher.find()) {
-            return "";
-        }
-        try {
-            return Integer.toString((int) Math.round(Double.parseDouble(matcher.group(1))));
-        } catch (NumberFormatException ignored) {
-            return "";
-        }
-    }
-
-    protected static String bestImageCandidate(String srcSet) {
-        if (srcSet == null || srcSet.isBlank()) {
-            return "";
-        }
-
-        String bestUrl = "";
-        double bestPixels = -1.0D;
-        for (String rawCandidate : srcSet.split(",")) {
-            String candidate = rawCandidate.trim();
-            if (candidate.isBlank()) {
-                continue;
-            }
-            String[] parts = candidate.split("\\s+", 2);
-            String candidateUrl = parts[0].trim();
-            if (candidateUrl.isBlank()) {
-                continue;
-            }
-
-            double score = 1.0D;
-            if (parts.length > 1) {
-                String descriptor = parts[1].trim().toLowerCase(java.util.Locale.ROOT);
-                try {
-                    if (descriptor.endsWith("w")) {
-                        score = Double.parseDouble(descriptor.substring(0, descriptor.length() - 1));
-                    } else if (descriptor.endsWith("x")) {
-                        /*
-                         * Density candidates are relative to src. Treat them as
-                         * a strong preference without making every 2x candidate
-                         * beat a clearly larger absolute-width thumbnail.
-                         */
-                        score = 256.0D * Double.parseDouble(
-                                descriptor.substring(0, descriptor.length() - 1)
-                        );
-                    }
-                } catch (NumberFormatException ignored) {
-                    score = 1.0D;
-                }
-            }
-            if (score > bestPixels) {
-                bestPixels = score;
-                bestUrl = candidateUrl;
-            }
-        }
-        return bestUrl;
+        spans.add(new MutableSpan(text, href, bold, italic, cssClasses, hoverTitle, hoverText, WikiImage.empty()));
     }
 
     protected static String normalizeMineTipAttribute(String value) {
@@ -399,21 +254,21 @@ public class WikiServiceSupport {
     }
 
     protected static void trimSpans(List<MutableSpan> spans) {
-        while (!spans.isEmpty()
-                && spans.get(0).inlineImage.isEmpty()
-                && spans.get(0).text.isBlank()) {
+        while (!spans.isEmpty() && spans.get(0).text.isBlank() && spans.get(0).inlineImage.isEmpty()) {
             spans.remove(0);
         }
         while (!spans.isEmpty()
-                && spans.get(spans.size() - 1).inlineImage.isEmpty()
-                && spans.get(spans.size() - 1).text.isBlank()) {
+                && spans.get(spans.size() - 1).text.isBlank()
+                && spans.get(spans.size() - 1).inlineImage.isEmpty()) {
             spans.remove(spans.size() - 1);
         }
-        if (!spans.isEmpty() && spans.get(0).inlineImage.isEmpty()) {
-            spans.get(0).text = spans.get(0).text.stripLeading();
-        }
-        if (!spans.isEmpty() && spans.get(spans.size() - 1).inlineImage.isEmpty()) {
-            spans.get(spans.size() - 1).text = spans.get(spans.size() - 1).text.stripTrailing();
+        if (!spans.isEmpty()) {
+            if (spans.get(0).inlineImage.isEmpty()) {
+                spans.get(0).text = spans.get(0).text.stripLeading();
+            }
+            if (spans.get(spans.size() - 1).inlineImage.isEmpty()) {
+                spans.get(spans.size() - 1).text = spans.get(spans.size() - 1).text.stripTrailing();
+            }
         }
     }
 
@@ -450,6 +305,24 @@ public class WikiServiceSupport {
 
     protected static void removeIgnoredElements(Element root) {
         root.select("script,style,noscript").remove();
+
+        for (Element element : new ArrayList<>(root.select("[hidden]"))) {
+            if (!element.hasClass(WikiHtmlContract.UI_TAB_CONTENT)) element.remove();
+        }
+
+        root.select(".sortkey,.sort-key,.mw-sortkey,.mw-sort-key").remove();
+
+        for (Element element : new ArrayList<>(root.select("[style]"))) {
+            String style = element.attr("style")
+                    .toLowerCase(java.util.Locale.ROOT)
+                    .replaceAll("\\s+", "");
+
+            if ((style.contains("display:none") || style.contains("visibility:hidden"))
+                    && !element.hasClass(WikiHtmlContract.UI_TAB_CONTENT)) {
+                element.remove();
+            }
+        }
+
         root.getElementsByClass(WikiHtmlContract.EDIT_SECTION).remove();
         root.getElementsByClass(WikiHtmlContract.REFERENCE).remove();
         root.getElementsByClass(WikiHtmlContract.REFERENCES).remove();
@@ -657,22 +530,10 @@ public class WikiServiceSupport {
                 boolean italic,
                 String cssClasses,
                 String hoverTitle,
-                String hoverText
-        ) {
-            this(text, href, bold, italic, cssClasses, hoverTitle, hoverText, WikiImage.empty());
-        }
-
-        private MutableSpan(
-                String text,
-                String href,
-                boolean bold,
-                boolean italic,
-                String cssClasses,
-                String hoverTitle,
                 String hoverText,
                 WikiImage inlineImage
         ) {
-            this.text = text == null ? "" : text;
+            this.text = text;
             this.href = href == null ? "" : href;
             this.bold = bold;
             this.italic = italic;
@@ -690,8 +551,7 @@ public class WikiServiceSupport {
                 String otherHoverTitle,
                 String otherHoverText
         ) {
-            return inlineImage.isEmpty()
-                    && href.equals(otherHref == null ? "" : otherHref)
+            return href.equals(otherHref == null ? "" : otherHref)
                     && bold == otherBold
                     && italic == otherItalic
                     && cssClasses.equals(otherClasses == null ? "" : otherClasses)
