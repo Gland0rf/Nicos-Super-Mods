@@ -102,7 +102,7 @@ public final class SkyblockItemDataReader {
     }
 
     private static SkyblockItemData empty(SkyblockItemResolver.ItemIdentity identity) {
-        return new SkyblockItemData(identity.internalId(), identity.displayName(), 1, "", 0, 0, 0
+        return new SkyblockItemData(identity.internalId(), identity.displayName(), 1, "", 0, 0, 0,
                 0, 0, 0, false, "", Map.of(),
                 List.of(), List.of(), Map.of());
     }

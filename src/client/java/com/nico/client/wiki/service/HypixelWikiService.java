@@ -4,35 +4,18 @@ import com.google.gson.JsonObject;
 import com.nico.client.utils.BazaarService;
 import com.google.gson.JsonParser;
 import com.nico.client.wiki.*;
-<<<<<<< Updated upstream
-=======
-import com.nico.client.utils.tradeprot.WikiAuctionHouseEnricher;
-import com.nico.client.utils.tradeprot.WikiAuctionHouseService;
-import com.nico.client.utils.tradeprot.WikiBazaarEnricher;
-import com.nico.client.utils.tradeprot.WikiBazaarService;
->>>>>>> Stashed changes
 import net.minecraft.world.item.ItemStack;
 import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.nodes.Node;
-import org.jsoup.nodes.TextNode;
-import org.jsoup.select.Elements;
 
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 

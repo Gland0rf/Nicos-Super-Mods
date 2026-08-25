@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /** Lightweight fallback for Wiki Bazaar values when the host mod did not inject a BazaarService. */
-public final class WikiBazaarService {
+public final class BazaarService {
     private static final URI ENDPOINT = URI.create("https://api.hypixel.net/v2/skyblock/bazaar");
     private static final long CACHE_TTL_MILLIS = Duration.ofMinutes(5).toMillis();
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
@@ -29,7 +29,7 @@ public final class WikiBazaarService {
     private static volatile long cachedAt;
     private static volatile CompletableFuture<Map<String, Product>> refresh;
 
-    private WikiBazaarService() { }
+    private BazaarService() { }
 
     public static CompletableFuture<Map<String, Product>> products() {
         long now = System.currentTimeMillis();
@@ -38,7 +38,7 @@ public final class WikiBazaarService {
             return CompletableFuture.completedFuture(current);
         }
 
-        synchronized (WikiBazaarService.class) {
+        synchronized (BazaarService.class) {
             now = System.currentTimeMillis();
             current = cachedProducts;
             if (!current.isEmpty() && now - cachedAt < CACHE_TTL_MILLIS) {
@@ -60,7 +60,7 @@ public final class WikiBazaarService {
                         return parse(response.body());
                     })
                     .whenComplete((products, throwable) -> {
-                        synchronized (WikiBazaarService.class) {
+                        synchronized (BazaarService.class) {
                             if (throwable == null && products != null && !products.isEmpty()) {
                                 cachedProducts = products;
                                 cachedAt = System.currentTimeMillis();

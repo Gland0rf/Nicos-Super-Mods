@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.GZIPInputStream;
 
-public final class WikiAuctionHouseService {
+public final class AuctionHouseService {
     private static final String AUCTIONS_ENDPOINT = "https://api.hypixel.net/v2/skyblock/auctions";
     private static final long CACHE_TIL_MILLIS = Duration.ofMinutes(15).toMillis();
     private static final int MAX_PAGES = 100;
@@ -40,7 +40,7 @@ public final class WikiAuctionHouseService {
     private static volatile long cachedAt;
     private static volatile CompletableFuture<Snapshot> refresh;
 
-    private WikiAuctionHouseService() { }
+    private AuctionHouseService() { }
 
     public static CompletableFuture<LowestBin> lowestBin(String internalId, String displayName) {
         String wantedId = normalizeId(internalId);
@@ -76,7 +76,7 @@ public final class WikiAuctionHouseService {
             return CompletableFuture.completedFuture(current);
         }
 
-        synchronized (WikiAuctionHouseService.class) {
+        synchronized (AuctionHouseService.class) {
             now = System.currentTimeMillis();
             current = cachedSnapshot;
             if (!current.isEmpty() && now - cachedAt < CACHE_TIL_MILLIS) {
@@ -85,7 +85,7 @@ public final class WikiAuctionHouseService {
             if (refresh != null && !refresh.isDone()) return refresh;
 
             refresh = loadSnapshot().whenComplete((loaded, throwable) -> {
-                synchronized (WikiAuctionHouseService.class) {
+                synchronized (AuctionHouseService.class) {
                     if (throwable == null && loaded != null && !loaded.isEmpty()) {
                         cachedSnapshot = loaded;
                         cachedAt = System.currentTimeMillis();

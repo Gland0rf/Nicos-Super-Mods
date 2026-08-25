@@ -1,8 +1,4 @@
-<<<<<<<< Updated upstream:src/client/java/com/nico/client/wiki/service/WikiBazaarEnricher.java
 package com.nico.client.wiki.service;
-========
-package com.nico.client.utils.tradeprot;
->>>>>>>> Stashed changes:src/client/java/com/nico/client/utils/tradeprot/WikiBazaarEnricher.java
 
 import com.nico.client.utils.BazaarService;
 import com.nico.client.wiki.WikiBlock;

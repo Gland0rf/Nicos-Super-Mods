@@ -1,5 +1,6 @@
 package com.nico.client.init;
 
+import com.mojang.brigadier.CommandDispatcher;
 import com.nico.client.bloodrush.BloodRoutes;
 import com.nico.client.bloodrush.RouteCommands;
 import com.nico.client.bloodrush.RouteContext;
@@ -7,12 +8,16 @@ import com.nico.client.bloodrush.RouteEditor;
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonTeammateScanner;
+import com.nico.client.utils.tradeprot.valuation.ItemValueService;
+import com.nico.client.utils.tradeprot.valuation.records.ItemValueEstimate;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
+import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -20,6 +25,7 @@ import java.util.Set;
 public final class NsmClientCommands {
 
     private static RouteEditor routeEditor;
+    private static ItemValueService itemValueService;
 
     private NsmClientCommands() { }
 
@@ -30,8 +36,13 @@ public final class NsmClientCommands {
                 (dispatcher, registryAccess) -> {
                     registerRoomsCommand(dispatcher);
                     registerConfigCommands(dispatcher);
+                    registerItemValueCommand(dispatcher);
                 }
         );
+    }
+
+    public static void setItemValueService(ItemValueService service) {
+        itemValueService = service;
     }
 
     private static void registerRoomsCommand(
@@ -59,6 +70,63 @@ public final class NsmClientCommands {
                 ClientCommands.literal("nsm")
                         .executes(context -> openConfigScreen())
                         .then(RouteCommands.node(routeEditor))
+        );
+    }
+
+    private static void registerItemValueCommand(CommandDispatcher<FabricClientCommandSource> dispatcher) {
+        dispatcher.register(
+                ClientCommands.literal("nsmvalue")
+                        .executes(context -> executeItemValueCommand())
+        );
+    }private static int executeItemValueCommand() {
+        Minecraft minecraft = Minecraft.getInstance();
+
+        if (minecraft.player == null) {
+            return 0;
+        }
+
+        if (itemValueService == null) {
+            sendMessage(Component.literal("§cItemValueService has not been initialized."));
+            return 0;
+        }
+
+        ItemStack stack = minecraft.player.getMainHandItem();
+
+        if (stack.isEmpty()) {
+            sendMessage(Component.literal("§cHold a SkyBlock item first."));
+            return 0;
+        }
+
+        sendMessage(Component.literal("§7Calculating item value..."));
+
+        itemValueService.estimate(stack)
+                .thenAccept(estimate ->
+                        minecraft.execute(() -> printItemValueEstimate(estimate))
+                )
+                .exceptionally(throwable -> {
+                    throwable.printStackTrace();
+
+                    minecraft.execute(() ->
+                            sendMessage(
+                                    Component.literal(
+                                            "§cFailed to calculate item value. Check latest.log."
+                                    )
+                            )
+                    );
+
+                    return null;
+                });
+
+        return 1;
+    }
+
+    private static void printItemValueEstimate(ItemValueEstimate estimate) {
+        sendMessage(Component.literal("§a--- NSM Item Value Debug ---"));
+
+        sendMessage(
+                Component.literal(
+                        "§f" + estimate
+                )
         );
     }
 

@@ -18,6 +18,8 @@ import com.nico.client.stacking.SecretStackingDetector;
 import com.nico.client.utils.BazaarService;
 import com.nico.client.utils.HypixelApiClient;
 //import com.nico.client.wiki.service.HypixelWikiService; TEMPORARY
+import com.nico.client.utils.tradeprot.valuation.ItemValueService;
+import com.nico.client.utils.tradeprot.valuation.SkyblockItemDataReader;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.core.BlockPos;
@@ -30,6 +32,7 @@ public final class Main implements ClientModInitializer {
 
     private HypixelApiClient apiClient;
     private BazaarService bazaarService;
+    private ItemValueService itemValueService;
 
     @Override
     public void onInitializeClient() {
@@ -57,9 +60,11 @@ public final class Main implements ClientModInitializer {
 
         ModCheckTitleButton.register();
 
-        // API and Bazaar
         apiClient = new HypixelApiClient(null);
         bazaarService = new BazaarService(apiClient);
+
+        itemValueService = new ItemValueService(bazaarService, new SkyblockItemDataReader());
+        NsmClientCommands.setItemValueService(itemValueService);
 
         //HypixelWikiService.setBazaarService(bazaarService); TEMPORARY
 

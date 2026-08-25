@@ -1,5 +1,6 @@
-package com.nico.client.utils.tradeprot;
+package com.nico.client.wiki.service;
 
+import com.nico.client.utils.tradeprot.AuctionHouseService;
 import com.nico.client.wiki.WikiContent;
 import com.nico.client.wiki.WikiInfobox;
 import com.nico.client.wiki.WikiPage;
@@ -38,7 +39,7 @@ public final class WikiAuctionHouseEnricher {
                 : CompletableFuture.completedFuture(itemId);
 
         return itemIdFuture
-                .thenCompose(resolvedId -> WikiAuctionHouseService.lowestBin(resolvedId, basePage.title()))
+                .thenCompose(resolvedId -> AuctionHouseService.lowestBin(resolvedId, basePage.title()))
                 .thenApply(lowestBin -> replaceAuctionHouseRows(basePage, lowestBin))
                 .exceptionally(throwable -> basePage);
     }
@@ -87,7 +88,7 @@ public final class WikiAuctionHouseEnricher {
 
     private static WikiPage replaceAuctionHouseRows(
             WikiPage page,
-            WikiAuctionHouseService.LowestBin lowestBin
+            AuctionHouseService.LowestBin lowestBin
     ) {
         List<WikiInfobox.Entry> result = new ArrayList<>(page.infobox().entries().size());
         boolean inAuctionHouse = false;
