@@ -7,6 +7,7 @@ import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.hud.HudLayoutManager;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutsFeature;
 import com.nico.client.lag.LagMonitorFeature;
+import com.nico.client.memleak.MemLeakFeature;
 import com.nico.client.stacking.SecretStackingDetector;
 import com.nico.client.utils.BazaarService;
 import com.nico.client.utils.HypixelApiClient;
@@ -33,6 +34,8 @@ public final class Main implements ClientModInitializer {
         bazaarService = new BazaarService(apiClient);
 
         //HypixelWikiService.setBazaarService(bazaarService); TEMPORARY
+
+        MemLeakFeature.initialize();
 
         HUD_LAYOUT = ClientFeatureInitializer.initialize();
         InventoryLayoutsFeature.initialize();

@@ -34,7 +34,9 @@ public final class ModClassIndex {
         Map<String, ModIdentity> mods = new HashMap<>();
 
         for (ModContainer container : FabricLoader.getInstance().getAllMods()) {
-            var metadata = container.getMetadata();
+            ModContainer owningContainer = getTopLevelContainer(container);
+
+            var metadata = owningContainer.getMetadata();
             ModIdentity identity = new ModIdentity(
                     metadata.getId(),
                     metadata.getName(),
@@ -69,6 +71,16 @@ public final class ModClassIndex {
             }
         }
         return new ModClassIndex(owners, mods, ambiguous);
+    }
+
+    private static ModContainer getTopLevelContainer(ModContainer container) {
+        ModContainer current = container;
+
+        while (current.getContainingMod().isPresent()) {
+            current = current.getContainingMod().get();
+        }
+
+        return current;
     }
 
     private static void indexJar(Path path, Consumer<String> classConsumer) throws IOException {

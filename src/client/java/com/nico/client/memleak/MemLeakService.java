@@ -1,17 +1,20 @@
 package com.nico.client.memleak;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public final class MemLeakService implements AutoCloseable {
+    private static final Logger LOGGER = LoggerFactory.getLogger("NSM/MemLeak");
+
     private static final double MIB = 1024.0 * 1024.0;
 
     private final MemLeakConfig config;
@@ -82,7 +85,7 @@ public final class MemLeakService implements AutoCloseable {
                     : "top allocation candidate: " + report.candidates().getFirst().mod().displayName();
             notifier.accept(String.format(
                     Locale.ROOT,
-                    "[NSM] Possible sustained heap growth: %+.1f MiB/min; %s. Run /memdoctor status.",
+                    "[NSM] Possible sustained heap growth: %+.1f MiB/min; %s. Run /nsm memleak status.",
                     report.growthRateBytesPerMinute() / MIB,
                     candidate
             ));
@@ -90,48 +93,145 @@ public final class MemLeakService implements AutoCloseable {
     }
 
     public List<String> statusLines() {
-        AnalysisReport report = analyzer.analyze(maxHeap());
-        return List.of(
-                "[NSM] " + report.state() + " - " + report.explanation(),
-                String.format(Locale.ROOT, "Post-GC heap: %.1f -> %.1f MiB across %d samples (%.1f min)",
-                        report.firstPostGcHeapBytes() / MIB,
-                        report.latestPostGcHeapBytes() / MIB,
-                        report.postGcSamples(),
-                        report.observedFor().toMillis() / 60_000.0),
-                String.format(Locale.ROOT, "Trend: %+.1f MiB/min, R² %.2f, monotonicity %.0f%%",
-                        report.growthRateBytesPerMinute() / MIB,
-                        report.rSquared(),
-                        report.monotonicity() * 100),
-                "Engine: " + startupStatus + "; indexed " + classIndex.indexedClassCount() + " classes from " + classIndex.mods().size() + " mods"
-        );
+        var report = analyzer.analyze(maxHeap());
+
+        logTechnicalReport(report);
+
+        if (report.postGcSamples() == 0) {
+            return List.of(
+                    "§b[NSM MemLeak] §fLearning your memory baseline...",
+                    "§7Waiting for the first full memory cleanup."
+            );
+        }
+
+        double latestMiB = report.latestPostGcHeapBytes() / MIB;
+        double growthMiB = Math.max(0, report.observedGrowthBytes()) / MIB;
+        String observedTime = formatDuration(report.observedFor());
+
+        return switch (report.state()) {
+            case WARMING_UP -> List.of(
+                    "§b[NSM MemLeak] §fLearning your memory baseline...",
+                    "§7Observed for §e"
+                            + formatDuration(report.observedFor())
+                            + "§7/§e"
+                            + formatDuration(config.minimumObservation())
+                            + "§7 with §e"
+                            + report.postGcSamples()
+                            + " §7memory cleanups.",
+                    "§7Current memory after cleanup: §f"
+                            + formatNumber(latestMiB)
+                            + " MiB"
+            );
+
+            case STABLE -> List.of(
+                    "§a[NSM MemLeak] §fNo memory leak detected.",
+                    "§7Memory after cleanup: §f"
+                            + formatNumber(latestMiB)
+                            + " MiB",
+                    "§8No action is currently needed."
+            );
+
+            case SUSPICIOUS -> List.of(
+                    "§c[NSM MemLeak] §fPossible memory leak detected.",
+                    "§7Memory kept after cleanup increased by §c"
+                            + formatNumber(growthMiB)
+                            + " MiB §7over §e"
+                            + observedTime
+                            + "§7.",
+                    "§eRun §f/nsm memleak suspects §efor likely sources."
+            );
+        };
     }
 
     public List<String> candidateLines() {
-        AnalysisReport report = analyzer.analyze(maxHeap());
+        var report = analyzer.analyze(maxHeap());
+
+        logTechnicalReport(report);
+
+        if (!"SUSPICIOUS".equals(report.state().name())) {
+            return List.of(
+                    "§a[NSM MemLeak] §fNo active leak suspicion.",
+                    "§7Possible sources will appear here if sustained growth is detected."
+            );
+        }
+
         if (report.candidates().isEmpty()) {
-            return List.of("[MemDoctor] No mod allocation candidates are available yet.");
+            return List.of(
+                    "§e[NSM MemLeak] §fMemory growth was detected,",
+                    "§7but no individual mod could be identified yet.",
+                    "§7Continue playing and check again later."
+            );
         }
-        var lines = new java.util.ArrayList<String>();
-        lines.add("[MemDoctor] Allocation candidates in the current trend window (not retained-memory proof):");
-        for (AnalysisReport.Candidate candidate : report.candidates()) {
-            lines.add(String.format(Locale.ROOT, "%s %s — %.1f MiB sampled (%.1f%%)",
-                    candidate.mod().name(),
-                    candidate.mod().version(),
-                    candidate.sampledAllocationBytes() / MIB,
-                    candidate.allocationShare() * 100));
+
+        List<String> lines = new ArrayList<>();
+
+        lines.add("§c[NSM MemLeak] §fMost likely allocation sources:");
+
+        int position = 1;
+
+        for (var candidate : report.candidates().stream().limit(3).toList()) {
+            lines.add(
+                    "§e"
+                            + position++
+                            + ". §f"
+                            + candidate.mod().name()
+                            + " §8- §7"
+                            + formatPercentage(candidate.allocationShare())
+                            + " of sampled allocations"
+            );
         }
+
+        lines.add("§8These are diagnostic leads, not definitive proof.");
+
         return List.copyOf(lines);
     }
 
     public List<String> modIndexLines() {
-        var lines = new java.util.ArrayList<String>();
-        lines.add("[MemDoctor] Indexed " + classIndex.indexedClassCount() + " classes; "
-                + classIndex.ambiguousClassCount() + " duplicate/ambiguous classes.");
-        classIndex.mods().stream().limit(40).forEach(mod ->
-                lines.add(mod.id() + " " + mod.version() + " — " + mod.name()));
-        if (classIndex.mods().size() > 40) {
-            lines.add("...and " + (classIndex.mods().size() - 40) + " more mods (export a report for the complete list).");
+        var visibleMods = classIndex.mods().stream()
+                .filter(mod -> !isInfrastructureMod(mod.id()))
+                .sorted(
+                        Comparator.comparing(
+                                mod -> mod.name().toLowerCase(Locale.ROOT)
+                        )
+                )
+                .toList();
+
+        LOGGER.info(
+                "MemLeak indexed {} classes, {} ambiguous classes and {} total mod containers",
+                classIndex.indexedClassCount(),
+                classIndex.ambiguousClassCount(),
+                classIndex.mods().size()
+        );
+
+        for (var mod : visibleMods) {
+            LOGGER.info(
+                    "MemLeak monitored mod: id={}, name={}, version={}",
+                    mod.id(),
+                    mod.name(),
+                    mod.version()
+            );
         }
+
+        List<String> lines = new ArrayList<>();
+        lines.add("§b[NSM MemLeak] §fMonitoring §e" + visibleMods.size() + " §fmods.");
+
+        int shown = Math.min(18, visibleMods.size());
+
+        for (int start = 0; start < shown; start += 6) {
+            int end = Math.min(start + 6, shown);
+
+            String names = visibleMods.subList(start, end).stream()
+                    .map(mod -> mod.name())
+                    .reduce((left, right) -> left + "§8, §7" + right)
+                    .orElse("");
+
+            lines.add("§7" + names);
+        }
+
+        if (visibleMods.size() > shown) {
+            lines.add("§8...and " + (visibleMods.size() - shown) + " more. The complete list is in latest.log.");
+        }
+
         return List.copyOf(lines);
     }
 
@@ -159,6 +259,70 @@ public final class MemLeakService implements AutoCloseable {
     private long maxHeap() {
         long max = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getMax();
         return max > 0 ? max : Runtime.getRuntime().maxMemory();
+    }
+
+    private void logTechnicalReport(AnalysisReport report) {
+        LOGGER.info(
+                "MemLeak analysis: state={}, samples={}, observedSeconds={}, "
+                        + "firstPostGcBytes={}, latestPostGcBytes={}, "
+                        + "growthBytes={}, rateBytesPerMinute={}, "
+                        + "rSquared={}, monotonicity={}",
+                report.state(),
+                report.postGcSamples(),
+                report.observedFor().toSeconds(),
+                report.firstPostGcHeapBytes(),
+                report.latestPostGcHeapBytes(),
+                report.observedGrowthBytes(),
+                report.growthRateBytesPerMinute(),
+                report.rSquared(),
+                report.monotonicity()
+        );
+
+        for (var candidate : report.candidates()) {
+            LOGGER.info(
+                    "MemLeak candidate: id={}, name={}, version={}, "
+                            + "sampledAllocationBytes={}, share={}",
+                    candidate.mod().id(),
+                    candidate.mod().name(),
+                    candidate.mod().version(),
+                    candidate.sampledAllocationBytes(),
+                    candidate.allocationShare()
+            );
+        }
+    }
+
+    private static boolean isInfrastructureMod(String modId) {
+        return modId.equals("minecraft")
+                || modId.equals("java")
+                || modId.equals("fabricloader")
+                || modId.equals("fabric-api")
+                || modId.startsWith("fabric-")
+                || modId.startsWith("fabric_");
+    }
+
+    private static String formatNumber(double value) {
+        return String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    private static String formatPercentage(double share) {
+        return String.format(Locale.ROOT, "%.0f%%", share * 100.0);
+    }
+
+    private static String formatDuration(Duration duration) {
+        long minutes = duration.toMinutes();
+
+        if (minutes < 60) {
+            return minutes + " min";
+        }
+
+        long hours = minutes / 60;
+        long remainingMinutes = minutes % 60;
+
+        if (remainingMinutes == 0) {
+            return hours + (hours == 1 ? " hour" : " hours");
+        }
+
+        return hours + "h " + remainingMinutes + "m";
     }
 
     @Override

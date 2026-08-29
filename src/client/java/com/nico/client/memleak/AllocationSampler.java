@@ -56,12 +56,22 @@ public final class AllocationSampler implements AutoCloseable {
         for (RecordedFrame frame : event.getStackTrace().getFrames()) {
             if (inspected++ >= maximumStackFrames) break;
             String className = frame.getMethod().getType().getName();
+            if (className.startsWith("com.nico.client.memleak.")) continue;
             var owner = classIndex.ownerOf(className);
-            if (owner.isPresent() && !NON_CANDIDATE_MODS.contains(owner.get().id())) {
+            if (owner.isPresent() && !isInfrastructureMod(owner.get().id())) {
                 sampledBytes.computeIfAbsent(owner.get().id(), ignored -> new LongAdder()).add(weight);
                 return;
             }
         }
+    }
+
+    private static boolean isInfrastructureMod(String modId) {
+        return modId.equals("minecraft")
+                || modId.equals("java")
+                || modId.equals("fabricloader")
+                || modId.equals("fabric-api")
+                || modId.startsWith("fabric-")
+                || modId.startsWith("fabric_");
     }
 
     public Map<String, Long> snapshot() {

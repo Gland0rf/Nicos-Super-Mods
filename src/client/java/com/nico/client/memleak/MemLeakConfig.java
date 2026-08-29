@@ -75,7 +75,7 @@ public record MemLeakConfig(
                 normalized.setProperty("alertCooldownMinutes", Long.toString(loaded.alertCooldown.toMinutes()));
                 normalized.setProperty("topCandidates", Integer.toString(loaded.topCandidates));
                 normalized.setProperty("maximumStackFrames", Integer.toString(loaded.maximumStackFrames));
-                normalized.store(writer, "MemDoctor configuration");
+                normalized.store(writer, "NSM MemLeak configuration");
             }
         } catch (IOException ignored) {
             // Monitoring can continue with an in-memory configuration.

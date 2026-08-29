@@ -68,7 +68,7 @@ public class ReportWriter {
             field(json, "name", candidate.mod().name(), true, 3);
             field(json, "version", candidate.mod().version(), true, 3);
             field(json, "sampledAllocationBytes", Long.toString(candidate.sampledAllocationBytes()), false, 3);
-            lastField(json, "allocationShare", number(candidate.allocationSahre()), false, 3);
+            lastField(json, "allocationShare", number(candidate.allocationShare()), false, 3);
             indent(json, 2).append('}').append(i + 1 == report.candidates().size() ? "\n" : ",\n");
         }
         indent(json, 1).append("],\n");
