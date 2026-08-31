@@ -865,7 +865,13 @@ public final class RouteEditor {
     }
 
     private RouteKey getAutomaticRoute() {
-        return switch (context.currentRole()) {
+        DungeonRole role = context.currentRole();
+
+        if (role == null) {
+            return null;
+        }
+
+        return switch (role) {
             case HEALER -> RouteKey.HEALER;
             case MAGE -> RouteKey.MAGE;
             case ARCHER -> RouteKey.ARCHER;
