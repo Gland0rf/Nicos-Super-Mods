@@ -49,7 +49,12 @@ public final class GcMonitor implements AutoCloseable {
                 }
                 GarbageCollectionNotificationInfo info = GarbageCollectionNotificationInfo.from(data);
                 String action = info.getGcAction().toLowerCase(Locale.ROOT);
-                if (action.contains("minor") || action.contains("young")) {
+                String collectorName = info.getGcName().toLowerCase(Locale.ROOT);
+                if (action.contains("minor")
+                        || action.contains("young")
+                        || action.contains("pause")
+                        || collectorName.contains("minor")
+                        || collectorName.contains("young")) {
                     return;
                 }
                 long afterGc = info.getGcInfo().getMemoryUsageAfterGc().entrySet().stream()
@@ -79,7 +84,7 @@ public final class GcMonitor implements AutoCloseable {
             } catch (ListenerNotFoundException ignored) {
                 // Already removed by the JVM during shutdown.
             }
-            registrations.clear();
         }
+        registrations.clear();
     }
 }

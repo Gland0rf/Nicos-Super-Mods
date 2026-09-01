@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
+import java.lang.ref.WeakReference;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -22,18 +23,23 @@ public final class MemLeakService implements AutoCloseable {
     private final Consumer<String> notifier;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final GcMonitor gcMonitor;
+    private final ActivityTimeline activityTimeline = new ActivityTimeline();
+    private final LifecycleLeakDetector lifecycleLeakDetector = new LifecycleLeakDetector();
+    private final ThreadLeakDetector threadLeakDetector;
 
     private volatile ModClassIndex classIndex = ModClassIndex.empty();
     private volatile HeapTrendAnalyzer analyzer;
     private volatile AllocationSampler allocationSampler;
     private volatile String startupStatus = "Starting";
     private volatile Instant lastAlert = Instant.EPOCH;
+    private WeakReference<Object> currentScreen = new WeakReference<>(null);
 
     public MemLeakService(MemLeakConfig config, Path reportDirectory, Consumer<String> notifier) {
         this.config = config;
         this.reportDirectory = reportDirectory;
         this.notifier = notifier;
         this.analyzer = new HeapTrendAnalyzer(config, classIndex);
+        this.threadLeakDetector = new ThreadLeakDetector(config.window(), config.maximumStackFrames());
         this.gcMonitor = new GcMonitor(this::handleGc);
     }
 
@@ -41,10 +47,11 @@ public final class MemLeakService implements AutoCloseable {
         gcMonitor.start();
         Thread.ofPlatform().daemon().name("NSM-MemLeak-Indexer").start(() -> {
             try {
-                startupStatus = "Indexing loaded mod clauses";
+                startupStatus = "Indexing loaded mod classes";
                 ModClassIndex builtIndex = ModClassIndex.build();
                 if (closed.get()) return;
                 classIndex = builtIndex;
+                threadLeakDetector.reset();
                 HeapTrendAnalyzer replacement = new HeapTrendAnalyzer(config, builtIndex);
                 for (HeapSnapshot snapshot : analyzer.history()) {
                     replacement.add(snapshot);
@@ -64,6 +71,12 @@ public final class MemLeakService implements AutoCloseable {
     }
 
     private void handleGc(GcMonitor.Observation observation) {
+        lifecycleLeakDetector.onMajorCollection();
+        try {
+            threadLeakDetector.sample(observation.time(), classIndex);
+        } catch (Throwable error) {
+            LOGGER.debug("MemLeak thread sampling failed", error);
+        }
         AllocationSampler sampler = allocationSampler;
         Map<String, Long> allocations = sampler == null ? Map.of() : sampler.snapshot();
         HeapSnapshot snapshot = new HeapSnapshot(
@@ -76,39 +89,117 @@ public final class MemLeakService implements AutoCloseable {
         HeapTrendAnalyzer currentAnalyzer = analyzer;
         currentAnalyzer.add(snapshot);
         AnalysisReport report = currentAnalyzer.analyze(maxHeap());
+        List<LifecycleLeakDetector.Suspect> lifecycleSuspects = lifecycleLeakDetector.suspects(observation.time());
+        ThreadLeakDetector.Report threadReport = threadLeakDetector.analyze(classIndex);
 
-        if (report.state() == AnalysisReport.State.SUSPICIOUS
+        if ((report.state() == AnalysisReport.State.SUSPICIOUS
+                || !lifecycleSuspects.isEmpty()
+                || threadReport.suspicious())
                 && Duration.between(lastAlert, observation.time()).compareTo(config.alertCooldown()) >= 0) {
             lastAlert = observation.time();
-            String candidate = report.candidates().isEmpty()
-                    ? "no allocation candidate yet"
-                    : "top allocation candidate: " + report.candidates().getFirst().mod().displayName();
-            notifier.accept(String.format(
-                    Locale.ROOT,
-                    "[NSM] Possible sustained heap growth: %+.1f MiB/min; %s. Run /nsm memleak status.",
-                    report.growthRateBytesPerMinute() / MIB,
-                    candidate
-            ));
+            if (report.state() == AnalysisReport.State.SUSPICIOUS) {
+                String candidate = report.candidates().isEmpty()
+                        ? "no allocation candidate yet"
+                        : "top allocation candidate: " + report.candidates().getFirst().mod().displayName();
+                notifier.accept(String.format(
+                        Locale.ROOT,
+                        "[NSM] Possible sustained heap growth: %+.1f MiB/min; %s. Run /nsm memleak status.",
+                        report.growthRateBytesPerMinute() / MIB,
+                        candidate
+                ));
+            } else if (!lifecycleSuspects.isEmpty()) {
+                LifecycleLeakDetector.Suspect suspect = lifecycleSuspects.getFirst();
+                notifier.accept(
+                        "[NSM] Possible lifecycle leak: " + suspect.description()
+                                + " survived " + suspect.completedMajorCollections()
+                                + " full cleanups. Run /nsm memleak suspects."
+                );
+            } else {
+                notifier.accept(
+                        "[NSM] Possible thread leak: " + threadReport.totalGrowth()
+                                + " additional live threads. Run /nsm memleak suspects."
+                );
+            }
         }
+    }
+
+    /** Called from the tick hook. No strong client-object references are retained. */
+    public void observeClientState(Object level, Object player, Object screen) {
+        if (closed.get()) {
+            return;
+        }
+
+        Instant now = Instant.now();
+        if (lifecycleLeakDetector.observe("world", level, describe(level, "Client world"), now)) {
+            activityTimeline.mark("world", level == null ? "Left a world" : "Joined or changed world");
+        }
+        lifecycleLeakDetector.observe("player", player, describe(player, "Client player"), now);
+        observeScreenActivity(screen);
+    }
+
+    private synchronized void observeScreenActivity(Object screen) {
+        if (currentScreen.get() == screen) return;
+
+        currentScreen = new WeakReference<>(screen);
+        activityTimeline.mark("screen",
+                screen == null ? "Closed a screen" : "Opened " + readableClassName(screen.getClass())
+        );
+    }
+
+    public void markActivity(String type, String description) {
+        if (closed.get() || type == null || description == null) return;
+
+        String safeType = type.strip();
+        String safeDescription = description.strip();
+        if (safeType.isEmpty() || safeDescription.isEmpty()) return;
+
+        activityTimeline.mark(
+                safeType.substring(0, Math.min(32, safeType.length())),
+                safeDescription.substring(0, Math.min(160, safeDescription.length()))
+        );
     }
 
     public List<String> statusLines() {
         var report = analyzer.analyze(maxHeap());
+        var lifecycleSuspects = lifecycleLeakDetector.suspects(Instant.now());
+        var threadReport = threadLeakDetector.analyze(classIndex);
 
         logTechnicalReport(report);
 
         if (report.postGcSamples() == 0) {
-            return List.of(
+            List<String> lines = new ArrayList<>(List.of(
                     "§b[NSM MemLeak] §fLearning your memory baseline...",
                     "§7Waiting for the first full memory cleanup."
-            );
+            ));
+            appendLifecycleWarning(lines, lifecycleSuspects);
+            return List.copyOf(lines);
         }
 
         double latestMiB = report.latestPostGcHeapBytes() / MIB;
         double growthMiB = Math.max(0, report.observedGrowthBytes()) / MIB;
         String observedTime = formatDuration(report.observedFor());
 
-        return switch (report.state()) {
+        if (!lifecycleSuspects.isEmpty() && report.state() != AnalysisReport.State.SUSPICIOUS) {
+            LifecycleLeakDetector.Suspect first = lifecycleSuspects.getFirst();
+            return List.of(
+                    "§c[NSM MemLeak] §fPossible lifecycle leak detected.",
+                    "§f" + first.description() + " §7survived §e"
+                            + first.completedMajorCollections() + " §7full cleanups.",
+                    "§8Sustained total heap growth is not confirmed yet.",
+                    "§eRun §f/nsm memleak suspects §efor details."
+            );
+        }
+
+        if (threadReport.suspicious() && report.state() != AnalysisReport.State.SUSPICIOUS) {
+            return List.of(
+                    "§c[NSM MemLeak] §fPossible thread leak detected.",
+                    "§7Live threads increased by §c " + threadReport.totalGrowth()
+                            + " §7over §e" + formatDuration(threadReport.observedFor()) + "§7.",
+                    "§eRun §f/nsm memleak suspects §e for details."
+            );
+        }
+
+        List<String> lines = new ArrayList<>(switch (report.state()) {
             case WARMING_UP -> List.of(
                     "§b[NSM MemLeak] §fLearning your memory baseline...",
                     "§7Observed for §e"
@@ -140,22 +231,37 @@ public final class MemLeakService implements AutoCloseable {
                             + "§7.",
                     "§eRun §f/nsm memleak suspects §efor likely sources."
             );
-        };
+        });
+
+        appendLifecycleWarning(lines, lifecycleSuspects);
+        if (report.state() == AnalysisReport.State.SUSPICIOUS) {
+            ActivityTimeline.Event latest = activityTimeline.latestSignificantEvent();
+            if (latest != null) {
+                lines.add("§8 Latest tracked activity: " + latest.description() + ".");
+            }
+        }
+        return List.copyOf(lines);
     }
 
     public List<String> candidateLines() {
         var report = analyzer.analyze(maxHeap());
+        var lifecycleSuspects = lifecycleLeakDetector.suspects(Instant.now());
+        var threadReport = threadLeakDetector.analyze(classIndex);
 
         logTechnicalReport(report);
 
-        if (!"SUSPICIOUS".equals(report.state().name())) {
+        if (report.state() != AnalysisReport.State.SUSPICIOUS
+                && lifecycleSuspects.isEmpty()
+                && !threadReport.suspicious()) {
             return List.of(
                     "§a[NSM MemLeak] §fNo active leak suspicion.",
                     "§7Possible sources will appear here if sustained growth is detected."
             );
         }
 
-        if (report.candidates().isEmpty()) {
+        if (report.candidates().isEmpty()
+                && lifecycleSuspects.isEmpty()
+                && !threadReport.suspicious()) {
             return List.of(
                     "§e[NSM MemLeak] §fMemory growth was detected,",
                     "§7but no individual mod could be identified yet.",
@@ -165,11 +271,48 @@ public final class MemLeakService implements AutoCloseable {
 
         List<String> lines = new ArrayList<>();
 
+        if (!lifecycleSuspects.isEmpty()) {
+            lines.add("§c[NSM MemLeak] §fObjects that should have unloaded:");
+            for (var suspect : lifecycleSuspects.stream().limit(1).toList()) {
+                lines.add(
+                        "§e• §f" + suspect.description()
+                                + " §7is still alive after §e"
+                                + suspect.completedMajorCollections()
+                                + "§7 full cleanups."
+                );
+            }
+        }
+
+        if (threadReport.suspicious()) {
+            lines.add("§cThread growth:");
+            lines.add(
+                    "§7Live threads increased from §f" + threadReport.firstThreadCount()
+                            + " §7 to §f" + threadReport.latestThreadCount() + "§7."
+            );
+            for (var owner : threadReport.ownerGrowth().stream().limit(1).toList()) {
+                lines.add(
+                        "§e• §f" + owner.mod().name()
+                                + " §7has §c+" + owner.growth() + " §7attributed threads"
+                );
+            }
+        }
+
+        if (report.state() != AnalysisReport.State.SUSPICIOUS) {
+            lines.add("§8Sustained total heap grwoth is not confirmed yet.");
+            return List.copyOf(lines);
+        }
+
+        if (report.candidates().isEmpty()) {
+            lines.add("§7No individual allocating mod could be identified yet.");
+            lines.add("§8Continue playing and export a report after more cleanups.");
+            return List.copyOf(lines);
+        }
+
         lines.add("§c[NSM MemLeak] §fMost likely allocation sources:");
 
         int position = 1;
 
-        for (var candidate : report.candidates().stream().limit(3).toList()) {
+        for (var candidate : report.candidates().stream().limit(2).toList()) {
             lines.add(
                     "§e"
                             + position++
@@ -237,6 +380,9 @@ public final class MemLeakService implements AutoCloseable {
 
     public void reset() {
         analyzer.reset();
+        lifecycleLeakDetector.reset();
+        activityTimeline.reset();
+        threadLeakDetector.reset();
         AllocationSampler sampler = allocationSampler;
         if (sampler != null) {
             sampler.reset();
@@ -252,8 +398,33 @@ public final class MemLeakService implements AutoCloseable {
                 analyzer.history(),
                 classIndex.mods(),
                 sampler != null && sampler.isRunning(),
-                sampler == null ? null : sampler.failureReason()
+                sampler == null ? null : sampler.failureReason(),
+                activityTimeline.snapshot(),
+                lifecycleLeakDetector.suspects(Instant.now()),
+                threadLeakDetector.analyze(classIndex)
         );
+    }
+
+    private static void appendLifecycleWarning(List<String> lines, List<LifecycleLeakDetector.Suspect> lifecycleSuspects) {
+        if (lifecycleSuspects.isEmpty()) return;
+
+        LifecycleLeakDetector.Suspect first = lifecycleSuspects.getFirst();
+        lines.add(
+                "§cLifecycle warning: §f" + first.description()
+                        + " §7survived §e"
+                        + first.completedMajorCollections()
+                        + " §7full cleanups."
+        );
+        lines.add("§eRun §f/nsm memleak suspects §efor details.");
+    }
+
+    private static String describe(Object value, String fallback) {
+        return value == null ? fallback : fallback + " (" + readableClassName(value.getClass()) + ")";
+    }
+
+    private static String readableClassName(Class<?> type) {
+        String simple = type.getSimpleName();
+        return simple == null || simple.isBlank() ? type.getName() : simple;
     }
 
     private long maxHeap() {

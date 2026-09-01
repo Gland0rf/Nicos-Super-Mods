@@ -2,6 +2,7 @@ package com.nico.client.memleak;
 
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.configuration.category.CategoryOther;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -16,6 +17,7 @@ public class MemLeakFeature {
 
     private static volatile MemLeakService service;
     private static boolean shutdownHookRegistered;
+    private static boolean clientTickHookRegistered;
 
     private MemLeakFeature() {
     }
@@ -61,6 +63,16 @@ public class MemLeakFeature {
         );
 
         service.start();
+
+        if (!clientTickHookRegistered) {
+            clientTickHookRegistered = true;
+            ClientTickEvents.END_CLIENT_TICK.register(minecraft -> {
+                MemLeakService current = service;
+                if (current != null) {
+                    current.observeClientState(minecraft.level, minecraft.player, minecraft.screen);
+                }
+            });
+        }
 
         if (!shutdownHookRegistered) {
             shutdownHookRegistered = true;
@@ -135,6 +147,14 @@ public class MemLeakFeature {
         }
 
         return current.exportReport();
+    }
+
+    /** Optional context marker for NSM features; mod attribution does not depend on this. */
+    public static void markActivity(String type, String description) {
+        MemLeakService current = service;
+        if (current != null) {
+            current.markActivity(type, description);
+        }
     }
 
     public static synchronized void shutdown() {

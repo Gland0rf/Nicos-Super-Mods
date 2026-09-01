@@ -34,9 +34,9 @@ public final class ModClassIndex {
         Map<String, ModIdentity> mods = new HashMap<>();
 
         for (ModContainer container : FabricLoader.getInstance().getAllMods()) {
-            ModContainer owningContainer = getTopLevelContainer(container);
+            ModContainer ownerContainer = topLevelContainer(container);
+            var metadata = ownerContainer.getMetadata();
 
-            var metadata = owningContainer.getMetadata();
             ModIdentity identity = new ModIdentity(
                     metadata.getId(),
                     metadata.getName(),
@@ -44,19 +44,17 @@ public final class ModClassIndex {
             );
             mods.put(identity.id(), identity);
 
-            Collection<Path> originPaths;
+            Collection<Path> rootPaths;
             try {
-                originPaths = container.getOrigin().getPaths();
+                rootPaths = container.getRootPaths();
             } catch (UnsupportedOperationException ignored) {
                 continue;
             }
 
-            for (Path path : originPaths) {
+            for (Path path : rootPaths) {
                 try {
                     if (Files.isDirectory(path)) {
                         indexDirectory(path, className -> mergeOwner(owners, className, identity));
-                    } else if (Files.isRegularFile(path)) {
-                        indexJar(path, className -> mergeOwner(owners, className, identity));
                     }
                  } catch (IOException ignored) {
                     // Go on
@@ -73,26 +71,19 @@ public final class ModClassIndex {
         return new ModClassIndex(owners, mods, ambiguous);
     }
 
-    private static ModContainer getTopLevelContainer(ModContainer container) {
+    private static ModContainer topLevelContainer(ModContainer container) {
         ModContainer current = container;
+        Set<String> visited = new HashSet<>();
 
-        while (current.getContainingMod().isPresent()) {
-            current = current.getContainingMod().get();
+        while (visited.add(current.getMetadata().getId())) {
+            Optional<ModContainer> containing = current.getContainingMod();
+            if (containing.isEmpty()) {
+                break;
+            }
+            current = containing.get();
         }
 
         return current;
-    }
-
-    private static void indexJar(Path path, Consumer<String> classConsumer) throws IOException {
-        try (ZipFile zip = new ZipFile(path.toFile())) {
-            Enumeration<? extends ZipEntry> entries = zip.entries();
-            while (entries.hasMoreElements()) {
-                String name = entries.nextElement().getName();
-                if (isIndexableClass(name)) {
-                    classConsumer.accept(toClassName(name));
-                }
-            }
-        }
     }
 
     private static void indexDirectory(Path root, Consumer<String> classConsumer) throws IOException {
