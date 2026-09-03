@@ -15,27 +15,38 @@ The goal of NSM is to fill niche gaps in Hypixel SkyBlock by providing high-qual
 - **Lag Monitor**
 
 ### Hypixel Wiki browser
-> THIS FEATURE IS CURRENTLY UNAVAILABLE!
 
 NSM contains an in-game browser for the Hypixel SkyBlock Wiki, so you don't have to open up your external browser every single time.
 
+The integrated browser does **not** use a traditional browser engine. It was built from the ground up with the only purpose being browsing the Wiki, keeping resource usage as low as possible and preventing unnecessary RAM bloating.
+
 Useful controls:
 
-| Control | Action |
-|---|---|
- | `Ctrl + Right Click` | Open the wiki of the selected item
-| `Ctrl + L` / `Ctrl + K` | Focus Wiki search |
-| `Ctrl + T` | Open a new tab |
-| `Ctrl + W` | Close the current tab |
-| `Ctrl + Tab` | Next tab |
-| `Ctrl + Shift + Tab` | Previous tab |
-| `Ctrl + F` | Find on page |
-| `Enter` / `Shift + Enter` | Next / previous find result |
-| `Ctrl + D` | Toggle bookmark |
-| `Ctrl + R` | Reload |
-| `Alt + Left` / `Alt + Right` | Back / forward |
-| `Ctrl + Click` / middle-click | Open an internal link in a new tab |
-| Right-click | Open the link context menu |
+| Control                          | Action |
+|----------------------------------|---|
+| `Ctrl + [DEFAULT: Right Click]`  | Open the wiki of the selected item
+| `Ctrl + L` / `Ctrl + K`          | Focus Wiki search |
+| `Ctrl + T`                       | Open a new tab |
+| `Ctrl + W`                       | Close the current tab |
+| `Ctrl + Tab`                     | Next tab |
+| `Ctrl + Shift + Tab`             | Previous tab |
+| `Ctrl + F`                       | Find on page |
+| `Enter` / `Shift + Enter`        | Next / previous find result |
+| `Ctrl + D`                       | Toggle bookmark |
+| `Ctrl + R`                       | Reload |
+| `Alt + Left` / `Alt + Right`     | Back / forward |
+| `Ctrl + Click` / middle-click    | Open an internal link in a new tab |
+| Right-click                      | Open the link context menu |
+
+#### Wiki content and attribution
+
+The wiki browser fetches content from the [Independent Hypixel Skyblock Wiki](https://hypixelskyblock.minecraft.wiki/) at runtime.
+
+Wiki text is provided under [CC BY-NC-SA 3.0](https://creativecommons.org/licenses/by-nc-sa/3.0/) and may be reformatted for display inside Minecraft. Images and other media may have separate licensing or attribution requirements; their original metadata and source information are shown where available.
+
+NSM is not affiliated with or endorsed by Hypixel, the Independent Hypixel Skyblock Wiki, Weird Gloop, MediaWiki, or the Wikimedia Foundation.
+
+The Wiki browser requires an internet connection (duh) and makes requests directly to the Hypixel Skyblock Wiki.
 
 ### Minion tools
 
@@ -56,7 +67,7 @@ HUD positions and scales are saved automatically.
 ## Requirements
 
 - **Mod loader:** Fabric Loader
-- **Required mods:** Fabric API, Fabric Language Kotlin, Odin, ModMenu
+- **Required mods:** Fabric API, Fabric Language Kotlin, ModMenu
 
 ## Configuration
 
@@ -76,9 +87,6 @@ The config location is:
 
 Some ideas and implementation details were inspired by existing Hypixel SkyBlock mods and the work of their developers.
 
-In particular, thank you to the developer of odin for developing his mod and putting it under an open license. I could NOT imagine myself writing allat from scratch.
-https://github.com/odtheking/Odin
-
 ## Network access
 
 NSM is client-side, but some features communicate over the network:
@@ -88,11 +96,5 @@ NSM is client-side, but some features communicate over the network:
 - Remote Wiki images are downloaded asynchronously.
 - The lag monitor sends lightweight ping requests over the active Minecraft connection while monitoring a run.
 
-## Known limitations
-
-- The lag monitor reports estimates rather than authoritative server metrics.
-- Hypixel UI and packet behavior can change without notice.
-- Wiki markup and public APIs can change and may temporarily break parsing.
-- Bazaar values depend on the availability and freshness of remote data.
-- Features that depend on dungeon room detection may require updates when Hypixel changes map, scoreboard, chat, or packet formats.
-- Clipboard copying is local to the client and may be unavailable on restricted desktop environments.
+## Notes
+The license of this repository applies to NSM's source code only and does not grant additional rights to third-party wiki content, images, or other assets.

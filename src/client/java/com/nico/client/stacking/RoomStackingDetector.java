@@ -1,14 +1,13 @@
 package com.nico.client.stacking;
 
-import com.nico.OdinRoomBridge;
 import com.nico.client.NsmClientCommands;
-import com.nico.client.SecretStackTrackerClient;
 import com.nico.client.configuration.NsmConfig;
+import com.nico.client.dungeon.DungeonScanner;
+import com.nico.client.dungeon.DungeonState;
+import com.nico.client.dungeon.DungeonStatsTracker;
+import com.nico.client.dungeon.DungeonTeammateScanner;
 import com.nico.client.secretTimer.SecretRoomTimerClient;
 import com.nico.client.utils.LocationUtils;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonClass;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonPlayer;
-import com.odtheking.odin.utils.skyblock.dungeon.DungeonUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -22,11 +21,11 @@ public class RoomStackingDetector {
     public static final long ROOM_STACK_ALERT_COOLDOWN_MS = 5000L;
 
     private static final int SCORE_SAME_ROOM_ONCE = 60;
-    private static final int SCORE_EVERY_5_SECONDS = 30;
+    private static final int SCORE_EVERY_X_SECONDS = 30;
     private static final int SCORE_GLOBAL_SECRET_INCREASE = 5;
     private static final int ALERT_THRESHOLD = 100;
 
-    private static final long SCORE_TIME_INTERVAL_MS = 5000L;
+    private static final long SCORE_TIME_INTERVAL_MS = 2000L;
 
     private static long lastGlobalAlertAt = 0L;
     private static int lastKnownGlobalSecretCount = -1;
@@ -47,7 +46,7 @@ public class RoomStackingDetector {
             resetAllState();
             return;
         }
-        if (DungeonUtils.INSTANCE.getInBoss()) {
+        if (DungeonState.INSTANCE.getInBoss()) {
             resetAllState();
             return;
         }
@@ -122,8 +121,6 @@ public class RoomStackingDetector {
             return false;
         }
 
-        // CHECK IF ROOM IS CLEARED HERE
-
         return true;
     }
 
@@ -151,7 +148,7 @@ public class RoomStackingDetector {
         }
 
         while (now - state.lastTimeScoreAtMs >= SCORE_TIME_INTERVAL_MS) {
-            state.score += SCORE_EVERY_5_SECONDS;
+            state.score += SCORE_EVERY_X_SECONDS;
             state.lastTimeScoreAtMs += SCORE_TIME_INTERVAL_MS;
         }
 
@@ -183,7 +180,7 @@ public class RoomStackingDetector {
     }
 
     private static int getGlobalSecretDelta() {
-        int current = DungeonUtils.INSTANCE.getSecretCount();
+        int current = DungeonStatsTracker.INSTANCE.getSecretCount();
 
         if (lastKnownGlobalSecretCount < 0) {
             lastKnownGlobalSecretCount = current;
@@ -228,7 +225,7 @@ public class RoomStackingDetector {
 
      private static Map<String, List<Player>> getDungeonPlayersByRoom(Minecraft mc) {
         Map<String, List<Player>> playersByRoom = new HashMap<>();
-        Set<String> teammateNames = NsmClientCommands.getOdinDungeonTeammateNames();
+        Set<String> teammateNames = DungeonTeammateScanner.getDungeonTeammateNames();
 
         for (Player player : mc.level.players()) {
             String playerName = player.getName().getString();
@@ -238,7 +235,7 @@ public class RoomStackingDetector {
 
             if (!isSelf && !isTeammate) continue;
 
-            String roomName = OdinRoomBridge.getRoomNameForPlayer(player);
+            String roomName = DungeonScanner.getRoomNameForPlayer(player);
 
             if (roomName == null || roomName.equals("Unknown")) continue;
 
@@ -251,8 +248,8 @@ public class RoomStackingDetector {
      }
 
      private static boolean isSecretCountAtOrAboveConfiguredPercent() {
-        int found = DungeonUtils.INSTANCE.getSecretCount();
-        int total = DungeonUtils.INSTANCE.getTotalSecrets();
+        int found = DungeonStatsTracker.getSecretCount();
+        int total = DungeonStatsTracker.INSTANCE.getTotalSecrets();
 
         if (total <= 0) return false;
 
@@ -273,7 +270,7 @@ public class RoomStackingDetector {
 
      private static boolean hasLockedWitherDoor(List<Player> players) {
         for (Player player : players) {
-            if (OdinRoomBridge.hasLockedWitherDoorForPlayer(player)) {
+            if (DungeonScanner.hasLockedWitherDoorForPlayer(player)) {
                 return true;
             }
         }
@@ -321,12 +318,11 @@ public class RoomStackingDetector {
              }
          } else {
              if (NsmConfig.INSTANCE.dungeons.roomStacking.showOtherStackingChatAlert) {
-                 mc.player.displayClientMessage(
+                 mc.getInstance().gui.getChat().addClientSystemMessage(
                          Component.literal("[NSM] ")
                                  .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
                                  .append(Component.literal(allNames + " are stacking in " + roomName + "!")
-                                         .withStyle(ChatFormatting.RED)),
-                         false
+                                         .withStyle(ChatFormatting.RED))
                  );
              }
 
@@ -400,25 +396,7 @@ public class RoomStackingDetector {
     }
 
     private static String getDungeonClassForPlayer(Player player) {
-        String playerName = player.getName().getString();
-
-        try {
-            for (DungeonPlayer dungeonPlayer : DungeonUtils.INSTANCE.getDungeonTeammates()) {
-                if (!dungeonPlayer.getName().equals(playerName)) continue;
-
-                DungeonClass clazz = dungeonPlayer.getClazz();
-
-                if (clazz == null || clazz == DungeonClass.Unknown) {
-                    return "Unknown";
-                }
-
-                return formatClassName(clazz.name());
-            }
-        } catch (Throwable throwable) {
-            throwable.printStackTrace();
-        }
-
-        return "Unknown";
+        return DungeonTeammateScanner.getDungeonClassForPlayer(player);
     }
 
     private static String formatClassName(String name) {

@@ -299,7 +299,7 @@ public class LagMonitorService {
 
         try {
             client.keyboardHandler.setClipboard("[NSM] Total loss by TPS: " + summary.tpsLossClipboardText());
-            client.player.displayClientMessage(summary.clipboardConfirmationLine(), false);
+            client.getInstance().gui.getChat().addClientSystemMessage(summary.clipboardConfirmationLine());
         } catch (RuntimeException exception) {
             System.err.println("[NSM Lag] Could not copy TPS loss: " + exception.getMessage());
         }
@@ -307,14 +307,12 @@ public class LagMonitorService {
 
     private static void sendSummary(Minecraft client, LagSessionSummary summary) {
         if (client == null || client.player == null || summary == null) {
-            System.out.println("[NSM Lag][Debug] Summary send skipped because client/player/summary is null");
             return;
         }
 
         var lines = summary.compactChatLines();
-        System.out.println("[NSM Lag][Debug] Sending " + lines.size() + " summary chat lines");
         for (var line : lines) {
-            client.player.displayClientMessage(line, false);
+            client.getInstance().gui.getChat().addClientSystemMessage(line);
         }
     }
 

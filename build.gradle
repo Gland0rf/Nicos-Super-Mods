@@ -1,6 +1,7 @@
 plugins {
-	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
 	id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
+	id 'com.gradleup.shadow' version "${shadow_version}"
 	id 'maven-publish'
 }
 
@@ -47,57 +48,44 @@ loom {
 
 }
 
-sourceSets {
-	main {
-		java {
-			exclude "com/odtheking/**"
-		}
-	}
+configurations {
+	shadowModImpl
+	clientImplementation.extendsFrom(shadowModImpl)
 }
 
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 
-	mappings loom.officialMojangMappings()
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	implementation "org.jetbrains.kotlin:kotlin-stdlib:${project.kotlin_stdlib_version}"
+	implementation "net.fabricmc:fabric-language-kotlin:${project.fabric_language_kotlin_version}"
 
-	implementation "org.jetbrains.kotlin:kotlin-stdlib:2.4.0"
-	modImplementation "net.fabricmc:fabric-language-kotlin:1.13.12+kotlin.2.4.0"
+	implementation "org.jsoup:jsoup:${project.jsoup_version}"
+	include "org.jsoup:jsoup:${project.jsoup_version}"
 
-	implementation "org.jsoup:jsoup:1.18.3"
-	include "org.jsoup:jsoup:1.18.3"
+	clientImplementation "maven.modrinth:modmenu:${project.modmenu_version}"
 
-	modClientImplementation "maven.modrinth:modmenu:${project.modmenu_version}"
+	clientImplementation include("org.notenoughupdates.moulconfig:${project.moulconfig_version}")
+}
 
-	modClientImplementation include("org.notenoughupdates.moulconfig:modern-1.21.11:4.7.2")
+tasks.named('shadowJar') {
+	archiveClassifier.set('dev-shadow')
 
-	modCompileOnly "maven.modrinth:odin:0.2.1"
+	configurations = [project.configurations.shadowModImpl]
 
-	/*
-     * Main JglTF library.
-     */
-	implementation("de.javagl:jgltf-model:2.0.4")
-	include("de.javagl:jgltf-model:2.0.4")
+	from(sourceSets.client.output)
 
-	/*
-     * JglTF model's dependencies.
-     */
-	implementation("de.javagl:jgltf-impl-v1:2.0.4")
-	include("de.javagl:jgltf-impl-v1:2.0.4")
+	from('third_party/odin') {
+		into 'META-INF/licenses/odin'
+	}
 
-	implementation("de.javagl:jgltf-impl-v2:2.0.4")
-	include("de.javagl:jgltf-impl-v2:2.0.4")
-
-	implementation("com.fasterxml.jackson.core:jackson-databind:2.13.4.2")
-	include("com.fasterxml.jackson.core:jackson-databind:2.13.4.2")
-
-	implementation("com.fasterxml.jackson.core:jackson-core:2.13.1")
-	include("com.fasterxml.jackson.core:jackson-core:2.13.1")
-
-	implementation("com.fasterxml.jackson.core:jackson-annotations:2.13.4")
-	include("com.fasterxml.jackson.core:jackson-annotations:2.13.4")
+	from('LICENSE') {
+		rename {
+			"${it}_${project.archives_base_name}"
+		}
+	}
 }
 
 processResources {
@@ -115,19 +103,19 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 21
+	it.options.release = 25
 	options.encoding = "UTF-8"
 }
 
 kotlin {
-	jvmToolchain(21)
+	jvmToolchain(25)
 }
 
 java {
 	withSourcesJar()
 
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
 }
 
 jar {

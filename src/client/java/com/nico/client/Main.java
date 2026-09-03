@@ -1,5 +1,8 @@
 package com.nico.client;
 
+import com.nico.client.bloodrush.BloodRoutes;
+import com.nico.client.bloodrush.RouteContext;
+import com.nico.client.bloodrush.RouteEditor;
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.hud.HudLayoutManager;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutsFeature;
@@ -48,28 +51,5 @@ public final class Main implements ClientModInitializer {
 
     public BazaarService getBazaarService() {
         return bazaarService;
-    }
-
-
-    public static void onRoomSecretsPacket(int foundSecrets, int totalSecrets) {
-        SecretStackingDetector.onRoomSecretsPacket(foundSecrets, totalSecrets);
-    }
-
-    public static void onRoomChanged() {
-        SecretStackingDetector.onRoomChanged();
-    }
-
-    public static void onOdinSecretPickup(BlockPos secretPos) {
-        SecretStackingDetector.onOdinSecretPickup(secretPos);
-    }
-
-    public static void onRoomSecretCounterUpdate(
-            String roomName,
-            int newSecretCount
-    ) {
-        SecretStackingDetector.onRoomSecretCounterUpdate(
-                roomName,
-                newSecretCount
-        );
     }
 }

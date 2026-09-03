@@ -1,0 +1,148 @@
+package com.nico.client.wiki;
+
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * A block-level element in a parsed wiki article
+ *
+ * <p>The parser converts supported MediaWiki structures into this model so rendering code does not
+ * need to retain or understand Jsoup elements.</p>
+ */
+public sealed interface WikiBlock permits
+        WikiBlock.Heading,
+        WikiBlock.MessageBox,
+        WikiBlock.Paragraph,
+        WikiBlock.ListItem,
+        WikiBlock.ForgingTree,
+        WikiBlock.Table,
+        WikiBlock.TabGroup,
+        WikiBlock.UiGroup,
+        WikiBlock.Crafting,
+        WikiBlock.Image,
+        WikiBlock.HorizontalRule {
+
+    record Heading(int level, WikiText text, String anchor) implements WikiBlock {
+        public Heading {
+            level = Math.max(2, Math.min(6, level));
+            text = text == null ? WikiText.empty() : text;
+            anchor = Objects.requireNonNullElse(anchor, "").trim();
+        }
+    }
+
+    record MessageBox(WikiContent content, Tone tone) implements WikiBlock {
+        public MessageBox {
+            content = content == null ? WikiContent.empty() : content;
+            tone = tone == null ? Tone.DEFAULT : tone;
+        }
+
+        public enum Tone {
+            DEFAULT, GREEN, RED, BLUE, YELLOW, ORANGE, PURPLE, GRAY
+        }
+    }
+
+    record Paragraph(WikiContent content) implements WikiBlock {
+        public Paragraph {
+            content = content == null ? WikiContent.empty() : content;
+        }
+    }
+
+    record ListItem(boolean ordered, int depth, WikiContent content) implements WikiBlock {
+        public ListItem {
+            depth = Math.max(0, depth);
+            content = content == null ? WikiContent.empty() : content;
+        }
+    }
+
+    record ForgingTree(WikiForgingTree tree) implements WikiBlock {
+        public ForgingTree {
+            tree = tree == null ? new WikiForgingTree("forging-tree", List.of()) : tree;
+        }
+    }
+
+    record Table(List<Row> rows, boolean sortable, boolean pixelated) implements WikiBlock {
+        public Table {
+            rows = rows == null ? List.of() : List.copyOf(rows);
+        }
+
+        public int columnCount() {
+            int maximum = 0;
+            for (Row row : rows) {
+                int count = 0;
+                for (Cell cell : row.cells()) {
+                    count += cell.columnSpan();
+                }
+                maximum = Math.max(maximum, count);
+            }
+            return maximum;
+        }
+
+        public record Row(List<Cell> cells) {
+            public Row {
+                cells = cells == null ? List.of() : List.copyOf(cells);
+            }
+        }
+
+        public record Cell(WikiContent content, boolean header, int rowSpan, int columnSpan) {
+            public Cell {
+                content = content == null ? WikiContent.empty() : content;
+                rowSpan = Math.max(1, rowSpan);
+                columnSpan = Math.max(1, columnSpan);
+            }
+        }
+    }
+
+    record TabGroup(List<Tab> tabs, int initiallySelectedIndex) implements WikiBlock {
+        public TabGroup {
+            tabs = tabs == null ? List.of() : List.copyOf(tabs);
+            initiallySelectedIndex = tabs.isEmpty()
+                    ? 0
+                    : Math.max(0, Math.min(initiallySelectedIndex, tabs.size() - 1));
+        }
+
+        public record Tab(String title, String panelId, List<WikiBlock> blocks) {
+            public Tab {
+                title = Objects.requireNonNullElse(title, "").trim();
+                panelId = Objects.requireNonNullElse(panelId, "").trim();
+                blocks = blocks == null ? List.of() : List.copyOf(blocks);
+            }
+        }
+    }
+
+    /** A MediaWiki SkyBlock UI group switched by invslot classes. */
+    record UiGroup(String key, List<Panel> panels, int initiallySelectedIndex) implements WikiBlock {
+        public UiGroup {
+            key = Objects.requireNonNullElse(key, "").trim();
+            panels = panels == null ? List.of() : List.copyOf(panels);
+            initiallySelectedIndex = panels.isEmpty()
+                    ? 0
+                    : Math.max(0, Math.min(initiallySelectedIndex, panels.size() - 1));
+        }
+
+        public record Panel(String id, List<WikiBlock> blocks) {
+            public Panel {
+                id = Objects.requireNonNullElse(id, "").trim();
+                blocks = blocks == null ? List.of() : List.copyOf(blocks);
+            }
+        }
+    }
+
+    record Crafting(WikiCraftingGrid grid) implements WikiBlock {
+        public Crafting {
+            grid = grid == null ? WikiCraftingGrid.empty() : grid;
+        }
+    }
+
+    record Image(WikiImage image, WikiText caption, boolean floatRight) implements WikiBlock {
+        public Image {
+            image = image == null ? WikiImage.empty() : image;
+            caption = caption == null ? WikiText.empty() : caption;
+        }
+
+        public Image(WikiImage image, WikiText caption) {
+            this(image, caption, false);
+        }
+    }
+
+    record HorizontalRule() implements WikiBlock { }
+}

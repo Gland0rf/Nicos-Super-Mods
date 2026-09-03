@@ -1,0 +1,353 @@
+package com.nico.client.wiki.screen;
+
+import com.nico.client.wiki.WikiTitleResolver;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.world.item.ItemStack;
+
+import java.util.List;
+import java.util.Optional;
+
+/** Mouse and keyboard interaction layer. */
+abstract class WikiScreenInput extends WikiScreenInteractionRenderer {
+    protected WikiScreenInput(Screen parent, ItemStack itemStack) {
+        super(parent, itemStack);
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
+        boolean control = event.hasControlDownWithQuirk();
+
+        if (contextMenu != null) {
+            if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
+                for (ContextMenuHitbox hitbox : contextMenuHitboxes) {
+                    if (hitbox.contains(event.x(), event.y())) {
+                        executeContextAction(hitbox.action(), hitbox.target());
+                        return true;
+                    }
+                }
+            }
+            contextMenu = null;
+            contextMenuHitboxes.clear();
+            if (event.button() != InputConstants.MOUSE_BUTTON_RIGHT) {
+                return true;
+            }
+        }
+
+        // Browser/content hitboxes are rebuilt independently from vanilla widgets.
+        // Give the toolbar field first chance at left clicks so a page link or
+        // image hitbox can never make the address bar appear read-only.
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
+            int toolbarY = HEADER_HEIGHT + BROWSER_TAB_HEIGHT + 3;
+            int fieldWidth = findBarVisible ? toolbarFindWidth : toolbarAddressWidth;
+            if (event.x() >= toolbarAddressX && event.x() < toolbarAddressX + fieldWidth
+                    && event.y() >= toolbarY && event.y() < toolbarY + 19) {
+                return super.mouseClicked(event, doubled);
+            }
+        }
+
+        if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT) {
+            Optional<LinkTarget> target = linkTargetAt(event.x(), event.y());
+            if (target.isPresent()) {
+                showContextMenu(target.get(), event.x(), event.y());
+                return true;
+            }
+        }
+
+        if (event.button() == InputConstants.MOUSE_BUTTON_MIDDLE) {
+            Optional<LinkTarget> target = linkTargetAt(event.x(), event.y());
+            if (target.isPresent()) {
+                openLinkTarget(
+                        target.get(),
+                        target.get().isImage() ? OpenDisposition.EXTERNAL : OpenDisposition.NEW_TAB
+                );
+                return true;
+            }
+        }
+
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
+            for (SearchSuggestionHitbox hitbox : searchSuggestionHitboxes) {
+                if (hitbox.contains(event.x(), event.y())) {
+                    if (control) {
+                        openResolvedUri(hitbox.result().pageUri(), OpenDisposition.NEW_TAB);
+                    } else {
+                        openResolvedUri(hitbox.result().pageUri(), OpenDisposition.CURRENT_TAB);
+                    }
+                    searchSuggestions = List.of();
+                    return true;
+                }
+            }
+
+            for (SpecialPageHitbox hitbox : specialPageHitboxes) {
+                if (!hitbox.contains(event.x(), event.y())) {
+                    continue;
+                }
+                switch (hitbox.action()) {
+                    case TOGGLE_STYLE -> toggleWebsiteStyle();
+                    case OPEN_BOOKMARK -> {
+                        if (hitbox.uri() != null) {
+                            openResolvedUri(hitbox.uri(), control ? OpenDisposition.NEW_TAB : OpenDisposition.CURRENT_TAB);
+                        }
+                    }
+                    case FOCUS_SEARCH -> focusAddressBar(true);
+                }
+                return true;
+            }
+
+            if (newTabHitbox != null && newTabHitbox.contains(event.x(), event.y())) {
+                createNewTab();
+                return true;
+            }
+
+            for (PageTabHitbox hitbox : pageTabHitboxes) {
+                if (!hitbox.contains(event.x(), event.y())) {
+                    continue;
+                }
+                PageTab tab = browserTabs.get(hitbox.tabIndex());
+                if (hitbox.isClose(event.x()) && tab.closable) {
+                    closeBrowserTab(hitbox.tabIndex());
+                } else {
+                    activateBrowserTab(hitbox.tabIndex());
+                }
+                return true;
+            }
+
+            // Help/license/mod-page links must work on non-article tabs too.
+            for (LinkHitbox hitbox : linkHitboxes) {
+                if (!hitbox.contains(event.x(), event.y())) {
+                    continue;
+                }
+                OpenDisposition disposition = hitbox.disposition();
+                if (disposition != OpenDisposition.EXTERNAL && control) {
+                    disposition = OpenDisposition.NEW_TAB;
+                }
+                openResolvedUri(hitbox.uri(), disposition);
+                return true;
+            }
+
+            if (activeBrowserTab().kind == PageKind.ARTICLE && state == LoadState.LOADED) {
+                ScrollbarGeometry geometry = scrollbarGeometry();
+                if (geometry != null && geometry.containsTrack(event.x(), event.y())) {
+                    draggingScrollbar = true;
+                    if (geometry.containsThumb(event.x(), event.y())) {
+                        scrollbarDragOffset = (int) Math.round(event.y() - geometry.thumbY());
+                    } else {
+                        scrollbarDragOffset = geometry.thumbHeight() / 2;
+                        updateScrollFromDrag(event.y(), geometry);
+                    }
+                    return true;
+                }
+
+                for (ForgingTreeHitbox hitbox : forgingTreeHitboxes) {
+                    if (!hitbox.contains(event.x(), event.y())) {
+                        continue;
+                    }
+                    forgingTreeExpansion.put(hitbox.stateKey(), !hitbox.expanded());
+                    int oldScroll = scrollPixels;
+                    rebuildLayout();
+                    scrollPixels = Math.min(oldScroll, maxScrollPixels);
+                    saveScreenToActiveTab();
+                    updateFindMatches(false);
+                    return true;
+                }
+
+                // Inventory UI controls own their item-image area.
+                for (int index = slotHitboxes.size() - 1; index >= 0; index--) {
+                    SlotHitbox hitbox = slotHitboxes.get(index);
+                    if (!hitbox.contains(event.x(), event.y())) continue;
+
+                    if (!hitbox.frame().uiTarget().isBlank()
+                            && activateUiTarget(hitbox.frame().uiGroupKey(), hitbox.frame().uiTarget())) {
+                        return true;
+                    }
+
+                    if (!hitbox.frame().link().isBlank()) {
+                        openLink(
+                                hitbox.frame().link(),
+                                control ? OpenDisposition.NEW_TAB : OpenDisposition.CURRENT_TAB
+                        );
+                        return true;
+                    }
+
+                    // It is still a slot even if it has no action. Swallow the
+                    // click so the nested item image cannot open a File: page.
+                    return true;
+                }
+
+                for (int index = imageHitboxes.size() - 1; index >= 0; index--) {
+                    ImageHitbox hitbox = imageHitboxes.get(index);
+                    if (!hitbox.contains(event.x(), event.y())) {
+                        continue;
+                    }
+                    Optional<LinkTarget> target = linkTargetAt(event.x(), event.y());
+                    if (target.isPresent() && target.get().isImage()) {
+                        openLinkTarget(target.get(), OpenDisposition.EXTERNAL);
+                        return true;
+                    }
+                }
+
+                for (TocHitbox hitbox : tocHitboxes) {
+                    if (hitbox.contains(event.x(), event.y())) {
+                        scrollPixels = Math.max(0, Math.min(hitbox.item().targetY - 4, maxScrollPixels));
+                        saveScreenToActiveTab();
+                        return true;
+                    }
+                }
+
+                for (TabHitbox hitbox : tabHitboxes) {
+                    if (hitbox.contains(event.x(), event.y())) {
+                        int current = selectedTabs.getOrDefault(hitbox.groupId(), 0);
+                        if (current != hitbox.tabIndex()) {
+                            selectedTabs.put(hitbox.groupId(), hitbox.tabIndex());
+                            int oldScroll = scrollPixels;
+                            rebuildLayout();
+                            scrollPixels = Math.min(oldScroll, maxScrollPixels);
+                            saveScreenToActiveTab();
+                            updateFindMatches(false);
+                        }
+                        return true;
+                    }
+                }
+            }
+        }
+        return super.mouseClicked(event, doubled);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        int key = event.key();
+        boolean control = event.hasControlDownWithQuirk();
+        boolean shift = event.hasShiftDown();
+        boolean alt = event.hasAltDown();
+        boolean enter = key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER;
+
+        if (contextMenu != null && key == InputConstants.KEY_ESCAPE) {
+            contextMenu = null;
+            return true;
+        }
+
+        if (findBarVisible && findBox != null && findBox.isFocused()) {
+            if (enter) {
+                jumpFind(shift ? -1 : 1);
+                return true;
+            }
+            if (key == InputConstants.KEY_ESCAPE) {
+                setFindBarVisible(false);
+                return true;
+            }
+        }
+
+        if (addressBox != null && addressBox.isFocused()) {
+            if (enter) {
+                if (!searchSuggestions.isEmpty()) {
+                    WikiTitleResolver.SearchResult first = searchSuggestions.get(0);
+                    openResolvedUri(
+                            first.pageUri(),
+                            control ? OpenDisposition.NEW_TAB : OpenDisposition.CURRENT_TAB
+                    );
+                    searchSuggestions = List.of();
+                    addressBox.setFocused(false);
+                } else {
+                    submitAddress(control);
+                }
+                return true;
+            }
+            if (key == InputConstants.KEY_ESCAPE) {
+                addressBox.setFocused(false);
+                searchSuggestions = List.of();
+                return true;
+            }
+        }
+
+        if (control && (key == InputConstants.KEY_L || key == InputConstants.KEY_K)) {
+            focusAddressBar(false);
+            return true;
+        }
+        if (control && key == InputConstants.KEY_T) {
+            createNewTab();
+            return true;
+        }
+        if (control && key == InputConstants.KEY_W) {
+            if (activeBrowserTab().closable) {
+                closeBrowserTab(activeBrowserTabIndex);
+            }
+            return true;
+        }
+        if (control && key == InputConstants.KEY_TAB) {
+            int direction = shift ? -1 : 1;
+            activateBrowserTab(Math.floorMod(activeBrowserTabIndex + direction, browserTabs.size()));
+            return true;
+        }
+        if (control && key == InputConstants.KEY_F) {
+            setFindBarVisible(true);
+            return true;
+        }
+        if (control && key == InputConstants.KEY_D) {
+            toggleCurrentBookmark();
+            return true;
+        }
+        if (control && key == InputConstants.KEY_R) {
+            loadPage(true);
+            return true;
+        }
+        if (alt && key == InputConstants.KEY_LEFT) {
+            navigateBack();
+            return true;
+        }
+        if (alt && key == InputConstants.KEY_RIGHT) {
+            navigateForward();
+            return true;
+        }
+        if (key == InputConstants.KEY_ESCAPE && findBarVisible) {
+            setFindBarVisible(false);
+            return true;
+        }
+
+        return super.keyPressed(event);
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double offsetX, double offsetY) {
+        if (draggingScrollbar && event.button() == 0) {
+            ScrollbarGeometry geometry = scrollbarGeometry();
+            if (geometry != null) {
+                updateScrollFromDrag(event.y(), geometry);
+            }
+            return true;
+        }
+        return super.mouseDragged(event, offsetX, offsetY);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (draggingScrollbar && event.button() == 0) {
+            draggingScrollbar = false;
+            return true;
+        }
+        return super.mouseReleased(event);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (state != LoadState.LOADED) {
+            return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+        }
+        scrollPixels -= (int) Math.round(verticalAmount * SCROLL_STEP);
+        scrollPixels = Math.max(0, Math.min(scrollPixels, maxScrollPixels));
+        saveScreenToActiveTab();
+        return true;
+    }
+
+    @Override
+    public void onClose() {
+        Minecraft.getInstance().setScreen(parent);
+    }
+
+    @Override
+    public boolean isPauseScreen() {
+        return false;
+    }
+}

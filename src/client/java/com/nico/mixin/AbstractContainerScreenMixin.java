@@ -2,7 +2,7 @@ package com.nico.mixin;
 
 import com.nico.client.configuration.NsmConfig;
 import com.nico.client.configuration.category.CategoryOther;
-//import com.nico.client.wiki.screen.WikiScreen; TEMPORARY
+import com.nico.client.wiki.screen.WikiScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -33,8 +33,7 @@ public abstract class AbstractContainerScreenMixin {
             KeyEvent event,
             CallbackInfoReturnable<Boolean> callback
     ) {
-        return;
-        /*CategoryOther config = NsmConfig.INSTANCE.other;
+        CategoryOther config = NsmConfig.INSTANCE.other;
         if (!config.wiki.wikiShortcutEnabled) {
             return;
         }
@@ -49,7 +48,7 @@ public abstract class AbstractContainerScreenMixin {
 
         if (nsm$openHoveredItem()) {
             callback.setReturnValue(true);
-        }*/ // TEMPORARY
+        }
     }
 
     @Inject(
@@ -62,7 +61,7 @@ public abstract class AbstractContainerScreenMixin {
             boolean doubleClick,
             CallbackInfoReturnable<Boolean> callback
     ) {
-        /*CategoryOther config = NsmConfig.INSTANCE.other;
+        CategoryOther config = NsmConfig.INSTANCE.other;
 
         if (!config.wiki.wikiShortcutEnabled) {
             return;
@@ -78,12 +77,11 @@ public abstract class AbstractContainerScreenMixin {
 
         if (nsm$openHoveredItem()) {
             callback.setReturnValue(true);
-        }*/ // TEMPORARY
-        return;
+        }
     }
 
     private boolean nsm$openHoveredItem() {
-        /*Slot slot = hoveredSlot;
+        Slot slot = hoveredSlot;
 
         if (slot == null || !slot.hasItem()) {
             return false;
@@ -105,7 +103,6 @@ public abstract class AbstractContainerScreenMixin {
                 )
         );
 
-        return true; */ // TEMPORARY
-        return false;
+        return true;
     }
 }
