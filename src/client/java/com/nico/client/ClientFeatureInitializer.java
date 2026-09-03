@@ -5,6 +5,7 @@ import com.nico.client.hud.HudLayoutManager;
 import com.nico.client.hud.HudMoveCommand;
 import com.nico.client.minions.MinionRoiClient;
 import com.nico.client.minions.base.MinionDataRegistry;
+import com.nico.client.roomthemes.RoomThemeFeature;
 import com.nico.client.secretTimer.SecretRoomTimerClient;
 import com.nico.client.utils.BazaarService;
 
@@ -18,6 +19,7 @@ public final class ClientFeatureInitializer {
     public static HudLayoutManager initialize() {
         initializeConfig();
         initializeSecretFeatures();
+        RoomThemeFeature.initialize();
 
         HudLayoutManager hudLayout = initializeHud();
 

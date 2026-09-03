@@ -1,5 +1,6 @@
 package com.nico.client.configuration.category;
 
+import com.nico.client.roomthemes.RoomThemeFeature;
 import com.nico.client.secretTimer.SecretRoomTimerClient;
 import io.github.notenoughupdates.moulconfig.annotations.*;
 
@@ -38,6 +39,13 @@ public class CategoryDungeons {
     )
     @Accordion
     public DungeonLagMonitor dungeonLagMonitor = new DungeonLagMonitor();
+
+    @ConfigOption(
+            name = "Room themes",
+            desc = "Loads local-only visual themes for configured SkyBlock rooms and areas."
+    )
+    @Accordion
+    public RoomThemes roomThemes = new RoomThemes();
 
     public static class RoomStacking {
 
@@ -226,5 +234,35 @@ public class CategoryDungeons {
         )
         @ConfigEditorBoolean
         public boolean copyTpsLossToClipboard = true;
+    }
+
+    public static class RoomThemes {
+
+        @ConfigOption(
+                name = "Enabled",
+                desc = "Shows the active JSON-defined theme for your current room or area."
+        )
+        @ConfigEditorBoolean
+        public boolean enabled = false;
+
+        @ConfigOption(
+                name = "Scene Detail",
+                desc = "Controls which elements are rendered."
+        )
+        @ConfigEditorDropdown(
+                values = {
+                        "Low",
+                        "Balanced",
+                        "High"
+                }
+        )
+        public int sceneDetail = 1;
+
+        @ConfigOption(
+                name = "Animations",
+                desc = "Allows lightweight animations, such as leaves, sparks, or dust."
+        )
+        @ConfigEditorBoolean
+        public boolean animations = true;
     }
 }

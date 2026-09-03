@@ -37,6 +37,11 @@ public abstract class ClientPacketListenerMixin {
             CallbackInfo ci
     ) {
         packet.getParameters().ifPresent(parameters -> {
+            DungeonState.onScoreboardText(
+                    parameters.getPlayerPrefix(),
+                    parameters.getPlayerSuffix()
+            );
+
             LocationUtils.onTeamText(
                     parameters.getPlayerPrefix(),
                     parameters.getPlayerSuffix()

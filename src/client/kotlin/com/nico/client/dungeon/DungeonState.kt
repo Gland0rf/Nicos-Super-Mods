@@ -2,11 +2,17 @@ package com.nico.client.dungeon
 
 import com.nico.client.utils.LocationUtils
 import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.Component
 
 object DungeonState {
 
-    private val floorRegex =
-        Regex("""The Catacombs \(([FM])(\d+)\)""")
+    private val floorRegex = Regex(
+        """(?:The\s+)?Catacombs\s*\(\s*([FM])\s*(\d+)\s*\)""",
+        RegexOption.IGNORE_CASE
+    )
+
+    private var scoreboardFloorNumber: Int? = null;
+    private var scoreboardMasterMode: Boolean = false;
 
     var floorNumber: Int? = null
         private set
@@ -47,8 +53,7 @@ object DungeonState {
     @JvmStatic
     fun tick() {
         if (!inDungeons) {
-            floorNumber = null
-            masterMode = false
+            reset()
             return
         }
 
@@ -64,26 +69,57 @@ object DungeonState {
             val line =
                 displayName.string.stripControlCodes()
 
-            val match = floorRegex.find(line) ?: continue
-
-            detectedMasterMode =
-                match.groupValues[1]
-                    .equals("M", ignoreCase = true)
-
-            detectedFloor =
-                match.groupValues[2].toIntOrNull()
+            val floor = parseFloor(line) ?: continue
+            detectedMasterMode = floor.masterMode
+            detectedFloor = floor.number
 
             break
         }
 
-        floorNumber = detectedFloor
-        masterMode = detectedMasterMode
+        floorNumber = detectedFloor ?: scoreboardFloorNumber
+        masterMode =
+            if (detectedFloor != null) detectedMasterMode
+            else scoreboardMasterMode
+    }
+
+    /**
+    * Receives the text components used by sidebar scoreboard rows. Hypixel puts
+    * "The Catacombs (F7)" there on clients where the same text is not present
+    * in the tab list, so this acts as the fallback for the normal tab scan.
+    */
+    @JvmStatic
+    fun onScoreboardText(prefix: Component?, suffix: Component?) {
+        val line = buildString {
+            prefix?.let { append(it.string) }
+            suffix?.let { append(it.string) }
+        }.stripControlCodes()
+
+        val floor = parseFloor(line) ?: return
+        scoreboardFloorNumber = floor.number
+        scoreboardMasterMode = floor.masterMode
+
+        // Publish it immediately; tick() will keep preferring the tab-list value
+        // whenever that number is available.
+        floorNumber = floor.number
+        masterMode = floor.masterMode
     }
 
     @JvmStatic
     fun reset() {
         floorNumber = null
         masterMode = false
+        scoreboardFloorNumber = null
+        scoreboardMasterMode = false
+    }
+
+    private fun parseFloor(line: String): DetectedFloor? {
+        val match = floorRegex.find(line) ?: return null
+        val number = match.groupValues[2].toIntOrNull() ?: return null
+
+        return DetectedFloor(
+            number = number,
+            masterMode = match.groupValues[1].equals("M", ignoreCase = true)
+        )
     }
 
     private fun String.stripControlCodes(): String =
@@ -94,4 +130,9 @@ object DungeonState {
             ),
             ""
         )
+
+    private data class DetectedFloor(
+        val number: Int,
+        val masterMode: Boolean
+    )
 }

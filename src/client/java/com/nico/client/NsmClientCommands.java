@@ -9,6 +9,7 @@ import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonTeammateScanner;
 import com.nico.client.memleak.MemLeakFeature;
+import com.nico.client.roomthemes.RoomThemeFeature;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -65,6 +66,7 @@ public final class NsmClientCommands {
                         .executes(context -> openConfigScreen())
                         .then(RouteCommands.node(routeEditor))
                         .then(createMemLeakNode())
+                        .then(createRoomThemesNode())
         );
     }
 
@@ -192,12 +194,29 @@ public final class NsmClientCommands {
                 );
     }
 
-    private static int sendMemLeakLines(Iterable<String> lines) {
+    private static LiteralArgumentBuilder<FabricClientCommandSource> createRoomThemesNode() {
+        return ClientCommands.literal("roomthemes")
+                .executes(context -> sendLines(RoomThemeFeature.statusLines()))
+                .then(
+                        ClientCommands.literal("status")
+                                .executes(context -> sendLines(RoomThemeFeature.statusLines()))
+                )
+                .then(
+                        ClientCommands.literal("reload")
+                                .executes(context -> sendLines(RoomThemeFeature.reloadLines()))
+                );
+    }
+
+    private static int sendLines(Iterable<String> lines) {
         for (String line : lines) {
             sendMessage(Component.literal(line));
         }
 
         return 1;
+    }
+
+    private static int sendMemLeakLines(Iterable<String> lines) {
+        return sendLines(lines);
     }
 
     private static int resetMemLeakMonitor() {
