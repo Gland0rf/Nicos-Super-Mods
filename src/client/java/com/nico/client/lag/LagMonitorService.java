@@ -11,7 +11,7 @@ public class LagMonitorService {
     private final TpsEstimator tpsEstimator = new TpsEstimator();
     private final PingTracker pingTracker = new PingTracker();
     private final LagTitleNotifier titleNotifier = new LagTitleNotifier();
-    private final ConnectionPingTracker connectionPingTracker = new ConnectionPingTracker();
+    private final TcpPingTracker connectionPingTracker = new TcpPingTracker();
 
     private volatile long lastInboundPacketNanos;
     private volatile LagSnapshot snapshot = LagSnapshot.inactive();
@@ -60,13 +60,6 @@ public class LagMonitorService {
                 && pingPacket.getId() != 0) {
             tpsEstimator.onServerTick(now);
         }
-
-        if (packet instanceof ClientboundPongResponsePacket pongPacket) {
-            int measuredPing = connectionPingTracker.accept(pongPacket);
-            if (measuredPing >= 0) {
-                onConnectionPingSample(measuredPing);
-            }
-        }
     }
 
     public synchronized void onJoin(Minecraft client) {
@@ -113,7 +106,8 @@ public class LagMonitorService {
 
         connectionPingTracker.requestNow(
                 client,
-                config.tcpPingTimeoutMillis
+                config.tcpPingTimeoutMillis,
+                this::onConnectionPingSample
         );
     }
 
@@ -195,7 +189,8 @@ public class LagMonitorService {
         connectionPingTracker.tick(
                 client,
                 config.tcpPingSampleIntervalSeconds,
-                config.tcpPingTimeoutMillis
+                config.tcpPingTimeoutMillis,
+                this::onConnectionPingSample
         );
 
         double tps = tpsEstimator.currentTps(now, config.tpsSampleStaleSeconds);

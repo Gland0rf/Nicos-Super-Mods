@@ -8,8 +8,10 @@ import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 
 public final class RouteRepository {
@@ -72,7 +74,13 @@ public final class RouteRepository {
             stored.breakerBlocks.add(storedBlock);
         }
 
-        Files.writeString(file, GSON.toJson(stored), StandardCharsets.UTF_8);
+        Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
+        Files.writeString(temporary, GSON.toJson(stored), StandardCharsets.UTF_8);
+        try {
+            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException ignored) {
+            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
+        }
 
         cache.put(
                 CacheKey.of(location, route),
@@ -86,9 +94,15 @@ public final class RouteRepository {
     }
 
     public void delete(RouteLocation location, RouteKey route) throws IOException {
-        Files.deleteIfExists(getFile(location, route));
-        cache.remove(CacheKey.of(location, route));
-        removeDirectoryIfEmpty(getConnectionDirectory(location));
+        Path file = findRouteFile(location, route);
+
+        if (file != null) {
+            Path parent = file.getParent();
+            Files.deleteIfExists(file);
+            removeDirectoryIfEmpty(parent);
+        }
+
+        cache.keySet().removeIf(key -> key.matches(location, route));
     }
 
     public void deleteConnection(RouteLocation location) throws IOException {
@@ -104,9 +118,9 @@ public final class RouteRepository {
     }
 
     private SavedRoute loadFromDisk(RouteLocation location, RouteKey route) {
-        Path file = getFile(location, route);
+        Path file = findRouteFile(location, route);
 
-        if (!Files.exists(file)) {
+        if (file == null) {
             return new SavedRoute(
                     location,
                     route,
@@ -282,6 +296,67 @@ public final class RouteRepository {
         return getConnectionDirectory(location).resolve(route.fileName() + ".json");
     }
 
+    private Path findRouteFile(RouteLocation location, RouteKey route) {
+        Path exact = getFile(location, route);
+
+        if (Files.isRegularFile(exact)) {
+            return exact;
+        }
+
+        Path roomDirectory = root.resolve(safe(location.room().id()));
+
+        if (!Files.isDirectory(roomDirectory)) {
+            return null;
+        }
+
+        Path best = null;
+        int bestDistance = Integer.MAX_VALUE;
+
+        try (var stream = Files.walk(roomDirectory)) {
+            for (Path candidate : stream
+                    .filter(Files::isRegularFile)
+                    .filter(path ->
+                            path.getFileName()
+                                    .toString()
+                                    .equalsIgnoreCase(route.fileName() + ".json"))
+                    .sorted(Comparator.comparing(Path::toString))
+                    .toList()) {
+
+                try {
+                    StoredRoute stored = GSON.fromJson(
+                            Files.readString(candidate, StandardCharsets.UTF_8), StoredRoute.class
+                    );
+
+                    if (stored == null
+                            || stored.entrance == null
+                            || stored.exit == null
+                            || stored.route == null
+                            || !stored.route.equals(route.name())
+                            || !stored.entrance.matchesWithTolerance(location.entrance())
+                            || !stored.exit.matchesWithTolerance(location.exit())) {
+                        continue;
+                    }
+
+                    int distance = stored.entrance.xzDistanceTo(location.entrance())
+                                    + stored.exit.xzDistanceTo(location.exit());
+
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        best = candidate;
+                    }
+
+                } catch (Exception exception) {
+                    exception.printStackTrace();
+                }
+            }
+
+        } catch (IOException exception) {
+            exception.printStackTrace();
+        }
+
+        return best;
+    }
+
     private Path getConnectionDirectory(RouteLocation location) {
         return root
                 .resolve(safe(location.room().id()))
@@ -336,8 +411,12 @@ public final class RouteRepository {
 
         boolean matchesConnection(RouteLocation location) {
             return roomId.equals(location.room().id())
-                    && entrance.equals(location.entrance())
-                    && exit.equals(location.exit());
+                    && entrance.matchesWithTolerance(location.entrance())
+                    && exit.matchesWithTolerance(location.exit());
+        }
+
+        boolean matches(RouteLocation location, RouteKey routeKey) {
+            return route == routeKey && matchesConnection(location);
         }
     }
 

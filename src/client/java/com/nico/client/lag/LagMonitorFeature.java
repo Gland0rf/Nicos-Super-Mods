@@ -12,7 +12,7 @@ import java.util.function.Supplier;
 public class LagMonitorFeature {
     private static boolean initialized;
 
-    private static final LagMonitorConfig config = new LagMonitorConfig();
+    private static final LagMonitorConfig config = LagMonitorConfig.load();
     private static Supplier<CategoryDungeons.DungeonLagMonitor> settingsSupplier;
 
     private LagMonitorFeature() { }

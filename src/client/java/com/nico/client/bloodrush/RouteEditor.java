@@ -263,7 +263,7 @@ public final class RouteEditor {
             exitDoor = end.door();
         }
 
-        if (recording.entrance.equals(exitDoor)) {
+        if (recording.entrance.matchesWithTolerance(exitDoor)) {
             return Result.fail(
                     "The exit door cannot be the same as the entrance door."
             );
@@ -345,7 +345,7 @@ public final class RouteEditor {
             if (recording != null
                     && recording.primaryKey() == key
                     && recording.room.id().equals(location.room().id())
-                    && recording.entrance.equals(location.entrance())) {
+                    && recording.entrance.matchesWithTolerance(location.entrance())) {
                 recording = null;
             }
             if (forcedPreview == key) {
@@ -438,7 +438,7 @@ public final class RouteEditor {
 
         List<RouteRepository.SavedRoute> routes = repository.getAllForRoom(setup.room()).stream()
                 .filter(route -> route.key() == key)
-                .filter(route -> route.location().entrance().equals(setup.door()))
+                .filter(route -> route.location().entrance().matchesWithTolerance(setup.door()))
                 .sorted(Comparator.comparing(route -> route.location().exit().fileName()))
                 .toList();
 
@@ -526,8 +526,8 @@ public final class RouteEditor {
 
         List<RouteRepository.SavedRoute> routes =
                 repository.getAllForRoom(previewStart.room()).stream()
-                        .filter(route -> route.location().entrance().equals(previewStart.door()))
-                        .filter(route -> route.location().exit().equals(end.door()))
+                        .filter(route -> route.location().entrance().matchesWithTolerance(previewStart.door()))
+                        .filter(route -> route.location().exit().matchesWithTolerance(end.door()))
                         .toList();
 
         if (routes.isEmpty()) {
@@ -666,7 +666,7 @@ public final class RouteEditor {
             return Result.fail("The exit door must be in the same room.");
         }
 
-        if (recording.entrance.equals(setup.door())) {
+        if (recording.entrance.matchesWithTolerance(setup.door())) {
             return Result.fail("The exit door cannot be the entrance door.");
         }
 
@@ -821,7 +821,7 @@ public final class RouteEditor {
             return Result.fail("The copied route belongs to a different room.");
         }
 
-        if (!recording.entrance.equals(copiedRoute.entrance())) {
+        if (!recording.entrance.matchesWithTolerance(copiedRoute.entrance())) {
             return Result.fail(
                     "The copied route starts at "
                             + copiedRoute.entrance().fileName()

@@ -14,10 +14,12 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 public final class NsmConfigManager {
 
@@ -33,14 +35,16 @@ public final class NsmConfigManager {
     private NsmConfigManager() {
     }
 
-    public static void init() {
+    public static synchronized void init() {
+        if (config != null && processor != null) return;
+
         File file = getConfigFile();
 
         if (file.exists()) {
-            try (FileReader reader = new FileReader(file)) {
+            try (Reader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
                 config = GSON.fromJson(reader, NsmConfig.class);
-            } catch (IOException exception) {
-                exception.printStackTrace();
+            } catch (IOException | RuntimeException exception) {
+                System.err.println("[NSM] Could not load config; using defaults: " + exception.getMessage());
             }
         }
 
@@ -90,14 +94,27 @@ public final class NsmConfigManager {
         return config;
     }
 
-    public static void save() {
+    public static synchronized void save() {
+        Path path = getConfigFile().toPath();
+        Path parent = path.getParent();
+        Path temporary = path.resolveSibling(path.getFileName() + ".tmp");
+
         File file = getConfigFile();
         file.getParentFile().mkdirs();
 
-        try (FileWriter writer = new FileWriter(file)) {
-            GSON.toJson(getConfig(), writer);
+        try {
+            Files.createDirectories(parent);
+            try (Writer writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
+                GSON.toJson(getConfig(), writer);
+            }
+
+            try {
+                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException exception) {
-            exception.printStackTrace();
+            System.err.println("[NSM] Could not save config: " + exception.getMessage());
         }
     }
 

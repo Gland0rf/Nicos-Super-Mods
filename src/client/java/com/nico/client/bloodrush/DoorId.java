@@ -4,21 +4,32 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 
 public record DoorId (int x, int y, int z) {
-    public static DoorId fromWorld(BlockPos doorAnchor, RoomInfo room) {
-        Vec3 worldCenter = new Vec3(
-                doorAnchor.getX() + 0.5,
-                doorAnchor.getY() + 0.5,
-                doorAnchor.getZ() + 0.5
-        );
+    public static final int TOLERANCE = 1;
 
-        Vec3 local = RouteTransforms.worldToLocal(worldCenter, room);
+    public static DoorId fromWorld(BlockPos doorAnchor, RoomInfo room) {
+        BlockPos local = RouteTransforms.worldBlockToLocal(doorAnchor, room);
 
         return new DoorId(
-                (int) Math.round(local.x),
-                (int) Math.round(local.y),
-                (int) Math.round(local.z)
+                local.getX(),
+                local.getY(),
+                local.getZ()
         );
     }
+
+    public boolean matchesWithTolerance(DoorId other) {
+        return other != null
+                && y == other.y
+                && Math.abs(x - other.x) <= TOLERANCE
+                && Math.abs(z - other.z) <= TOLERANCE;
+    }
+
+   public int xzDistanceTo(DoorId other) {
+        if (other == null || y != other.y) {
+             return Integer.MAX_VALUE;
+        }
+
+        return Math.abs(x - other.x) + Math.abs(z - other.z);
+   }
 
     public String fileName() {
         return x + "_" + y + "_" + z;

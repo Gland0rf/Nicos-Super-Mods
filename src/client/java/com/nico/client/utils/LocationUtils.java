@@ -69,6 +69,12 @@ public class LocationUtils {
         return currentArea == Island.DUNGEON;
     }
 
+    public static void reset() {
+        inSkyBlock = false;
+        currentArea = Island.UNKNOWN;
+        lobbyId = null;
+    }
+
     public static boolean isCurrentArea(Island... islands) {
         if (currentArea == Island.SINGLE_PLAYER) {
             return true;

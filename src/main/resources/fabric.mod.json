@@ -8,10 +8,10 @@
 		"Nico8k"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
+		"homepage": "https://modrinth.com/mod/nicos-super-mods",
 		"sources": "https://github.com/FabricMC/fabric-example-mod"
 	},
-	"license": "CC0-1.0",
+	"license": "GPL-3.0-only",
 	"icon": "assets/nsm/NSM_Logo.png",
 	"environment": "*",
 	"entrypoints": {

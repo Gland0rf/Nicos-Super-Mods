@@ -8,8 +8,8 @@ public record RouteLocation (
     public boolean sameTraversal(RouteLocation other) {
         return other != null
                 && room.id().equals(other.room.id())
-                && entrance.equals(other.entrance)
-                && exit.equals(other.exit);
+                && entrance.matchesWithTolerance(other.entrance)
+                && exit.matchesWithTolerance(other.exit);
     }
 
     public String connectionName() {
