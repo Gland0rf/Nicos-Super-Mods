@@ -53,7 +53,7 @@ public final class Main implements ClientModInitializer {
             DungeonState.reset();
             DungeonStatsTracker.reset();
             DungeonTeammateScanner.reset();
-        })
+        });
 
         LagMonitorFeature.initialize(() -> NsmConfigManager.getConfig().dungeons.dungeonLagMonitor);
     }
