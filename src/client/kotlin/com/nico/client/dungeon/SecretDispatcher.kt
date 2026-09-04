@@ -47,9 +47,6 @@ object SecretDispatcher {
             is ClientboundTakeItemEntityPacket ->
                 handleTakeItem(packet)
 
-            is ClientboundRemoveEntitiesPacket ->
-                handleRemoveEntities(packet)
-
             is ClientboundSoundPacket ->
                 handleSound(packet)
 
@@ -71,29 +68,14 @@ object SecretDispatcher {
 
         val client = Minecraft.getInstance()
         val player = client.player ?: return
+        if (packet.playerId != player.id) return
         val entity = client.level?.getEntity(packet.itemId) as? ItemEntity ?: return
 
+        if (packet.playerId != player.id) return;
         if (!isDungeonItemDrop(entity.item.hoverName.string)) return
         if (entity.distanceTo(player) > 8) return
 
         dispatchItemSecret(entity.blockPosition())
-    }
-
-    private fun handleRemoveEntities(packet: ClientboundRemoveEntitiesPacket) {
-        if (!DungeonState.inClear) return
-
-        val client = Minecraft.getInstance()
-        val player = client.player ?: return
-        val level = client.level ?: return
-
-        packet.entityIds.forEach { id ->
-            val entity = level.getEntity(id) as? ItemEntity ?: return@forEach
-
-            if (!isDungeonItemDrop(entity.item.hoverName.string)) return@forEach
-            if (entity.distanceTo(player) > 8) return@forEach
-
-            dispatchItemSecret(entity.blockPosition())
-        }
     }
 
     private fun handleSound(packet: ClientboundSoundPacket) {
@@ -101,14 +83,7 @@ object SecretDispatcher {
 
         val sound = packet.sound.value()
 
-        val isBatSound =
-            sound == SoundEvents.BAT_HURT ||
-            sound == SoundEvents.BAT_DEATH ||
-            sound.location
-                .toString()
-                .contains("bat", ignoreCase = true)
-
-        if (!isBatSound) return
+        if (sound != SoundEvents.BAT_DEATH) return
         if (packet.volume > 0.3f) return
 
         dispatchSecret(BlockPos.containing(packet.x, packet.y, packet.z))
@@ -138,6 +113,8 @@ object SecretDispatcher {
         if (DungeonSecretClassifier.isSecret(level, blockState, pos)) {
             if (blockState.`is`(Blocks.CHEST) || blockState.`is`(Blocks.TRAPPED_CHEST)) {
                 dispatchChestSecret(pos)
+            } else if (blockState.block is SkullBlock) {
+                SecretStackingDetector.onSecretPickup(pos)
             } else {
                 dispatchSecret(pos)
             }
@@ -178,7 +155,6 @@ object SecretDispatcher {
     }
 
     private fun dispatchChestSecret(pos: BlockPos) {
-        SecretStackingDetector.onSecretPickup(pos)
         SecretRoomTimerClient.onChestSecretPickup(pos)
     }
 

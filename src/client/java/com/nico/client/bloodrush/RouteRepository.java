@@ -8,8 +8,10 @@ import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 
 public final class RouteRepository {
@@ -72,7 +74,13 @@ public final class RouteRepository {
             stored.breakerBlocks.add(storedBlock);
         }
 
-        Files.writeString(file, GSON.toJson(stored), StandardCharsets.UTF_8);
+        Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
+        Files.writeString(temporary, GSON.toJson(stored), StandardCharsets.UTF_8);
+        try {
+            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException ignored) {
+            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
+        }
 
         cache.put(
                 CacheKey.of(location, route),

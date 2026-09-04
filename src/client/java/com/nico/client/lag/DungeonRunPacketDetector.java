@@ -1,5 +1,6 @@
 package com.nico.client.lag;
 
+import com.nico.client.utils.LocationUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
@@ -15,6 +16,9 @@ public final class DungeonRunPacketDetector {
     }
 
     public static void handle(Packet<?> packet) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!HypixelServerDetector.isHypixel(minecraft) || !LocationUtils.isInDungeon()) return;
+
         LagMonitorService service = LagMonitorService.getInstance();
         Component component = extractText(packet);
         if (component == null) {

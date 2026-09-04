@@ -4,6 +4,9 @@ import com.nico.client.bloodrush.BloodRoutes;
 import com.nico.client.bloodrush.RouteContext;
 import com.nico.client.bloodrush.RouteEditor;
 import com.nico.client.configuration.NsmConfigManager;
+import com.nico.client.dungeon.DungeonState;
+import com.nico.client.dungeon.DungeonStatsTracker;
+import com.nico.client.dungeon.DungeonTeammateScanner;
 import com.nico.client.hud.HudLayoutManager;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutsFeature;
 import com.nico.client.lag.LagMonitorFeature;
@@ -12,7 +15,9 @@ import com.nico.client.stacking.SecretStackingDetector;
 import com.nico.client.utils.BazaarService;
 import com.nico.client.utils.HypixelApiClient;
 //import com.nico.client.wiki.service.HypixelWikiService; TEMPORARY
+import com.nico.client.utils.LocationUtils;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.core.BlockPos;
 
 public final class Main implements ClientModInitializer {
@@ -42,6 +47,13 @@ public final class Main implements ClientModInitializer {
 
         NsmClientCommands.register();
         ClientTickHandler.register();
+
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            LocationUtils.reset();
+            DungeonState.reset();
+            DungeonStatsTracker.reset();
+            DungeonTeammateScanner.reset();
+        })
 
         LagMonitorFeature.initialize(() -> NsmConfigManager.getConfig().dungeons.dungeonLagMonitor);
     }

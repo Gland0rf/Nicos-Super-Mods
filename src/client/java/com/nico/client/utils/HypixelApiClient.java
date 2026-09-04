@@ -3,7 +3,6 @@ package com.nico.client.utils;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
-import net.minecraft.server.dialog.Input;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -42,31 +41,33 @@ public final class HypixelApiClient {
         URL url = new URL(baseUrl + cleanPath);
 
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestMethod("GET");
-        connection.setConnectTimeout(connectTimeoutMs);
-        connection.setReadTimeout(readTimeoutMs);
-        connection.setRequestProperty("Accept", "application/json");
-        connection.setRequestProperty("User-Agent", "Nicos_Super_Mods");
-
-        if (apiKey != null) {
-            connection.setRequestProperty("API-Key", apiKey);
-        }
-
-        int statusCode = connection.getResponseCode();
-        InputStream stream = statusCode >= 200 && statusCode < 300
-                ? connection.getInputStream()
-                : connection.getErrorStream();
-
-        String body = readFully(stream);
-
-        if (statusCode < 200 || statusCode >= 300) {
-            throw new ApiException(statusCode, body);
-        }
-
         try {
-            return new JsonParser().parse(body).getAsJsonObject();
-        } catch (JsonParseException | IllegalStateException e) {
-            throw new IOException("Hypixel API returned invalid JSON", e);
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(connectTimeoutMs);
+            connection.setReadTimeout(readTimeoutMs);
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setRequestProperty("User-Agent", "Nicos_Super_Mods");
+
+            if (apiKey != null) {
+                connection.setRequestProperty("API-Key", apiKey);
+            }
+
+            int statusCode = connection.getResponseCode();
+            InputStream stream = statusCode >= 200 && statusCode < 300
+                    ? connection.getInputStream()
+                    : connection.getErrorStream();
+
+            String body = readFully(stream);
+
+            if (statusCode < 200 || statusCode >= 300) {
+                throw new ApiException(statusCode, body);
+            }
+
+            try {
+                return new JsonParser().parse(body).getAsJsonObject();
+            } catch (JsonParseException | IllegalStateException e) {
+                throw new IOException("Hypixel API returned invalid JSON", e);
+            }
         } finally {
             connection.disconnect();
         }

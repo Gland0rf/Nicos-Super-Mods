@@ -178,7 +178,7 @@ public class BazaarService {
 
         private BazaarSnapshot(long lastUpdated, Map<String, BazaarProduct> products) {
             this.lastUpdated = lastUpdated;
-            this.products = products;
+            this.products = Map.copyOf(products);
         }
 
         public long getLastUpdated() {

@@ -12,7 +12,7 @@ import java.util.List;
 /** Builds HTTP requests with a stable, identifiable user agent for Hypixel Skyblock Wiki traffic. **/
 public final class WikiHttp {
     private static final String DEFAULT_MOD_PAGE_URL = "https://modrinth.com/mod/nicos-super-mods";
-    private static final String DEFAULT_CONTACT = "ndkogler@icloud.com";
+    private static final String DEFAULT_CONTACT = "https://github.com/Gland0rf/Nicos-Super-Mods/issues";
 
     private static final ModIdentity MOD_IDENTITY = findOwningMod();
     private static final String MOD_NAME = MOD_IDENTITY.name();

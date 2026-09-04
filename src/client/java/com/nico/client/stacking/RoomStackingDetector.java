@@ -80,7 +80,7 @@ public class RoomStackingDetector {
 
             updateRoomScore(state, roomName, players, globalSecretDelta, now);
 
-            if (state.score > ALERT_THRESHOLD) {
+            if (state.score >= ALERT_THRESHOLD) {
                 trySendAlert(roomName, players, state.score, now);
             }
         }
@@ -93,7 +93,13 @@ public class RoomStackingDetector {
             return true;
         }
 
-        if (isStartRoom(roomName) || isFairyRoom(roomName)) {
+        if (isStartRoom(roomName)) {
+            return true;
+        }
+        if (NsmConfig.INSTANCE.dungeons.roomStacking.ignoreFairy && isFairyRoom(roomName)) {
+            return true;
+        }
+        if (NsmConfig.INSTANCE.dungeons.roomStacking.ignoreBlood && isBloodRoom(roomName)) {
             return true;
         }
 
@@ -114,6 +120,10 @@ public class RoomStackingDetector {
 
     private static boolean isFairyRoom(String roomName) {
         return roomName.equalsIgnoreCase("Fairy");
+    }
+
+    private static boolean isBloodRoom(String roomName) {
+        return roomName.equalsIgnoreCase("Blood");
     }
 
     private static boolean isRoomFullyComplete(String roomName) {
@@ -137,6 +147,8 @@ public class RoomStackingDetector {
             state.playerNames.addAll(currentPlayers);
             state.lastTimeScoreAtMs = now;
         } else if (!state.playerNames.equals(currentPlayers)) {
+            state.score = 0;
+            state.addedSameRoomScore = false;
             state.playerNames.clear();
             state.playerNames.addAll(currentPlayers);
             state.lastTimeScoreAtMs = now;
@@ -335,14 +347,6 @@ public class RoomStackingDetector {
                          1.0F
                  );
              }
-         }
-
-         if (mc.player != null) {
-             mc.player.playSound(
-                     SoundEvents.BELL_BLOCK, // newer versions
-                     1.0F, // volume
-                     1.0F  // pitch
-             );
          }
     }
 

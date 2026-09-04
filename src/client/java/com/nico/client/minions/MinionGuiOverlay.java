@@ -62,6 +62,8 @@ public final class MinionGuiOverlay {
     }
 
     public void onRenderPost(Screen screen, GuiGraphicsExtractor graphics) {
+        if (!NsmConfig.INSTANCE.island.minionInfo.enabled) return;
+
         Optional<DetectedMinionWindow> optionalWindow = detector.detect(screen);
 
         if (optionalWindow.isEmpty()) {
