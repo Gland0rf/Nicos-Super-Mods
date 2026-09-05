@@ -3,6 +3,7 @@ package com.nico.client.inventoryLayouts.render;
 import com.nico.client.configuration.category.CategoryOther;
 import com.nico.client.inventoryLayouts.core.InventoryLayout;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutSlot;
+import com.nico.client.inventoryLayouts.storage.InventoryLayoutStackSnapshot;
 import com.nico.client.inventoryLayouts.storage.SkyblockItemIdentity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -25,6 +26,14 @@ public class InventoryLayoutRenderUtil {
         if (expected == null) return ItemStack.EMPTY;
 
         if (player != null) {
+            if (player.containerMenu != null) {
+                ItemStack carried = player.containerMenu.getCarried();
+                if (SkyblockItemIdentity.matches(expected, carried, false)) {
+                    ItemStack copy = carried.copy();
+                    copy.setCount(1);
+                    return copy;
+                }
+            }
             for (int inventorySlot = 0;
                  inventorySlot < InventoryLayout.INVENTORY_SLOT_COUNT;
                  inventorySlot++) {
@@ -40,6 +49,15 @@ public class InventoryLayoutRenderUtil {
             }
         }
 
+        // If the item is not currently present, use the visual ItemStack that
+        // was saved with the layout. This preserves SkyBlock-specific models
+        // and components instead of falling back to the vanilla base item
+        // (which is often something generic such as paper).
+        ItemStack savedVisual = InventoryLayoutStackSnapshot.restore(expected);
+        if (!savedVisual.isEmpty()) return savedVisual;
+
+        // Legacy layouts created before visual snapshots were stored still
+        // get the old base-item fallback rather than failing to render.
         Identifier identifier = Identifier.tryParse(expected.baseItemId());
         if (identifier == null) return ItemStack.EMPTY;
 

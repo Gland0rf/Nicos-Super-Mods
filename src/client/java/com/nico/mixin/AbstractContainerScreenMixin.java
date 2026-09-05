@@ -2,10 +2,14 @@ package com.nico.mixin;
 
 import com.nico.client.configuration.NsmConfig;
 import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.inventoryLayouts.core.InventoryLayoutsFeature;
+import com.nico.client.inventoryLayouts.render.InventoryLayoutOverlay;
 import com.nico.client.wiki.screen.WikiScreen;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.world.inventory.Slot;
@@ -15,6 +19,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(AbstractContainerScreen.class)
@@ -77,6 +82,25 @@ public abstract class AbstractContainerScreenMixin {
 
         if (nsm$openHoveredItem()) {
             callback.setReturnValue(true);
+        }
+    }
+
+    @Inject(
+            method = "extractTooltip",
+            at = @At("HEAD"),
+            cancellable = true
+    )
+    private void nsm$replaceInventoryLayoutTooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY, CallbackInfo callback) {
+        if (!((Object) this instanceof InventoryScreen inventoryScreen)) return;
+
+        if (InventoryLayoutOverlay.captureLayoutTooltip(
+                inventoryScreen,
+                hoveredSlot,
+                mouseX,
+                mouseY,
+                InventoryLayoutsFeature.manager()
+        )) {
+            callback.cancel();
         }
     }
 

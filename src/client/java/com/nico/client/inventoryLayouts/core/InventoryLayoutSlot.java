@@ -1,11 +1,14 @@
 package com.nico.client.inventoryLayouts.core;
 
+import com.google.gson.JsonElement;
+
 public class InventoryLayoutSlot {
     private int inventorySlot;
     private String baseItemId;
     private String skyblockItemId;
     private String displayName;
     private int count;
+    private JsonElement visualStack;
 
     public InventoryLayoutSlot() { }
 
@@ -14,13 +17,15 @@ public class InventoryLayoutSlot {
             String baseItemId,
             String skyblockItemId,
             String displayName,
-            int count
+            int count,
+            JsonElement visualStack
     ) {
         this.inventorySlot = inventorySlot;
         this.baseItemId = baseItemId;
         this.skyblockItemId = skyblockItemId;
         this.displayName = displayName;
         this.count = count;
+        this.visualStack = visualStack;
     }
 
     public int inventorySlot() {
@@ -41,6 +46,10 @@ public class InventoryLayoutSlot {
 
     public int count() {
         return Math.max(1, count);
+    }
+
+    public JsonElement visualStack() {
+        return visualStack;
     }
 
     public boolean isValid() {
