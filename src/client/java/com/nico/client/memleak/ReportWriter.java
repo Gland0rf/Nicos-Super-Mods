@@ -56,7 +56,7 @@ public class ReportWriter {
     ) {
         StringBuilder json = new StringBuilder(8192);
         json.append("{\n");
-        field(json, "formatVersion", "2", false, 1);
+        field(json, "formatVersion", "4", false, 1);
         field(json, "disclaimer", "Allocation candidates are correlation signals, not proof that a mod retains the objects.", true, 1);
         field(json, "state", report.state().name(), true, 1);
         field(json, "explanation", report.explanation(), true, 1);
@@ -82,6 +82,7 @@ public class ReportWriter {
             field(json, "modId", candidate.mod().id(), true, 3);
             field(json, "name", candidate.mod().name(), true, 3);
             field(json, "version", candidate.mod().version(), true, 3);
+            field(json, "supportUrl", candidate.mod().supportUrl(), true, 3);
             field(json, "sampledAllocationBytes", Long.toString(candidate.sampledAllocationBytes()), false, 3);
             lastField(json, "allocationShare", number(candidate.allocationShare()), false, 3);
             indent(json, 2).append('}').append(i + 1 == report.candidates().size() ? "\n" : ",\n");
@@ -131,15 +132,27 @@ public class ReportWriter {
         field(json, "observedSeconds", Long.toString(threadReport.observedFor().toSeconds()), false, 2);
         field(json, "firstThreadCount", Integer.toString(threadReport.firstThreadCount()), false, 2);
         field(json, "latestThreadCount", Integer.toString(threadReport.latestThreadCount()), false, 2);
+        field(json, "totalGrowth", Integer.toString(threadReport.totalGrowth()), false, 2);
+        field(json, "totalPositiveSteps", Integer.toString(threadReport.totalPositiveSteps()), false, 2);
+        field(json, "totalNegativeSteps", Integer.toString(threadReport.totalNegativeSteps()), false, 2);
+        field(json, "totalNewThreadSteps", Integer.toString(threadReport.totalNewThreadSteps()), false, 2);
+        field(json, "totalSustainedGrowth", Boolean.toString(threadReport.totalSustainedGrowth()), false, 2);
         indent(json, 2).append("\"ownerGrowth\": [\n");
         for (int i = 0; i < threadReport.ownerGrowth().size(); i++) {
             ThreadLeakDetector.OwnerGrowth owner = threadReport.ownerGrowth().get(i);
             indent(json, 3).append("{\n");
             field(json, "modId", owner.mod().id(), true, 4);
             field(json, "name", owner.mod().name(), true, 4);
+            field(json, "version", owner.mod().version(), true, 4);
+            field(json, "supportUrl", owner.mod().supportUrl(), true, 4);
             field(json, "firstCount", Integer.toString(owner.firstCount()), false, 4);
             field(json, "latestCount", Integer.toString(owner.latestCount()), false, 4);
-            lastField(json, "growth", Integer.toString(owner.growth()), false, 4);
+            field(json, "growth", Integer.toString(owner.growth()), false, 4);
+            field(json, "positiveSteps", Integer.toString(owner.positiveSteps()), false, 4);
+            field(json, "negativeSteps", Integer.toString(owner.negativeSteps()), false, 4);
+            field(json, "newThreadSteps", Integer.toString(owner.newThreadSteps()), false, 4);
+            field(json, "observedSamples", Integer.toString(owner.observedSamples()), false, 4);
+            lastField(json, "sustainedGrowth", Boolean.toString(owner.sustainedGrowth()), false, 4);
             indent(json, 3).append('}').append(i + 1 == threadReport.ownerGrowth().size() ? "\n" : ",\n");
         }
         indent(json, 2).append("]\n");
@@ -151,7 +164,8 @@ public class ReportWriter {
             indent(json, 2).append("{\n");
             field(json, "id", mod.id(), true, 3);
             field(json, "name", mod.name(), true, 3);
-            lastField(json, "version", mod.version(), true, 3);
+            field(json, "version", mod.version(), true, 3);
+            lastField(json, "supportUrl", mod.supportUrl(), true, 3);
             indent(json, 2).append('}').append(++index == mods.size() ? "\n" : ",\n");
         }
         indent(json, 1).append("]\n");

@@ -22,6 +22,11 @@ public final class DungeonRoomGeometry {
     private Level currentLevel;
     private final Map<DungeonRoom, Orientation> orientationCache = new HashMap<>();
 
+    public synchronized void clearTransientState() {
+        currentLevel = null;
+        orientationCache.clear();
+    }
+
     public synchronized Orientation getOrientation(Level level, DungeonRoom room) {
         if (level == null || room == null) return null;
 

@@ -453,6 +453,12 @@ public final class SecretRoomTimerClient {
         }
     }
 
+    public static void clearTransientState() {
+        resetRunState();
+        lastInDungeonRoom = false;
+        tickCounter = 0;
+    }
+
     private static void resetRunState() {
         attempts.clear();
         knownFoundByRoom.clear();

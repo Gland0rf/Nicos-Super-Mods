@@ -11,6 +11,11 @@ public final class DungeonScanner {
 
     private DungeonScanner() { }
 
+    public static void clearTransientState() {
+        LAYOUT.clearTransientState();
+        GEOMETRY.clearTransientState();
+    }
+
     public static DungeonLayoutScanner.Layout scan(Level level) {
         return LAYOUT.scan(level);
     }

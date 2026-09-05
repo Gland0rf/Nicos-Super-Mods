@@ -14,6 +14,11 @@ public final class DungeonLayoutScanner {
 
     private final Map<DungeonGrid.Tile, DungeonRoomData> dataByTile = new HashMap<>();
 
+    public synchronized void clearTransientState() {
+        currentLevel = null;
+        dataByTile.clear();
+    }
+
     public synchronized Layout scan(Level level) {
         if (currentLevel != level) {
             currentLevel = level;
