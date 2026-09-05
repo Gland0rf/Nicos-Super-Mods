@@ -37,10 +37,14 @@ public final class ModClassIndex {
             ModContainer ownerContainer = topLevelContainer(container);
             var metadata = ownerContainer.getMetadata();
 
+            var contact = metadata.getContact();
             ModIdentity identity = new ModIdentity(
                     metadata.getId(),
                     metadata.getName(),
-                    metadata.getVersion().getFriendlyString()
+                    metadata.getVersion().getFriendlyString(),
+                    contact.get("issues").orElse(""),
+                    contact.get("homepage").orElse(""),
+                    contact.get("sources").orElse("")
             );
             mods.put(identity.id(), identity);
 

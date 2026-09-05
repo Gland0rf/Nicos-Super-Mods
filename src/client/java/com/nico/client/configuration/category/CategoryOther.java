@@ -1,6 +1,5 @@
 package com.nico.client.configuration.category;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import io.github.notenoughupdates.moulconfig.annotations.*;
 import org.lwjgl.glfw.GLFW;
 
@@ -77,7 +76,7 @@ public class CategoryOther {
 
         @ConfigOption(
                 name = "Enable",
-                desc = "Monitor memory usage and automatically attribute allocations to loaded mods.\n"
+                desc = "Watch for memory that keeps growing and suggest likely causes.\n"
                         + "§cRequires a restart after changing."
         )
         @ConfigEditorBoolean
@@ -85,10 +84,18 @@ public class CategoryOther {
 
         @ConfigOption(
                 name = "Chat Alerts",
-                desc = "Show a chat warning when sustained heap growth is detected."
+                desc = "Show a chat warning when sustained memory growth is detected."
         )
         @ConfigEditorBoolean
         public boolean chatAlerts = true;
+
+        @ConfigOption(
+                name = "Auto-clean Temporary NSM Data",
+                desc = "Clear temporary dungeon(player tracking when changing or leaving world.\n"
+                        + "§7Keeps wiki caches, PBs, routes, layouts, and settings."
+        )
+        @ConfigEditorBoolean
+        public boolean autoCleanupTransientData = true;
 
         @ConfigOption(
                 name = "Analysis Window",

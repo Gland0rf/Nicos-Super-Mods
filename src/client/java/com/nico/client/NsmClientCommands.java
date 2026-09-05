@@ -64,7 +64,8 @@ public final class NsmClientCommands {
                 ClientCommands.literal("nsm")
                         .executes(context -> openConfigScreen())
                         .then(RouteCommands.node(routeEditor))
-                        .then(createMemLeakNode())
+                        .then(createMemoryNode("memory"))
+                        .then(createMemoryNode("memleak"))
         );
     }
 
@@ -165,8 +166,8 @@ public final class NsmClientCommands {
         return names;
     }
 
-    private static LiteralArgumentBuilder<FabricClientCommandSource> createMemLeakNode() {
-        return ClientCommands.literal("memleak")
+    private static LiteralArgumentBuilder<FabricClientCommandSource> createMemoryNode(String literal) {
+        return ClientCommands.literal(literal)
                 .executes(context ->
                         sendMemLeakLines(MemLeakFeature.statusLines())
                 )
@@ -175,16 +176,28 @@ public final class NsmClientCommands {
                                 .executes(context -> sendMemLeakLines(MemLeakFeature.statusLines()))
                 )
                 .then(
+                        ClientCommands.literal("diagnose")
+                                .executes(context -> sendMemLeakLines(MemLeakFeature.diagnosisLines()))
+                )
+                .then(
                         ClientCommands.literal("suspects")
-                                .executes(context -> sendMemLeakLines(MemLeakFeature.candidateLines()))
+                                .executes(context -> sendMemLeakLines(MemLeakFeature.diagnosisLines()))
                 )
                 .then(
                         ClientCommands.literal("mods")
                                 .executes(context -> sendMemLeakLines(MemLeakFeature.modIndexLines()))
                 )
                 .then(
+                        ClientCommands.literal("cleanup")
+                                .executes(context -> sendMemLeakLines(MemLeakFeature.cleanupLines()))
+                )
+                .then(
                         ClientCommands.literal("reset")
                                 .executes(context -> resetMemLeakMonitor())
+                )
+                .then(
+                        ClientCommands.literal("report")
+                                .executes(context -> exportMemLeakReport())
                 )
                 .then(
                         ClientCommands.literal("export")
@@ -202,12 +215,12 @@ public final class NsmClientCommands {
 
     private static int resetMemLeakMonitor() {
         if (!MemLeakFeature.reset()) {
-            sendMessage(Component.literal("§c[NSM MemLeak] The detector is disabled."));
+            sendMessage(Component.literal("§c[NSM Memory Check] The detector is disabled."));
 
             return 0;
         }
 
-        sendMessage(Component.literal("§a[NSM MemLeak] Monitoring baseline reset."));
+        sendMessage(Component.literal("§a[NSM Memory Check] Monitoring baseline reset."));
 
         return 1;
     }
@@ -217,18 +230,20 @@ public final class NsmClientCommands {
             Path report = MemLeakFeature.exportReport();
 
             if (report == null) {
-                sendMessage(Component.literal("§c[NSM MemLeak] The detector is disabled."));
+                sendMessage(Component.literal("§c[NSM Memory Check] The detector is disabled."));
 
                 return 0;
             }
 
-            sendMessage(Component.literal("§a[NSM MemLeak] Report exported to: §f" + report.toAbsolutePath()));
+            sendMessage(Component.literal("§a[NSM Memory Check] Report created."));
+            sendMessage(Component.literal("§7Saved to: §f" + report.toAbsolutePath()));
+            sendMemLeakLines(MemLeakFeature.statusLines());
 
             return 1;
         } catch (IOException exception) {
             exception.printStackTrace();
 
-            sendMessage(Component.literal("§c[NSM MemLeak] Could not export the report: " + exception.getMessage()));
+            sendMessage(Component.literal("§c[NSM Memory Check] Could not create the report: " + exception.getMessage()));
             return 0;
         }
     }

@@ -228,6 +228,10 @@ public class RoomStackingDetector {
         lastAlertByRoom.remove(roomName);
     }
 
+    public static void clearTransientState() {
+        resetAllState();
+    }
+
     private static void resetAllState() {
         roomStates.clear();
         lastAlertByRoom.clear();
