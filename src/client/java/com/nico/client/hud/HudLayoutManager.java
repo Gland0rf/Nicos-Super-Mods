@@ -17,6 +17,7 @@ public class HudLayoutManager {
     public static final String MINION_OUTPUT = "minion_output";
     public static final String LAG_MONITOR = "lag_monitor";
     public static final String INVENTORY_LAYOUTS_BUTTON = "inventory_layouts_button";
+    public static final String INVENTORY_LAYOUTS_PROGRESS = "inventory_layouts_progress";
 
     private static final Gson GSON =
             new GsonBuilder().setPrettyPrinting().create();
@@ -63,6 +64,15 @@ public class HudLayoutManager {
 
         inventoryLayoutsButton.setMeasuredSize(78, 20);
         register(inventoryLayoutsButton);
+
+        // Position is initialized next to the inventory the first time an active
+        // layout is rendered. After that it can be moved/scaled through /nsm gui
+        register(new HudElement(
+                INVENTORY_LAYOUTS_PROGRESS,
+                "Inventory Layout Progress",
+                12,
+                164
+        ));
     }
 
     private void register(HudElement element) {

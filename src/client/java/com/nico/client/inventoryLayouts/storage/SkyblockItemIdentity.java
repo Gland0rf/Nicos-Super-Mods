@@ -26,7 +26,8 @@ public final class SkyblockItemIdentity {
                 baseItemId,
                 identity.internalId(),
                 identity.displayName(),
-                stack.getCount()
+                stack.getCount(),
+                InventoryLayoutStackSnapshot.capture(stack)
         );
     }
 

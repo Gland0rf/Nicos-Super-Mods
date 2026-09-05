@@ -1,6 +1,7 @@
 package com.nico.client.lag;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundPingPacket;
 import net.minecraft.network.protocol.ping.ClientboundPongResponsePacket;
@@ -11,7 +12,7 @@ public class LagMonitorService {
     private final TpsEstimator tpsEstimator = new TpsEstimator();
     private final PingTracker pingTracker = new PingTracker();
     private final LagTitleNotifier titleNotifier = new LagTitleNotifier();
-    private final TcpPingTracker connectionPingTracker = new TcpPingTracker();
+    private final ConnectionPingTracker connectionPingTracker = new ConnectionPingTracker();
 
     private volatile long lastInboundPacketNanos;
     private volatile LagSnapshot snapshot = LagSnapshot.inactive();
@@ -60,6 +61,13 @@ public class LagMonitorService {
                 && pingPacket.getId() != 0) {
             tpsEstimator.onServerTick(now);
         }
+
+        if (packet instanceof ClientboundPongResponsePacket pongPacket) {
+            int measuredPing = connectionPingTracker.accept(pongPacket);
+            if (measuredPing >= 0) {
+                onConnectionPingSample(measuredPing);
+            }
+        }
     }
 
     public synchronized void onJoin(Minecraft client) {
@@ -104,11 +112,7 @@ public class LagMonitorService {
             dungeonStats.recordPingSample(cachedPing, pingTracker.jitter());
         }
 
-        connectionPingTracker.requestNow(
-                client,
-                config.tcpPingTimeoutMillis,
-                this::onConnectionPingSample
-        );
+        connectionPingTracker.requestNow(client, config.tcpPingTimeoutMillis);
     }
 
     private synchronized void onConnectionPingSample(int pingMillis) {
@@ -186,12 +190,7 @@ public class LagMonitorService {
             return;
         }
 
-        connectionPingTracker.tick(
-                client,
-                config.tcpPingSampleIntervalSeconds,
-                config.tcpPingTimeoutMillis,
-                this::onConnectionPingSample
-        );
+        connectionPingTracker.tick(client, config.tcpPingSampleIntervalSeconds, config.tcpPingTimeoutMillis);
 
         double tps = tpsEstimator.currentTps(now, config.tpsSampleStaleSeconds);
         int ping = pingTracker.latest();

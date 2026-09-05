@@ -114,7 +114,7 @@ public class InventoryLayoutStorage {
     }
 
     private static final class StoredLayouts {
-        private int version = 1;
+        private int version = 2;
         private List<InventoryLayout> layouts = new ArrayList<>();
 
         private StoredLayouts() { }

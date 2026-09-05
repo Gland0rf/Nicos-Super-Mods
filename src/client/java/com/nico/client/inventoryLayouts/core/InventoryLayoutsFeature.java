@@ -61,7 +61,13 @@ public class InventoryLayoutsFeature {
                             graphics,
                             mouseX,
                             mouseY,
-                            MANAGER
+                            MANAGER,
+                            hudLayoutManager
+                    );
+
+                    InventoryLayoutOverlay.renderPendingLayoutTooltip(
+                            renderedInventoryScreen,
+                            graphics
                     );
                 }
             });
