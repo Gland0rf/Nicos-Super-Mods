@@ -26,6 +26,13 @@ public class CategoryOther {
     @Accordion
     public MemLeak memLeak = new MemLeak();
 
+    @ConfigOption(
+            name = "Party Safety",
+            desc = "Blocks automatic party transfers triggered by a player that just joined"
+    )
+    @Accordion
+    public PartySafety partySafety = new PartySafety();
+
     public static class IntegratedWiki {
         @ConfigOption(
                 name = "Enable",
@@ -151,6 +158,23 @@ public class CategoryOther {
                 minStep = 1
         )
         public int minimumGrowthMiBPerMinute = 8;
+    }
+
+    public static class PartySafety {
+        @ConfigOption(
+                name = "Enable",
+                desc = "Blocks automatic party transfers triggered by a player that just joined."
+        )
+        @ConfigEditorBoolean
+        public boolean enabled = true;
+
+        @ConfigOption(
+                name = "Prefill Party Warning",
+                desc = "After blocking a suspicious transfer, open chat with a party warning ready to send.\n"
+                        + "§7You still have to press Enter yourself."
+        )
+        @ConfigEditorBoolean
+        public boolean prefillPartyWarning = true;
     }
 
 }
