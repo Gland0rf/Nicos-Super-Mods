@@ -1,6 +1,5 @@
 package com.nico.client.configuration.category;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import io.github.notenoughupdates.moulconfig.annotations.*;
 import org.lwjgl.glfw.GLFW;
 
@@ -19,6 +18,13 @@ public class CategoryOther {
     )
     @Accordion
     public IntegratedWiki wiki = new IntegratedWiki();
+
+    @ConfigOption(
+            name = "Memory Leak Detector",
+            desc = "Detects sustained heap growth and identifies likely mod allocation sources."
+    )
+    @Accordion
+    public MemLeak memLeak = new MemLeak();
 
     public static class IntegratedWiki {
         @ConfigOption(
@@ -64,6 +70,87 @@ public class CategoryOther {
         )
         @ConfigEditorBoolean
         public boolean matchStackCounts = false;
+    }
+
+    public static class MemLeak {
+
+        @ConfigOption(
+                name = "Enable",
+                desc = "Watch for memory that keeps growing and suggest likely causes.\n"
+                        + "§cRequires a restart after changing."
+        )
+        @ConfigEditorBoolean
+        public boolean enabled = true;
+
+        @ConfigOption(
+                name = "Chat Alerts",
+                desc = "Show a chat warning when sustained memory growth is detected."
+        )
+        @ConfigEditorBoolean
+        public boolean chatAlerts = true;
+
+        @ConfigOption(
+                name = "Auto-clean Temporary NSM Data",
+                desc = "Clear temporary dungeon(player tracking when changing or leaving world.\n"
+                        + "§7Keeps wiki caches, PBs, routes, layouts, and settings."
+        )
+        @ConfigEditorBoolean
+        public boolean autoCleanupTransientData = true;
+
+        @ConfigOption(
+                name = "Analysis Window",
+                desc = "Number of recent minutes used when calculating the memory trend."
+        )
+        @ConfigEditorSlider(
+                minValue = 10,
+                maxValue = 120,
+                minStep = 5
+        )
+        public int windowMinutes = 30;
+
+        @ConfigOption(
+                name = "Minimum Observation Time (minutes)",
+                desc = "How long MemLeak must observe memory before issuing a warning."
+        )
+        @ConfigEditorSlider(
+                minValue = 5,
+                maxValue = 60,
+                minStep = 5
+        )
+        public int minimumObservationMinutes = 10;
+
+        @ConfigOption(
+                name = "Minimum GC Samples",
+                desc = "Minimum number of major garbage collections required before evaluating the trend."
+        )
+        @ConfigEditorSlider(
+                minValue = 3,
+                maxValue = 20,
+                minStep = 1
+        )
+        public int minimumSamples = 6;
+
+        @ConfigOption(
+                name = "Minimum Memory Growth",
+                desc = "Required post-GC heap growth before it is considered suspicious."
+        )
+        @ConfigEditorSlider(
+                minValue = 32,
+                maxValue = 1024,
+                minStep = 32
+        )
+        public int minimumGrowthMiB = 128;
+
+        @ConfigOption(
+                name = "Minimum Growth Rate",
+                desc = "Required memory growth per minute before an alert is generated."
+        )
+        @ConfigEditorSlider(
+                minValue = 1,
+                maxValue = 128,
+                minStep = 1
+        )
+        public int minimumGrowthMiBPerMinute = 8;
     }
 
 }

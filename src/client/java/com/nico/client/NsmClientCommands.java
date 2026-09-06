@@ -1,5 +1,6 @@
 package com.nico.client;
 
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.nico.client.bloodrush.BloodRoutes;
 import com.nico.client.bloodrush.RouteCommands;
 import com.nico.client.bloodrush.RouteContext;
@@ -7,13 +8,17 @@ import com.nico.client.bloodrush.RouteEditor;
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonTeammateScanner;
+import com.nico.client.memleak.MemLeakFeature;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
+import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -59,6 +64,8 @@ public final class NsmClientCommands {
                 ClientCommands.literal("nsm")
                         .executes(context -> openConfigScreen())
                         .then(RouteCommands.node(routeEditor))
+                        .then(createMemoryNode("memory"))
+                        .then(createMemoryNode("memleak"))
         );
     }
 
@@ -98,12 +105,7 @@ public final class NsmClientCommands {
             return;
         }
 
-        if (!FabricLoader.getInstance().isModLoaded("odin")) {
-            sendMessage(Component.literal("§cOdin is not loaded."));
-            return;
-        }
-
-        Set<String> teammateNames = getOdinDungeonTeammateNames();
+        Set<String> teammateNames = getDungeonTeammateNames();
 
         sendMessage(
                 Component.literal(
@@ -147,7 +149,7 @@ public final class NsmClientCommands {
         );
     }
 
-    public static Set<String> getOdinDungeonTeammateNames() {
+    public static Set<String> getDungeonTeammateNames() {
         Set<String> names = new HashSet<>();
 
         try {
@@ -162,6 +164,88 @@ public final class NsmClientCommands {
         }
 
         return names;
+    }
+
+    private static LiteralArgumentBuilder<FabricClientCommandSource> createMemoryNode(String literal) {
+        return ClientCommands.literal(literal)
+                .executes(context ->
+                        sendMemLeakLines(MemLeakFeature.statusLines())
+                )
+                .then(
+                        ClientCommands.literal("status")
+                                .executes(context -> sendMemLeakLines(MemLeakFeature.statusLines()))
+                )
+                .then(
+                        ClientCommands.literal("diagnose")
+                                .executes(context -> sendMemLeakLines(MemLeakFeature.diagnosisLines()))
+                )
+                .then(
+                        ClientCommands.literal("suspects")
+                                .executes(context -> sendMemLeakLines(MemLeakFeature.diagnosisLines()))
+                )
+                .then(
+                        ClientCommands.literal("mods")
+                                .executes(context -> sendMemLeakLines(MemLeakFeature.modIndexLines()))
+                )
+                .then(
+                        ClientCommands.literal("cleanup")
+                                .executes(context -> sendMemLeakLines(MemLeakFeature.cleanupLines()))
+                )
+                .then(
+                        ClientCommands.literal("reset")
+                                .executes(context -> resetMemLeakMonitor())
+                )
+                .then(
+                        ClientCommands.literal("report")
+                                .executes(context -> exportMemLeakReport())
+                )
+                .then(
+                        ClientCommands.literal("export")
+                                .executes(context -> exportMemLeakReport())
+                );
+    }
+
+    private static int sendMemLeakLines(Iterable<String> lines) {
+        for (String line : lines) {
+            sendMessage(Component.literal(line));
+        }
+
+        return 1;
+    }
+
+    private static int resetMemLeakMonitor() {
+        if (!MemLeakFeature.reset()) {
+            sendMessage(Component.literal("§c[NSM Memory Check] The detector is disabled."));
+
+            return 0;
+        }
+
+        sendMessage(Component.literal("§a[NSM Memory Check] Monitoring baseline reset."));
+
+        return 1;
+    }
+
+    private static int exportMemLeakReport() {
+        try {
+            Path report = MemLeakFeature.exportReport();
+
+            if (report == null) {
+                sendMessage(Component.literal("§c[NSM Memory Check] The detector is disabled."));
+
+                return 0;
+            }
+
+            sendMessage(Component.literal("§a[NSM Memory Check] Report created."));
+            sendMessage(Component.literal("§7Saved to: §f" + report.toAbsolutePath()));
+            sendMemLeakLines(MemLeakFeature.statusLines());
+
+            return 1;
+        } catch (IOException exception) {
+            exception.printStackTrace();
+
+            sendMessage(Component.literal("§c[NSM Memory Check] Could not create the report: " + exception.getMessage()));
+            return 0;
+        }
     }
 
     public static RouteEditor getRouteEditor() {

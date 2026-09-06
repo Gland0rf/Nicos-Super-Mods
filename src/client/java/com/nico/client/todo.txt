@@ -1,12 +1,15 @@
-#1 Remove logs when you are done
+#1 Remove logs when you are done # Done
 #2 Sometimes, picking up an item-secret wont count and the attempt gets invalidated.
-Doesnt even enter the SecretPacketHooks
-#3 Clean up the code DONE
-#4 Expand f7/m7 goldor routes
-#5 Split helper with a line on the floor of where to go, until the split ends
+Doesnt even enter the SecretPacketHooks # Done
+#3 Clean up the code # DONE
+#4 Expand f7/m7 goldor routes # Nah
+#5 Split helper with a line on the floor of where to go, until the split ends # Changed
 #6 Scam / Rat protection? Example tier boosted pets
-#7 Show minion upgrade quality -> Tell them how long it takes to make the money back. DONE
-#8 Save inventory as "overlay" and when setting it up, select it and show what item goes where.
+#7 Show minion upgrade quality -> Tell them how long it takes to make the money back. # Done
+#8 Save inventory as "overlay" and when setting it up, select it and show what item goes where. # Done
+
+Secret timer is currently bugged, just hearing a bat counts as a secret
+Finish blood routes
 
 Room stacking concept:
 -> The idea is to alert the player if they are doing work that is already being done by

@@ -48,7 +48,6 @@ public abstract class ConnectionMixin {
             DungeonRunPacketDetector.handle(packet);
 
             if (packet instanceof ClientboundTakeItemEntityPacket
-                    || packet instanceof ClientboundRemoveEntitiesPacket
                     || packet instanceof ClientboundSoundPacket
                     || packet instanceof ClientboundSystemChatPacket) {
 

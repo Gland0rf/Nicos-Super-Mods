@@ -1,6 +1,7 @@
 package com.nico.client.lag;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundPingPacket;
 import net.minecraft.network.protocol.ping.ClientboundPongResponsePacket;
@@ -111,10 +112,7 @@ public class LagMonitorService {
             dungeonStats.recordPingSample(cachedPing, pingTracker.jitter());
         }
 
-        connectionPingTracker.requestNow(
-                client,
-                config.tcpPingTimeoutMillis
-        );
+        connectionPingTracker.requestNow(client, config.tcpPingTimeoutMillis);
     }
 
     private synchronized void onConnectionPingSample(int pingMillis) {
@@ -192,11 +190,7 @@ public class LagMonitorService {
             return;
         }
 
-        connectionPingTracker.tick(
-                client,
-                config.tcpPingSampleIntervalSeconds,
-                config.tcpPingTimeoutMillis
-        );
+        connectionPingTracker.tick(client, config.tcpPingSampleIntervalSeconds, config.tcpPingTimeoutMillis);
 
         double tps = tpsEstimator.currentTps(now, config.tpsSampleStaleSeconds);
         int ping = pingTracker.latest();

@@ -57,6 +57,15 @@ public final class SecretStackingDetector {
         clearPendingSelfSecret();
     }
 
+    public static void clearTransientState() {
+        currentRoomName = null;
+        lastRoomSecretCount = -1;
+        lastSelfSecretAt = 0;
+        lastSelfSecretRoom = null;
+        lastAlertAt = 0L;
+        clearPendingSelfSecret();
+    }
+
     public static void onSecretPickup(BlockPos secretPos) {
         Minecraft minecraft = Minecraft.getInstance();
 

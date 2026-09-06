@@ -1,16 +1,24 @@
 package com.nico.client.inventoryLayouts.render;
 
+import com.nico.client.hud.HudElement;
+import com.nico.client.hud.HudLayoutManager;
 import com.nico.client.inventoryLayouts.core.InventoryLayout;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutManager;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutSlot;
 import com.nico.client.inventoryLayouts.storage.InventoryLayoutMatcher;
 import com.nico.client.inventoryLayouts.storage.SlotMatchState;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.screens.inventory.tooltip.DefaultTooltipPositioner;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+
+import java.util.ArrayList;
+import java.util.List;
 
 
 public class InventoryLayoutOverlay {
@@ -26,6 +34,8 @@ public class InventoryLayoutOverlay {
     private static final int MISSING_FILL = 0x4433AAFF;
     private static final int MISSING_BORDER = 0xFF55CCFF;
 
+    private static PendingLayoutTooltip pendingTooltip;
+
     private InventoryLayoutOverlay() { }
 
     public static void render(
@@ -33,7 +43,8 @@ public class InventoryLayoutOverlay {
             GuiGraphicsExtractor graphics,
             int mouseX,
             int mouseY,
-            InventoryLayoutManager manager
+            InventoryLayoutManager manager,
+            HudLayoutManager hudLayoutManager
     ) {
         Minecraft minecraft = Minecraft.getInstance();
         InventoryLayout layout = manager.activeLayout();
@@ -46,8 +57,6 @@ public class InventoryLayoutOverlay {
 
         int left = (screen.width - INVENTORY_GUI_WIDTH) / 2;
         int top = (screen.height - INVENTORY_GUI_HEIGHT) / 2;
-        InventoryLayoutSlot hoveredExpected = null;
-        SlotMatchState hoveredState = null;
 
         for (Slot slot : screen.getMenu().slots) {
             int inventorySlot = getPlayerInventorySlot(screen, slot);
@@ -65,27 +74,9 @@ public class InventoryLayoutOverlay {
             InventoryLayoutSlot expected = layout.expectedAt(inventorySlot);
 
             renderSlotState(graphics, x, y, state, expected, minecraft, manager);
-
-            if (mouseX >= x && mouseX < x + 16 && mouseY >= y && mouseY < y + 16) {
-                hoveredExpected = expected;
-                hoveredState = state;
-            }
         }
 
-        renderStatusPanel(graphics, screen, manager, minecraft);
-
-        if (hoveredState != null && hoveredState != SlotMatchState.CORRECT_EMPTY) {
-            String toolTipText = getTooltipText(hoveredExpected, hoveredState);
-
-            if (toolTipText != null && !toolTipText.isBlank()) {
-                graphics.setTooltipForNextFrame(
-                        minecraft.font,
-                        Component.literal(toolTipText),
-                        mouseX,
-                        mouseY
-                );
-            }
-        }
+        renderStatusPanel(graphics, screen, manager, minecraft, hudLayoutManager);
     }
 
     private static void renderSlotState(
@@ -110,7 +101,6 @@ public class InventoryLayoutOverlay {
             case WRONG_ITEM -> {
                 graphics.fill(x, y, x + 16, y + 16, WRONG_FILL);
                 InventoryLayoutRenderUtil.drawBorder(graphics, x, y, 16, 16, WRONG_BORDER);
-                renderExpectedGhost(graphics, x, y, expected, minecraft, manager);
             }
             case UNEXPECTED_ITEM -> {
                 graphics.fill(x, y, x + 16, y + 16, UNEXPECTED_FILL);
@@ -150,7 +140,8 @@ public class InventoryLayoutOverlay {
             GuiGraphicsExtractor graphics,
             InventoryScreen screen,
             InventoryLayoutManager manager,
-            Minecraft minecraft
+            Minecraft minecraft,
+            HudLayoutManager hudLayoutManager
     ) {
         InventoryLayoutMatcher.LayoutProgress progress = manager.progress(minecraft.player);
         String lineOne = "Layout: " + manager.activeLayout().name();
@@ -159,17 +150,159 @@ public class InventoryLayoutOverlay {
         int left = (screen.width - INVENTORY_GUI_WIDTH) / 2;
         int top = (screen.height - INVENTORY_GUI_HEIGHT) / 2;
         int panelWidth = Math.max(minecraft.font.width(lineOne), minecraft.font.width(lineTwo)) + 12;
+        int panelHeight = 30;
         int panelX = left + INVENTORY_GUI_WIDTH + 4;
+        int panelY = top + 50;
 
         if (panelX + panelWidth > screen.width - 4) {
             panelX = Math.max(4, left - panelWidth - 4);
         }
 
-        int panelY = top + 50;
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 30, 0xCC101218);
-        graphics.fill(panelX, panelY, panelX + 2, panelY + 30, 0xFF55CCFF);
-        graphics.text(minecraft.font, lineOne, panelX + 6, panelY + 5, 0xFFFFFFFF, true);
-        graphics.text(minecraft.font, lineTwo, panelX + 6, panelY + 17, 0xFFCCCCCC, true);
+        float scale = 1.0F;
+
+        if (hudLayoutManager != null) {
+            HudElement element = hudLayoutManager.get(HudLayoutManager.INVENTORY_LAYOUTS_PROGRESS);
+            if (element != null) {
+                boolean wasSeen = element.hasBeenSeen();
+
+                if (!wasSeen) {
+                    // Preserve the old automatic position until the player moves it in /nsm gui.
+                    element.setPosition(panelX, panelY);
+                }
+
+                element.setMeasuredSize(panelWidth, panelHeight);
+                panelX = element.getX();
+                panelY = element.getY();
+                scale = (float) element.getScale();
+
+                if (!wasSeen) {
+                    hudLayoutManager.save();
+                }
+            }
+        }
+
+        graphics.pose().pushMatrix();
+        graphics.pose().translate((float) panelX, (float) panelY);
+        graphics.pose().scale(scale, scale);
+
+        graphics.fill(0, 0, panelWidth, panelHeight, 0xCC101218);
+        graphics.fill(0, 0, 2, panelHeight, 0xFF55CCFF);
+        graphics.text(minecraft.font, lineOne, 6, 5, 0xFFFFFFFF, true);
+        graphics.text(minecraft.font, lineTwo, 6, 17, 0xFFCCCCCC, true);
+
+        graphics.pose().popMatrix();
+    }
+
+    public static boolean captureLayoutTooltip(
+            InventoryScreen screen,
+            Slot slot,
+            int mouseX,
+            int mouseY,
+            InventoryLayoutManager manager
+    ) {
+        pendingTooltip = null;
+
+        if (screen == null || slot == null || manager == null || !manager.config().enabled) {
+            return false;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
+        InventoryLayout layout = manager.activeLayout();
+        if (layout == null || minecraft.player == null) return false;
+
+        int inventorySlot = getPlayerInventorySlot(screen, slot);
+        if (inventorySlot < 0) return false;
+
+        SlotMatchState state = InventoryLayoutMatcher.getState(
+                layout,
+                minecraft.player,
+                inventorySlot,
+                manager.config()
+        );
+
+        if (state == SlotMatchState.CORRECT_EMPTY) return false;
+
+        InventoryLayoutSlot expected = layout.expectedAt(inventorySlot);
+        ItemStack actual = slot.getItem();
+        List<Component> tooltipLines = getTooltipLines(expected, actual, state);
+        if (tooltipLines.isEmpty()) return false;
+
+        pendingTooltip = new PendingLayoutTooltip(screen, List.copyOf(tooltipLines), mouseX, mouseY);
+        return true;
+    }
+
+    public static void renderPendingLayoutTooltip(
+            InventoryScreen screen,
+            GuiGraphicsExtractor graphics
+    ) {
+        PendingLayoutTooltip pending = pendingTooltip;
+        pendingTooltip = null;
+
+        if (pending == null || pending.screen() != screen || graphics == null) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
+
+        // The layout overlay itself uses a later stratum than the inventory. Put
+        // the compact tooltip one stratum beyond that so slot borders, ghost
+        // items and the progress HUD can never render on top of it.
+        graphics.nextStratum();
+        renderCompactTooltip(
+                graphics,
+                screen,
+                minecraft,
+                pending.lines(),
+                pending.mouseX(),
+                pending.mouseY()
+        );
+    }
+
+    private static void renderCompactTooltip(
+            GuiGraphicsExtractor graphics,
+            InventoryScreen screen,
+            Minecraft minecraft,
+            List<Component> lines,
+            int mouseX,
+            int mouseY
+    ) {
+        List<FormattedCharSequence> rendered = lines.stream()
+                .map(Component::getVisualOrderText)
+                .toList();
+
+        int contentWidth = 0;
+        for (FormattedCharSequence line : rendered) {
+            contentWidth = Math.max(contentWidth, minecraft.font.width(line));
+        }
+
+        int width = contentWidth + 10;
+        int height = rendered.size() * 10 + 6;
+        int x = mouseX + 12;
+        int y = mouseY - 12;
+
+        if (x + width > screen.width - 4) {
+            x = mouseX - width - 12;
+        }
+        if (y + height > screen.height - 4) {
+            y = mouseY - height - 4;
+        }
+        x = Math.max(4, x);
+        y = Math.max(4, y);
+
+        // Compact vanilla-style tooltip box. The Component formatting on each
+        // line is preserved, including the item's display-name color.
+        graphics.fill(x - 1, y - 1, x + width + 1, y + height + 1, 0xF0100010);
+        graphics.fill(x, y, x + width, y + height, 0xF0100010);
+        graphics.fill(x - 1, y - 1, x + width + 1, y, 0xFF505000);
+        graphics.fill(x - 1, y + height, x + width + 1, y + height + 1, 0xFF280028);
+        graphics.fill(x - 1, y, x, y + height, 0xFF505000);
+        graphics.fill(x + width, y, x + width + 1, y + height, 0xFF280028);
+
+        int lineY = y + 3;
+        for (FormattedCharSequence line : rendered) {
+            graphics.text(minecraft.font, line, x + 5, lineY, 0xFFFFFFFF, true);
+            lineY += 10;
+        }
     }
 
     private static int getPlayerInventorySlot(InventoryScreen screen, Slot slot) {
@@ -184,16 +317,37 @@ public class InventoryLayoutOverlay {
                 : -1;
     }
 
-    private static String getTooltipText(
+    private static List<Component> getTooltipLines(
             InventoryLayoutSlot expected,
+            ItemStack actual,
             SlotMatchState state
     ) {
-        return switch (state) {
-            case CORRECT -> expected == null ? "Correct" : "Correct: " + expected.displayName();
-            case WRONG_ITEM -> expected == null ? "Wrong item" : "Expected: " + expected.displayName();
-            case UNEXPECTED_ITEM -> "This slot should be empty";
-            case MISSING_ITEM -> expected == null ? "Missing item" : "Missing: " + expected.displayName();
-            case CORRECT_EMPTY -> "Correctly empty";
-        };
+        List<Component> lines = new ArrayList<>(2);
+
+        if (actual != null && !actual.isEmpty()) {
+            lines.add(actual.getHoverName().copy());
+        } else if (expected != null) {
+            lines.add(Component.literal(expected.displayName()).withStyle(ChatFormatting.WHITE));
+        } else {
+            lines.add(Component.literal("Empty slot").withStyle(ChatFormatting.GRAY));
+        }
+
+        switch (state) {
+            case CORRECT -> lines.add(Component.literal("Correct slot").withStyle(ChatFormatting.GREEN));
+            case WRONG_ITEM -> lines.add(Component.literal(
+                    expected == null ? "Wrong item" : "Expected: " + expected.displayName()).withStyle(ChatFormatting.RED));
+            case UNEXPECTED_ITEM -> lines.add(Component.literal("This slot should be empty").withStyle(ChatFormatting.RED));
+            case MISSING_ITEM -> lines.add(Component.literal("Missing from this slot").withStyle(ChatFormatting.AQUA));
+            case CORRECT_EMPTY -> { }
+        }
+
+        return lines;
     }
+
+    private record PendingLayoutTooltip(
+            InventoryScreen screen,
+            List<Component> lines,
+            int mouseX,
+            int mouseY
+    ) { }
 }

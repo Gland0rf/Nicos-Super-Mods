@@ -17,7 +17,10 @@ public final class SaveInventoryLayoutScreen extends Screen {
     private final InventoryLayoutManager manager;
 
     private EditBox nameField;
+    private Button saveButton;
     private Component status = Component.empty();
+    private boolean overwritePending;
+    private String overwriteName = "";
 
     public SaveInventoryLayoutScreen(
             Screen menuParent,
@@ -44,14 +47,22 @@ public final class SaveInventoryLayoutScreen extends Screen {
         );
         nameField.setMaxLength(48);
         nameField.setHint(Component.literal("Example: Mage clear"));
-        nameField.setFocused(true);
-        addRenderableWidget(nameField);
 
-        addRenderableWidget(
-                Button.builder(Component.literal("Save"), button -> saveLayout())
-                        .bounds(centerX - 102, height / 2 + 10, 96, 20)
-                        .build()
-        );
+        addRenderableWidget(nameField);
+        setInitialFocus(nameField);
+
+        nameField.setResponder(value -> {
+            if (!overwritePending) return;
+
+            if (!value.trim().equalsIgnoreCase(overwriteName)) {
+                clearOverwriteWarning();
+            }
+        });
+
+        saveButton = Button.builder(Component.literal("Save"), button -> saveLayout())
+                .bounds(centerX - 102, height / 2 + 10, 96, 20)
+                .build();
+        addRenderableWidget(saveButton);
 
         addRenderableWidget(
                 Button.builder(Component.literal("Cancel"), button -> onClose())
@@ -64,13 +75,6 @@ public final class SaveInventoryLayoutScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         graphics.fill(0, 0, width, height, 0xE0101218);
         graphics.centeredText(font, title, width / 2, height / 2 - 60, 0xFF55CCFF);
-        graphics.centeredText(
-                font,
-                "This saves positions only. It never moves any items.",
-                width / 2,
-                height / 2 - 44,
-                0xFFBBBBBB
-        );
 
         if (!status.getString().isEmpty()) {
             graphics.centeredText(font, status, width / 2, height / 2 + 40, 0xFFFF7777);
@@ -112,8 +116,28 @@ public final class SaveInventoryLayoutScreen extends Screen {
             return;
         }
 
+        InventoryLayout existing = manager.storage().findByName(name);
+        if (existing != null && (!overwritePending || !name.equalsIgnoreCase(overwriteName))) {
+            overwritePending = true;
+            overwriteName = name;
+            status = Component.literal("A layout named \"" + existing.name() + "\" already exists. Save again to overwrite it.");
+            if (saveButton != null) {
+                saveButton.setMessage(Component.literal("Are you sure?"));
+            }
+            return;
+        }
+
         InventoryLayout layout = InventoryLayout.capture(name, minecraft.player);
         manager.storage().upsert(layout);
         Minecraft.getInstance().setScreen(new InventoryLayoutsScreen(inventoryParent, manager));
+    }
+
+    private void clearOverwriteWarning() {
+        overwritePending = false;
+        overwriteName = "";
+        status = Component.empty();
+        if (saveButton != null) {
+            saveButton.setMessage(Component.literal("Save"));
+        }
     }
 }

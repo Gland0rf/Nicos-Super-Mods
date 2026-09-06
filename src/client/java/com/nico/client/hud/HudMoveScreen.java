@@ -37,21 +37,6 @@ public class HudMoveScreen extends Screen {
                 true
         );
 
-        Collection<HudElement> seenElements = layoutManager.getSeenElements();
-
-        if (seenElements.isEmpty()) {
-            graphics.text(
-                    font,
-                    "You can only move GUI elements you have already seen.",
-                    10,
-                    24,
-                    0xFFAAAAAA,
-                    true
-            );
-
-            return;
-        }
-
         for (HudElement element : layoutManager.getAll()) {
             drawElementBox(graphics, font, element, mouseX, mouseY);
         }

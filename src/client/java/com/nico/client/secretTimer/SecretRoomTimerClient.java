@@ -39,7 +39,6 @@ public final class SecretRoomTimerClient {
 
     private static final long SELF_SECRET_CONFIRM_WINDOW_MS = 2500L;
     private static final double CHEST_DROP_IGNORE_RADIUS_SQ = 2.0D * 2.0D;
-    private static final long LOCKED_CHEST_WAIT_MS = 500L;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Type PB_MAP_TYPE = new TypeToken<Map<String, PbEntry>>() {}.getType();
@@ -67,16 +66,17 @@ public final class SecretRoomTimerClient {
 
     private static boolean lastInDungeonRoom = false;
     private static int tickCounter = 0;
+    private static boolean initialized = false;
 
-    public static void init() {
+    public static synchronized void init() {
+        if (initialized) return;
+
         loadPbs();
-
         ClientTickEvents.END_CLIENT_TICK.register(client -> tick());
+        initialized = true;
     }
 
     public static void onRoomSecretsPacket(int foundSecrets, int totalSecrets) {
-        if (!enabled()) return;
-
         Minecraft mc = Minecraft.getInstance();
 
         if (!mc.isSameThread()) {
@@ -88,6 +88,16 @@ public final class SecretRoomTimerClient {
 
         String roomName = getCurrentRoomName(mc);
         if (roomName == null) return;
+
+        // Room stacking uses these counters even when the timer HUD/feature itself is disabled.
+        // Because the room stacking feature also relies on those. Maybe a better organisation would be smark idk too lazy
+        if (!enabled()) {
+            knownFoundByRoom.put(roomName, Math.max(0, foundSecrets));
+            if (totalSecrets > 0) {
+                knownTotalByRoom.put(roomName, totalSecrets);
+            }
+            return;
+        }
 
         onRoomSecretCounterUpdate(roomName, foundSecrets, totalSecrets);
     }
@@ -124,8 +134,6 @@ public final class SecretRoomTimerClient {
                     roomName,
                     ignored -> new HashSet<>()
             );
-
-            long posLong = secretPos.asLong();
 
             if (!seenPositions.add(secretPos.asLong())) {
                 return;
@@ -200,6 +208,16 @@ public final class SecretRoomTimerClient {
         knownFoundByRoom.put(roomName, foundSecrets);
 
         for (int i = 0; i < delta; i++) {
+            PendingChestSecret chestSecret = consumePendingChestSecret(roomName, now);
+            if (chestSecret != null) {
+                Set<Long> seenPositions = seenSelfSecretPositions.computeIfAbsent(roomName, ignored -> new HashSet<>());
+                if (seenPositions.add(chestSecret.pos.asLong())) {
+                    rememberChestSecretPosition(roomName, chestSecret.pos);
+                    countSelfSecret(roomName, now, true, chestSecret.pos);
+                    continue;
+                }
+            }
+
             if (consumePendingSelfPickup(roomName, now)) {
                 continue;
             }
@@ -401,8 +419,6 @@ public final class SecretRoomTimerClient {
 
         long now = System.currentTimeMillis();
 
-        confirmUnlockedPendingChests(now);
-
         if (tickCounter % 20 == 0) {
             expireUnmatchedCounterIncrements(now);
         }
@@ -437,6 +453,12 @@ public final class SecretRoomTimerClient {
         }
     }
 
+    public static void clearTransientState() {
+        resetRunState();
+        lastInDungeonRoom = false;
+        tickCounter = 0;
+    }
+
     private static void resetRunState() {
         attempts.clear();
         knownFoundByRoom.clear();
@@ -457,8 +479,8 @@ public final class SecretRoomTimerClient {
         pendingCounterIncrements.remove(roomName);
         seenSelfSecretPositions.remove(roomName);
         pendingIgnoredSelfPickups.remove(roomName);
-        chestSecretPositionsByRoom.clear();
-        pendingChestSecretsByRoom.clear();
+        chestSecretPositionsByRoom.remove(roomName);
+        pendingChestSecretsByRoom.remove(roomName);
     }
 
     private static void loadPbs() {
@@ -703,6 +725,7 @@ public final class SecretRoomTimerClient {
                     send("§7[NSM] Not timing §b" + roomName +
                             "§7 because the room already had found secrets.");
                 }
+                return;
             }
 
             attempt = new Attempt(roomName, now, knownTotal);
@@ -770,19 +793,26 @@ public final class SecretRoomTimerClient {
         if (!isDungeonRoomContext(mc, true)) return;
 
         String roomName = getCurrentRoomName(mc);
-        if (roomName == null) return;
+        if (roomName == null || chestPos == null) return;
 
-        pendingChestSecretsByRoom
-                .computeIfAbsent(roomName, ignored -> new ArrayDeque<>())
-                .addLast(new PendingChestSecret(chestPos.immutable(), System.currentTimeMillis()));
+        Set<Long> seenPositions = seenSelfSecretPositions.get(roomName);
+        if (seenPositions != null && seenPositions.contains(chestPos.asLong())) return;
+
+        Deque<PendingChestSecret> queue = pendingChestSecretsByRoom
+                .computeIfAbsent(roomName, ignored -> new ArrayDeque<>());
+
+        // Repeated clicks on the same locked chest must not queue multiple secrets.
+        queue.removeIf(pending -> pending.pos.equals(chestPos));
+        queue.addLast(new PendingChestSecret(chestPos.immutable(), System.currentTimeMillis()));
     }
 
     private static void rememberChestSecretPosition(String roomName, BlockPos chestPos) {
         if (roomName == null || chestPos == null) return;
 
-        chestSecretPositionsByRoom
-                .computeIfAbsent(roomName, ignored -> new ArrayList<>())
-                .add(chestPos.immutable());
+        List<BlockPos> positions = chestSecretPositionsByRoom
+                .computeIfAbsent(roomName, ignored -> new ArrayList<>());
+        BlockPos immutablePos = chestPos.immutable();
+        if (!positions.contains(immutablePos)) positions.add(immutablePos);
 
         System.out.println("[NSM] Remembered chest secret at " + chestPos + " in room " + roomName);
     }
@@ -805,29 +835,20 @@ public final class SecretRoomTimerClient {
         return false;
     }
 
-    private static void confirmUnlockedPendingChests(long now) {
-        Iterator<Map.Entry<String, Deque<PendingChestSecret>>> iterator =
-                pendingChestSecretsByRoom.entrySet().iterator();
+    private static PendingChestSecret consumePendingChestSecret(String roomName, long now) {
+        Deque<PendingChestSecret> queue = pendingChestSecretsByRoom.get(roomName);
+        if (queue == null || queue.isEmpty()) return null;
 
-        while (iterator.hasNext()) {
-            Map.Entry<String, Deque<PendingChestSecret>> entry = iterator.next();
-
-            String roomName = entry.getKey();
-            Deque<PendingChestSecret> queue = entry.getValue();
-
-            while (!queue.isEmpty() && now - queue.peekFirst().clickedAtMs >= LOCKED_CHEST_WAIT_MS) {
-                PendingChestSecret pending = queue.removeFirst();
-
-                System.out.println("[NSM] Confirmed unlocked chest secret at " + pending.pos + " in room " + roomName);
-
-                rememberChestSecretPosition(roomName, pending.pos);
-                onSecretPickup(pending.pos);
-            }
-
-            if (queue.isEmpty()) {
-                iterator.remove();
-            }
+        while (!queue.isEmpty() && now - queue.peekFirst().clickedAtMs > SELF_SECRET_CONFIRM_WINDOW_MS) {
+            queue.removeFirst();
         }
+
+        PendingChestSecret matched = queue.pollLast();
+        if (queue.isEmpty()) {
+            pendingChestSecretsByRoom.remove(roomName);
+        }
+
+        return matched;
     }
 
     public static int getKnownFoundSecrets(String roomName) {
