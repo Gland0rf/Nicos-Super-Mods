@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.nico.client.utils.SkyblockItemResolver;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -376,15 +377,15 @@ public final class WikiTitleResolver {
     }
 
     private static java.util.List<SearchResult> parseSearchResults(JsonObject root, String property) {
-        JsonObject query = getObject(root, "query");
-        JsonArray array = query == null ? null : getArray(query, property);
+        JsonObject query = WikiJson.object(root, "query");
+        JsonArray array = query == null ? null : WikiJson.array(query, property);
         if (array == null) {
             return java.util.List.of();
         }
         java.util.List<SearchResult> results = new java.util.ArrayList<>();
         for (JsonElement element : array) {
             if (!element.isJsonObject()) continue;
-            String title = getString(element.getAsJsonObject(), "title");
+            String title = WikiJson.string(element.getAsJsonObject(), "title");
             if (!title.isBlank()) results.add(new SearchResult(title, buildArticleUri(title)));
         }
         return java.util.List.copyOf(results);
@@ -413,20 +414,20 @@ public final class WikiTitleResolver {
                 "titles", title
         ));
         return sendJson(uri).thenApply(root -> {
-            JsonObject query = getObject(root, "query");
-            JsonArray pages = query == null ? null : getArray(query, "pages");
+            JsonObject query = WikiJson.object(root, "query");
+            JsonArray pages = query == null ? null : WikiJson.array(query, "pages");
             if (pages == null || pages.isEmpty() || !pages.get(0).isJsonObject()) {
                 return null;
             }
             JsonObject page = pages.get(0).getAsJsonObject();
-            if (page.has("missing") || page.has("invalid") || getInt(page, "ns", -1) != 0) {
+            if (page.has("missing") || page.has("invalid") || WikiJson.integer(page, "ns", -1) != 0) {
                 return null;
             }
-            String canonicalTitle = getString(page, "title");
+            String canonicalTitle = WikiJson.string(page, "title");
             if (canonicalTitle.isBlank()) {
                 return null;
             }
-            String fullUrl = getString(page, "fullurl");
+            String fullUrl = WikiJson.string(page, "fullurl");
             URI pageUri = fullUrl.isBlank() ? buildArticleUri(canonicalTitle) : URI.create(fullUrl);
             return new ResolvedWikiTitle(canonicalTitle, pageUri);
         });
@@ -459,7 +460,7 @@ public final class WikiTitleResolver {
                 .thenApply(WikiTitleResolver::validateResponse)
                 .thenAccept(body -> {
                     JsonObject root = JsonParser.parseString(body).getAsJsonObject();
-                    JsonArray items = getArray(root, "items");
+                    JsonArray items = WikiJson.array(root, "items");
                     if (items == null) {
                         throw new WikiResolutionException("Hypixel item registry contained no items array");
                     }
@@ -469,8 +470,8 @@ public final class WikiTitleResolver {
                             continue;
                         }
                         JsonObject item = element.getAsJsonObject();
-                        String id = getString(item, "id");
-                        String name = stripFormatting(getString(item, "name"));
+                        String id = WikiJson.string(item, "id");
+                        String name = stripFormatting(WikiJson.string(item, "name"));
                         if (!id.isBlank() && !name.isBlank()) {
                             updated.put(id.toUpperCase(Locale.ROOT), name);
                         }
@@ -531,38 +532,6 @@ public final class WikiTitleResolver {
 
     private static String stripFormatting(String input) {
         return input == null ? "" : input.replaceAll("(?i)\\u00a7[0-9A-FK-ORX]", "").replaceAll("\\s+", " ").trim();
-    }
-
-    private static JsonObject getObject(JsonObject parent, String name) {
-        return parent != null && parent.has(name) && parent.get(name).isJsonObject()
-                ? parent.getAsJsonObject(name)
-                : null;
-    }
-
-    private static JsonArray getArray(JsonObject parent, String name) {
-        return parent != null && parent.has(name) && parent.get(name).isJsonArray()
-                ? parent.getAsJsonArray(name)
-                : null;
-    }
-
-    private static String getString(JsonObject object, String name) {
-        try {
-            return object != null && object.has(name) && !object.get(name).isJsonNull()
-                    ? object.get(name).getAsString()
-                    : "";
-        } catch (RuntimeException ignored) {
-            return "";
-        }
-    }
-
-    private static int getInt(JsonObject object, String name, int fallback) {
-        try {
-            return object != null && object.has(name) && !object.get(name).isJsonNull()
-                    ? object.get(name).getAsInt()
-                    : fallback;
-        } catch (RuntimeException ignored) {
-            return fallback;
-        }
     }
 
     private record ScoredSearchResult(SearchResult result, int score) { }

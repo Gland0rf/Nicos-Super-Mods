@@ -1,7 +1,9 @@
 package com.nico.client.memleak;
 
+import com.nico.client.configuration.NsmConfig;
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.lifecycle.WorldStateCleanup;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -31,17 +33,11 @@ public class MemLeakFeature {
             return;
         }
 
-        CategoryOther.MemLeak settings =
-                NsmConfigManager.getConfig().other.memLeak;
+        CategoryOther.MemLeak settings = NsmConfig.INSTANCE.other.memLeak;
 
-        if (!settings.enabled) {
-            return;
-        }
+        if (!settings.enabled) return;
 
-        int observationMinutes = Math.min(
-                settings.minimumObservationMinutes,
-                settings.windowMinutes
-        );
+        int observationMinutes = Math.min(settings.minimumObservationMinutes, settings.windowMinutes);
 
         MemLeakConfig config = new MemLeakConfig(
                 Duration.ofMinutes(settings.windowMinutes),
@@ -77,9 +73,7 @@ public class MemLeakFeature {
             shutdownHookRegistered = true;
 
             Runtime.getRuntime().addShutdownHook(
-                    Thread.ofPlatform()
-                            .name("NSM-MemLeak-Shutdown")
-                            .unstarted(MemLeakFeature::shutdown)
+                    Thread.ofPlatform().name("NSM-MemLeak-Shutdown").unstarted(MemLeakFeature::shutdown)
             );
         }
 
@@ -89,11 +83,10 @@ public class MemLeakFeature {
     private static void onClientTick(Minecraft minecraft) {
         Object world = minecraft.level;
         Object previousWorld = lastWorld.get();
-        boolean changedAwayFromExistingWorld = lastTickHadWorld
-                && (world == null || previousWorld != world);
+        boolean changedAwayFromExistingWorld = lastTickHadWorld && (world == null || previousWorld != world);
 
-        if (changedAwayFromExistingWorld && NsmConfigManager.getConfig().other.memLeak.autoCleanupTransientData) {
-            NsmTransientCleanup.Result result = NsmTransientCleanup.cleanupWorldState();
+        if (changedAwayFromExistingWorld && NsmConfig.INSTANCE.other.memLeak.autoCleanupTransientData) {
+            WorldStateCleanup.Result result = WorldStateCleanup.cleanupWorldState();
             MemLeakService current = service;
             if (current != null) {
                 current.markActivity("nsm-cleanup", result.successful()
@@ -158,7 +151,7 @@ public class MemLeakFeature {
     }
 
     public static List<String> cleanupLines() {
-        NsmTransientCleanup.Result result = NsmTransientCleanup.cleanupWorldState();
+        WorldStateCleanup.Result result = WorldStateCleanup.cleanupWorldState();
 
         MemLeakService current = service;
         if (current != null) {
@@ -230,7 +223,7 @@ public class MemLeakFeature {
     }
 
     private static void sendAutomaticAlert(String message) {
-        if (!NsmConfigManager.getConfig().other.memLeak.chatAlerts) {
+        if (!NsmConfig.INSTANCE.other.memLeak.chatAlerts) {
             return;
         }
 

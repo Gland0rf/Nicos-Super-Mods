@@ -4,6 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.nico.client.wiki.WikiHttp;
+import com.nico.client.wiki.WikiJson;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -103,12 +104,12 @@ public final class WikiBazaarService {
                 continue;
             }
 
-            String id = stringValue(product, "product_id");
+            String id = WikiJson.string(product, "product_id");
             if (id.isBlank()) {
                 id = entry.getKey();
             }
-            double instantBuy = doubleValue(quick, "sellPrice");
-            double instantSell = doubleValue(quick, "buyPrice");
+            double instantBuy = WikiJson.decimal(quick, "sellPrice");
+            double instantSell = WikiJson.decimal(quick, "buyPrice");
             if (!Double.isFinite(instantBuy)) {
                 instantBuy = 0.0D;
             }
@@ -118,26 +119,6 @@ public final class WikiBazaarService {
             result.put(id.toUpperCase(Locale.ROOT), new Product(instantBuy, instantSell));
         }
         return Map.copyOf(result);
-    }
-
-    private static String stringValue(JsonObject object, String key) {
-        try {
-            return object != null && object.has(key) && !object.get(key).isJsonNull()
-                    ? object.get(key).getAsString()
-                    : "";
-        } catch (RuntimeException ignored) {
-            return "";
-        }
-    }
-
-    private static double doubleValue(JsonObject object, String key) {
-        try {
-            return object != null && object.has(key) && !object.get(key).isJsonNull()
-                    ? object.get(key).getAsDouble()
-                    : 0.0D;
-        } catch (RuntimeException ignored) {
-            return 0.0D;
-        }
     }
 
     public record Product(double instantBuyPrice, double instantSellPrice) { }

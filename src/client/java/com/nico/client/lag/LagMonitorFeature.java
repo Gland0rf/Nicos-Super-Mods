@@ -4,6 +4,7 @@ import com.nico.client.configuration.NsmConfig;
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.configuration.category.CategoryDungeons;
 import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.hud.HudLayoutManager;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
@@ -14,11 +15,11 @@ import java.util.function.Supplier;
 public class LagMonitorFeature {
     private static boolean initialized;
 
-    private static final LagMonitorConfig config = LagMonitorConfig.load();
+    private static final LagMonitorConfig config = new LagMonitorConfig();
 
     private LagMonitorFeature() { }
 
-    public static synchronized void initialize() {
+    public static synchronized void initialize(HudLayoutManager hudLayout) {
         if (initialized) return;
 
         syncConfig();
@@ -39,17 +40,16 @@ public class LagMonitorFeature {
                 (handler, client) -> service.onDisconnect()
         );
 
-        LagMonitorHud.register();
+        LagMonitorHud.register(hudLayout);
 
         initialized = true;
         System.out.println("[NSM Lag] Lag monitor initialized");
     }
 
     private static void syncConfig() {
-        NsmConfig current = NsmConfigManager.getConfig();
-        CategoryOther.LagMonitor settings = current != null && current.other != null
-                ? current.other.lagMonitor
-                : null;
+        CategoryOther.LagMonitor settings = NsmConfig.INSTANCE.other == null
+                ? null
+                : NsmConfig.INSTANCE.other.lagMonitor;
 
         config.applyMoulConfig(settings);
         config.sanitize();
@@ -57,10 +57,6 @@ public class LagMonitorFeature {
 
     public static LagMonitorConfig config() {
         return config;
-    }
-
-    public static void saveConfig() {
-        config.save();
     }
 
     public static void openLastSummary(Screen parent) {

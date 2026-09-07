@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.nico.client.wiki.WikiHttp;
+import com.nico.client.wiki.WikiJson;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -166,12 +167,12 @@ public final class WikiAuctionHouseService {
 
     private static AuctionPage parsePage(String body) {
         JsonObject root = JsonParser.parseString(body).getAsJsonObject();
-        if (!booleanValue(root, "success", false)) {
+        if (!WikiJson.booleanValue(root, "success", false)) {
             throw new IllegalStateException("Hypixel auctions response was not successful");
         }
 
-        int totalPages = intValue(root, "totalPages", 1);
-        long lastUpdated = longValue(root, "lastUpdated", 0L);
+        int totalPages = WikiJson.integer(root, "totalPages", 1);
+        long lastUpdated = WikiJson.longValue(root, "lastUpdated", 0L);
         JsonArray auctions = root.has("auctions") && root.get("auctions").isJsonArray()
                 ? root.getAsJsonArray("auctions")
                 : new JsonArray();
@@ -188,16 +189,16 @@ public final class WikiAuctionHouseService {
                 continue;
             }
             JsonObject auction = element.getAsJsonObject();
-            if (!booleanValue(auction, "bin", false)) {
+            if (!WikiJson.booleanValue(auction, "bin", false)) {
                 continue;
             }
 
-            long price = longValue(auction, "starting_bid", 0L);
+            long price = WikiJson.longValue(auction, "starting_bid", 0L);
             if (price <= 0L) {
                 continue;
             }
 
-            String normalizedName = normalizeName(stringValue(auction, "item_name"));
+            String normalizedName = normalizeName(WikiJson.string(auction, "item_name"));
             if (!normalizedName.isBlank()) {
                 byName.merge(normalizedName, price, Math::min);
             }
@@ -219,7 +220,7 @@ public final class WikiAuctionHouseService {
                 return itemBytes.getAsString();
             }
             if (itemBytes.isJsonObject()) {
-                return stringValue(itemBytes.getAsJsonObject(), "data");
+                return WikiJson.string(itemBytes.getAsJsonObject(), "data");
             }
         } catch (RuntimeException ignored) {
             // Invalid auction item_bytes; ignore this auction's ID.
@@ -275,46 +276,6 @@ public final class WikiAuctionHouseService {
             return "Auction data unavailable";
         }
         return current.getMessage();
-    }
-
-    private static String stringValue(JsonObject object, String key) {
-        try {
-            return object != null && object.has(key) && !object.get(key).isJsonNull()
-                    ? object.get(key).getAsString()
-                    : "";
-        } catch (RuntimeException ignored) {
-            return "";
-        }
-    }
-
-    private static long longValue(JsonObject object, String key, long fallback) {
-        try {
-            return object != null && object.has(key) && !object.get(key).isJsonNull()
-                    ? object.get(key).getAsLong()
-                    : fallback;
-        } catch (RuntimeException ignored) {
-            return fallback;
-        }
-    }
-
-    private static int intValue(JsonObject object, String key, int fallback) {
-        try {
-            return object != null && object.has(key) && !object.get(key).isJsonNull()
-                    ? object.get(key).getAsInt()
-                    : fallback;
-        } catch (RuntimeException ignored) {
-            return fallback;
-        }
-    }
-
-    private static boolean booleanValue(JsonObject object, String key, boolean fallback) {
-        try {
-            return object != null && object.has(key) && !object.get(key).isJsonNull()
-                    ? object.get(key).getAsBoolean()
-                    : fallback;
-        } catch (RuntimeException ignored) {
-            return fallback;
-        }
     }
 
     public record LowestBin(long coins, long sourceLastUpdated, String error) {

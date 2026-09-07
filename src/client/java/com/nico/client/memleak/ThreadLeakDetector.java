@@ -92,7 +92,7 @@ public final class ThreadLeakDetector {
             for (StackTraceElement frame : entry.getValue()) {
                 if (inspected++ >= maximumStackFrames) break;
                 var owner = classIndex.ownerOf(frame.getClassName());
-                if (owner.isPresent() && !isInfrastructureMod(owner.get().id())) {
+                if (owner.isPresent() && !ModIdentity.isInfrastructureId(owner.get().id())) {
                     String modId = owner.get().id();
                     byMod.merge(modId, 1, Integer::sum);
                     idsByMod.computeIfAbsent(modId, ignored -> new HashSet<>()).add(thread.threadId());
@@ -267,14 +267,5 @@ public final class ThreadLeakDetector {
         private int growth() {
             return latest - first;
         }
-    }
-
-    private static boolean isInfrastructureMod(String modId) {
-        return modId.equals("minecraft")
-                || modId.equals("java")
-                || modId.equals("fabricloader")
-                || modId.equals("fabric-api")
-                || modId.startsWith("fabric-")
-                || modId.startsWith("fabric_");
     }
 }

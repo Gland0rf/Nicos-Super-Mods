@@ -116,16 +116,16 @@ final class WikiImageInfoResolver {
         }
 
         JsonObject info = imageInfo.get(0).getAsJsonObject();
-        String url = string(info, "url");
+        String url = WikiJson.string(info, "url");
         if (url.isBlank()) {
             throw new IllegalStateException("imageinfo returned no original URL");
         }
 
-        String fileTitle = string(page, "title");
+        String fileTitle = WikiJson.string(page, "title");
         if (fileTitle.isBlank()) {
             fileTitle = requestedTitle;
         }
-        String filePageUrl = string(info, "descriptionurl");
+        String filePageUrl = WikiJson.string(info, "descriptionUrl");
         if (filePageUrl.isBlank()) {
             filePageUrl = filePageUrl(fileTitle);
         }
@@ -155,9 +155,9 @@ final class WikiImageInfoResolver {
 
         return new ResolvedImage(
                 url,
-                string(info, "mime"),
-                integer(info, "width"),
-                integer(info, "height"),
+                WikiJson.string(info, "mime"),
+                WikiJson.integer(info, "width"),
+                WikiJson.integer(info, "height"),
                 credits
         );
     }
@@ -258,7 +258,7 @@ final class WikiImageInfoResolver {
         if (metadata == null || !metadata.has(key) || !metadata.get(key).isJsonObject()) {
             return "";
         }
-        return string(metadata.getAsJsonObject(key), "value");
+        return WikiJson.string(metadata.getAsJsonObject(key), "value");
     }
 
     /**
@@ -278,7 +278,7 @@ final class WikiImageInfoResolver {
         for (JsonElement element : page.getAsJsonArray("templates")) {
             if (!element.isJsonObject()) continue;
 
-            String title = string(element.getAsJsonObject(), "title");
+            String title = WikiJson.string(element.getAsJsonObject(), "title");
             if (!title.regionMatches(true, 0, "Template:License/", 0, 17)) continue;
 
             String name = title.substring(17).replace('_', ' ').trim();
@@ -334,28 +334,6 @@ final class WikiImageInfoResolver {
                 .replace("+", "%20")
                 .replace("%2F", "/");
         return FILE_PAGE_BASE + encoded;
-    }
-
-    private static String string(JsonObject object, String key) {
-        if (object == null || !object.has(key) || object.get(key).isJsonNull()) {
-            return "";
-        }
-        try {
-            return object.get(key).getAsString();
-        } catch (RuntimeException ignored) {
-            return "";
-        }
-    }
-
-    private static int integer(JsonObject object, String key) {
-        if (object == null || !object.has(key) || object.get(key).isJsonNull()) {
-            return 0;
-        }
-        try {
-            return object.get(key).getAsInt();
-        } catch (RuntimeException ignored) {
-            return 0;
-        }
     }
 
     record ResolvedImage(String url, String mime, int width, int height, WikiImageCredits credits) {

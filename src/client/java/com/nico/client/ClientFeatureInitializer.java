@@ -12,16 +12,15 @@ import java.io.IOException;
 
 public final class ClientFeatureInitializer {
 
-    private ClientFeatureInitializer() {
-    }
+    private ClientFeatureInitializer() { }
 
-    public static HudLayoutManager initialize() {
+    public static HudLayoutManager initialize(BazaarService bazaarService) {
         initializeConfig();
         initializeSecretFeatures();
 
         HudLayoutManager hudLayout = initializeHud();
 
-        initializeMinionFeatures(hudLayout);
+        initializeMinionFeatures(hudLayout, bazaarService);
 
         return hudLayout;
     }
@@ -48,15 +47,14 @@ public final class ClientFeatureInitializer {
     }
 
     private static void initializeMinionFeatures(
-            HudLayoutManager hudLayout
+            HudLayoutManager hudLayout,
+            BazaarService bazaarService
     ) {
         try {
             MinionDataRegistry registry =
                     MinionDataRegistry.loadFromResources(
                             "/assets/nsm/minions.json"
                     );
-
-            BazaarService bazaarService = Main.INSTANCE.getBazaarService();
 
             MinionRoiClient.init(
                     registry,

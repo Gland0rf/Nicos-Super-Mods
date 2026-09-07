@@ -3,6 +3,7 @@ package com.nico.client.configuration;
 import com.google.gson.*;
 import com.nico.client.configuration.category.CategoryDungeons;
 import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.utils.AtomicFiles;
 import io.github.notenoughupdates.moulconfig.gui.GuiContext;
 import io.github.notenoughupdates.moulconfig.gui.GuiElementComponent;
 import io.github.notenoughupdates.moulconfig.gui.MoulConfigEditor;
@@ -29,7 +30,7 @@ public final class NsmConfigManager {
             .registerTypeAdapterFactory(new PropertyTypeAdapterFactory())
             .create();
 
-    private static NsmConfig config;
+    private static boolean initialized;
     private static MoulConfigProcessor<NsmConfig> processor;
     private static MoulConfigEditor<NsmConfig> editor;
 
@@ -37,40 +38,24 @@ public final class NsmConfigManager {
     }
 
     public static synchronized void init() {
-        if (config != null && processor != null) return;
+        if (initialized && processor != null) return;
 
-        File file = getConfigFile();
+        NsmConfig loadedConfig = loadConfig();
+        NsmConfig.INSTANCE = loadedConfig == null ? new NsmConfig() : loadedConfig;
 
-        if (file.exists()) {
-            try (Reader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
-                JsonElement rawConfig = JsonParser.parseReader(reader);
-                config = GSON.fromJson(rawConfig, NsmConfig.class);
-                migrateLegacyLagMonitor(rawConfig);
-            } catch (IOException | RuntimeException exception) {
-                System.err.println("[NSM] Could not load config; using defaults: " + exception.getMessage());
-            }
-        }
-
-        if (config == null) {
-            config = new NsmConfig();
-        }
-
-        NsmConfig.INSTANCE = config;
-
-        processor = new MoulConfigProcessor<>(config);
+        processor = new MoulConfigProcessor<>(NsmConfig.INSTANCE);
         BuiltinMoulConfigGuis.addProcessors(processor);
 
         ConfigProcessorDriver driver = new ConfigProcessorDriver(processor);
         driver.warnForPrivateFields = false;
-        driver.processConfig(config);
+        driver.processConfig(NsmConfig.INSTANCE);
 
+        initialized = true;
         save();
     }
 
     public static Screen createScreen(Screen parent) {
-        if (config == null || processor == null) {
-            init();
-        }
+        if (!initialized || processor == null) init();
 
         if (editor == null) {
             editor = new MoulConfigEditor<>(processor);
@@ -81,47 +66,49 @@ public final class NsmConfigManager {
                 new GuiContext(new GuiElementComponent(editor)),
                 parent
         ) {
-
-          public void removed() {
-              NsmConfigManager.save();
-              super.removed();
-          }
+            @Override
+            public void removed() {
+                NsmConfigManager.save();
+                super.removed();
+            }
         };
     }
 
-    public static NsmConfig getConfig() {
-        if (config == null) {
+    public static synchronized void save() {
+        if (!initialized) {
             init();
+            return;
         }
 
-        return config;
-    }
-
-    public static synchronized void save() {
         Path path = getConfigFile().toPath();
-        Path parent = path.getParent();
-        Path temporary = path.resolveSibling(path.getFileName() + ".tmp");
-
-        File file = getConfigFile();
-        file.getParentFile().mkdirs();
 
         try {
-            Files.createDirectories(parent);
-            try (Writer writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
-                GSON.toJson(getConfig(), writer);
-            }
-
-            try {
-                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException ignored) {
-                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
-            }
+            AtomicFiles.writeAtomically(path, temporary -> {
+                try (Writer writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
+                    GSON.toJson(NsmConfig.INSTANCE, writer);
+                }
+            });
         } catch (IOException exception) {
             System.err.println("[NSM] Could not save config: " + exception.getMessage());
         }
     }
 
-    private static void migrateLegacyLagMonitor(JsonElement rawConfig) {
+    private static NsmConfig loadConfig() {
+        File file = getConfigFile();
+        if (!file.exists()) return null;
+
+        try (Reader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
+            JsonElement rawConfig = JsonParser.parseReader(reader);
+            NsmConfig loadedConfig = GSON.fromJson(rawConfig, NsmConfig.class);
+            migrateLegacyLagMonitor(loadedConfig, rawConfig);
+            return loadedConfig;
+        } catch (IOException | RuntimeException exception) {
+            System.err.println("[NSM] Could not load config; using defaults: " + exception.getMessage());
+            return null;
+        }
+    }
+
+    private static void migrateLegacyLagMonitor(NsmConfig config, JsonElement rawConfig) {
         if (config == null || rawConfig == null || !rawConfig.isJsonObject()) {
             return;
         }

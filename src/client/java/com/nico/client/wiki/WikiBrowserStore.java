@@ -1,6 +1,7 @@
 package com.nico.client.wiki;
 
 import com.google.gson.*;
+import com.nico.client.utils.AtomicFiles;
 import net.minecraft.client.Minecraft;
 
 import java.io.IOException;
@@ -107,8 +108,8 @@ public final class WikiBrowserStore {
                     continue;
                 }
                 JsonObject object = element.getAsJsonObject();
-                String title = string(object, "title");
-                String uriText = string(object, "uri");
+                String title = WikiJson.string(object, "title");
+                String uriText = WikiJson.string(object, "uri");
                 if (uriText.isBlank()) {
                     continue;
                 }
@@ -129,7 +130,6 @@ public final class WikiBrowserStore {
 
     private synchronized void saveQuietly() {
         Path path = configPath();
-        Path temporary = path.resolveSibling(path.getFileName() + ".tmp");
 
         JsonObject root = new JsonObject();
         root.addProperty("websiteStyle", websiteStyle);
@@ -144,15 +144,11 @@ public final class WikiBrowserStore {
         root.add("bookmarks", array);
 
         try {
-            Files.createDirectories(path.getParent());
-            try (Writer writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
-                GSON.toJson(root, writer);
-            }
-            try {
-                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (IOException atomicMoveFailure) {
-                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
-            }
+            AtomicFiles.writeAtomically(path, temporary -> {
+                try (Writer writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
+                    GSON.toJson(root, writer);
+                }
+            });
         } catch (IOException exception) {
             System.err.println("[NSM Wiki Browser] Could not save settings: " + exception.getMessage());
         }
@@ -163,17 +159,6 @@ public final class WikiBrowserStore {
         return minecraft.gameDirectory.toPath()
                 .resolve("config")
                 .resolve("nsm-wiki-browser.json");
-    }
-
-    private static String string(JsonObject object, String key) {
-        if (object == null || !object.has(key) || object.get(key).isJsonNull()) {
-            return "";
-        }
-        try {
-            return object.get(key).getAsString();
-        } catch (RuntimeException ignored) {
-            return "";
-        }
     }
 
     private static String key(URI uri) {

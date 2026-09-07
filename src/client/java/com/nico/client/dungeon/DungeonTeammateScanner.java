@@ -39,10 +39,6 @@ public final class DungeonTeammateScanner {
         CLASS_BY_PLAYER.clear();
     }
 
-    public static void reset() {
-        CLASS_BY_PLAYER.clear();
-    }
-
     public static Set<String> getDungeonTeammateNames() {
         Minecraft minecraft = Minecraft.getInstance();
         ClientPacketListener connection = minecraft.getConnection();
