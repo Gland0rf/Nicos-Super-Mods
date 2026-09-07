@@ -6,6 +6,13 @@ import org.lwjgl.glfw.GLFW;
 public class CategoryOther {
 
     @ConfigOption(
+            name = "Lag Monitor",
+            desc = "Tracks TPS, ping, jitter, and connection stalls with a customizable HUD."
+    )
+    @Accordion
+    public LagMonitor lagMonitor = new LagMonitor();
+
+    @ConfigOption(
             name = "Inventory Layouts",
             desc = "Lets you save inventory arrangements and display a visual guide while rebuilding them."
     )
@@ -25,6 +32,156 @@ public class CategoryOther {
     )
     @Accordion
     public MemLeak memLeak = new MemLeak();
+
+    public static class LagMonitor {
+        @ConfigOption(
+                name = "Enabled",
+                desc = "Tracks TPS, ping, jitter and connection stalls."
+        )
+        @ConfigEditorBoolean
+        public boolean enabled = true;
+
+        @ConfigOption(
+                name = "Show HUD",
+                desc = "Displays the Lag Monitor HUD when the current location is enabled below."
+        )
+        @ConfigEditorBoolean
+        public boolean showHud = true;
+
+        @ConfigOption(
+                name = "Visibility",
+                desc = "Choose where the Lag Monitor is active."
+        )
+        @Accordion
+        public Visibility visibility = new Visibility();
+
+        @ConfigOption(
+                name = "Design",
+                desc = "Customize the Lag Monitor HUD appearance and which values are shown."
+        )
+        @Accordion
+        public Design design = new Design();
+
+        @ConfigOption(
+                name = "Show Warning Titles",
+                desc = "Shows title alerts for low TPS, high ping, and connection stalls."
+        )
+        @ConfigEditorBoolean
+        public boolean showTitles = true;
+
+        @ConfigOption(
+                name = "Show End Report",
+                desc = "Shows a lag report when your dungeon run ends. §4Requires Dungeons visibility to be enabled."
+        )
+        @ConfigEditorBoolean
+        public boolean showEndReport = true;
+
+        @ConfigOption(
+                name = "Copy TPS Loss",
+                desc = "Copies the estimated TPS time loss to your clipboard after a dungeon run."
+        )
+        @ConfigEditorBoolean
+        public boolean copyTpsLossToClipboard = true;
+
+        public static class Visibility {
+            @ConfigOption(
+                    name = "Dungeons",
+                    desc = "Show and sample the Lag Monitor while you are inside a dungeon."
+            )
+            @ConfigEditorBoolean
+            public boolean showInDungeons = true;
+
+            @ConfigOption(
+                    name = "Hypixel Outside Dungeons",
+                    desc = "Show and sample the Lag Monitor on Hypixel when you are not inside a dungeon."
+            )
+            @ConfigEditorBoolean
+            public boolean showOnHypixelOutsideDungeons = true;
+
+            @ConfigOption(
+                    name = "Other Multiplayer Servers",
+                    desc = "Show and sample the Lag Monitor on non-Hypixel multiplayer servers."
+            )
+            @ConfigEditorBoolean
+            public boolean showOnOtherServers = false;
+        }
+
+        public static class Design {
+            @ConfigOption(
+                    name = "Background",
+                    desc = "Draw the dark background behind the Lag Monitor."
+            )
+            @ConfigEditorBoolean
+            public boolean showBackground = true;
+
+            @ConfigOption(
+                    name = "Background Opacity",
+                    desc = "Opacity of the HUD background when Background is enabled."
+            )
+            @ConfigEditorSlider(
+                    minValue = 0,
+                    maxValue = 100,
+                    minStep = 1
+            )
+            public int backgroundOpacity = 69;
+
+            @ConfigOption(
+                    name = "Accent Bar",
+                    desc = "Draw the colored lag-status bar on the left side."
+            )
+            @ConfigEditorBoolean
+            public boolean showAccentBar = true;
+
+            @ConfigOption(
+                    name = "Header",
+                    desc = "Show the 'Lag Monitor' header."
+            )
+            @ConfigEditorBoolean
+            public boolean showHeader = true;
+
+            @ConfigOption(
+                    name = "TPS",
+                    desc = "Show the estimated server TPS."
+            )
+            @ConfigEditorBoolean
+            public boolean showTps = true;
+
+            @ConfigOption(
+                    name = "Ping",
+                    desc = "Show your current connection ping."
+            )
+            @ConfigEditorBoolean
+            public boolean showPing = true;
+
+            @ConfigOption(
+                    name = "Jitter",
+                    desc = "Show ping variation (jitter)."
+            )
+            @ConfigEditorBoolean
+            public boolean showJitter = true;
+
+            @ConfigOption(
+                    name = "Packet Gap",
+                    desc = "Show packet-gap time when the connection stalls for at least 0.5 seconds."
+            )
+            @ConfigEditorBoolean
+            public boolean showPacketGap = true;
+
+            @ConfigOption(
+                    name = "Diagnosis",
+                    desc = "Show the current lag diagnosis, such as Server Lag or Network Lag."
+            )
+            @ConfigEditorBoolean
+            public boolean showDiagnosis = true;
+
+            @ConfigOption(
+                    name = "Text Shadow",
+                    desc = "Draw a shadow behind HUD text."
+            )
+            @ConfigEditorBoolean
+            public boolean textShadow = true;
+        }
+    }
 
     public static class IntegratedWiki {
         @ConfigOption(

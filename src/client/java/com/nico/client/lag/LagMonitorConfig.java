@@ -1,8 +1,8 @@
 package com.nico.client.lag;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.google.gson.*;
 import com.nico.client.configuration.category.CategoryDungeons;
+import com.nico.client.configuration.category.CategoryOther;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -24,7 +24,21 @@ public class LagMonitorConfig {
     public boolean showEndReport = true;
     public boolean copyTpsLossToClipboard = true;
     public boolean debugLogging = true;
-    public boolean onlyShowInDungeons = true;
+
+    public boolean showInDungeons = true;
+    public boolean showOnHypixelOutsideDungeons = true;
+    public boolean showOnOtherServers = false;
+
+    public boolean showHudBackground = true;
+    public int hudBackgroundOpacity = 69;
+    public boolean showHudAccentBar = true;
+    public boolean showHudHeader = true;
+    public boolean showHudTps = true;
+    public boolean showHudPing = true;
+    public boolean showHudJitter = true;
+    public boolean showHudPacketGap = true;
+    public boolean showHudDiagnosis = true;
+    public boolean hudTextShadow = true;
 
     public int warmupSeconds = 6;
     public int pingSampleIntervalTicks = 20;
@@ -59,10 +73,12 @@ public class LagMonitorConfig {
         }
 
         try (Reader reader = Files.newBufferedReader(PATH)) {
-            LagMonitorConfig loaded = GSON.fromJson(reader, LagMonitorConfig.class);
+            JsonElement rawConfig = JsonParser.parseReader(reader);
+            LagMonitorConfig loaded = GSON.fromJson(rawConfig, LagMonitorConfig.class);
             if (loaded == null) {
                 loaded = new LagMonitorConfig();
             }
+            loaded.migrateLegacyVisibility(rawConfig);
             loaded.sanitize();
             return loaded;
         } catch (IOException | RuntimeException e) {
@@ -84,6 +100,7 @@ public class LagMonitorConfig {
     }
 
     public void sanitize() {
+        hudBackgroundOpacity = clamp(hudBackgroundOpacity, 0, 100);
         warmupSeconds = clamp(warmupSeconds, 0, 30);
         pingSampleIntervalTicks = clamp(pingSampleIntervalTicks, 5, 200);
         tpsSampleStaleSeconds = clamp(tpsSampleStaleSeconds, 2, 30);
@@ -106,19 +123,47 @@ public class LagMonitorConfig {
         hudYOffset = clamp(hudYOffset, 0, 500);
     }
 
-    public void applyMoulConfig(
-            CategoryDungeons.DungeonLagMonitor settings
-    ) {
+    public void applyMoulConfig(CategoryOther.LagMonitor settings) {
         if (settings == null) {
             return;
         }
 
         enabled = settings.enabled;
-        onlyShowInDungeons = settings.onlyShowInDungeons;
         showHud = settings.showHud;
         showTitles = settings.showTitles;
         showEndReport = settings.showEndReport;
         copyTpsLossToClipboard = settings.copyTpsLossToClipboard;
+
+        if (settings.visibility != null) {
+            showInDungeons = settings.visibility.showInDungeons;
+            showOnHypixelOutsideDungeons =  settings.visibility.showOnHypixelOutsideDungeons;
+            showOnOtherServers = settings.visibility.showOnOtherServers;
+        }
+
+        if (settings.design != null) {
+            showHudBackground = settings.design.showBackground;
+            hudBackgroundOpacity = settings.design.backgroundOpacity;
+            showHudAccentBar = settings.design.showAccentBar;
+            showHudHeader = settings.design.showHeader;
+            showHudTps = settings.design.showTps;
+            showHudPing = settings.design.showPing;
+            showHudJitter = settings.design.showJitter;
+            showHudPacketGap = settings.design.showPacketGap;
+            showHudDiagnosis = settings.design.showDiagnosis;
+            hudTextShadow = settings.design.textShadow;
+        }
+    }
+
+    private void migrateLegacyVisibility(JsonElement rawConfig) {
+        if (rawConfig == null || !rawConfig.isJsonObject()) return;
+
+        JsonObject root = rawConfig.getAsJsonObject();
+        JsonElement onlyDungeons = root.get("onlyShowInDungeons");
+        if (onlyDungeons == null || !onlyDungeons.isJsonPrimitive() || !onlyDungeons.getAsJsonPrimitive().isBoolean()) return;
+
+        showInDungeons = true;
+        showOnHypixelOutsideDungeons = !onlyDungeons.getAsBoolean();
+        showOnOtherServers = false;
     }
 
     private static int clamp(int value, int min, int max) {

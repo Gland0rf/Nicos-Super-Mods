@@ -33,13 +33,11 @@ final class LagMonitorHud {
             GuiGraphicsExtractor graphics,
             DeltaTracker deltaTracker
     ) {
-        LagMonitorService service =
-                LagMonitorService.getInstance();
-
+        LagMonitorService service = LagMonitorService.getInstance();
         LagMonitorConfig config = service.config();
         LagSnapshot snapshot = service.snapshot();
 
-        if (!config.showHud || !snapshot.active() || (config.onlyShowInDungeons && !service.isDungeonRunActive())) {
+        if (!config.showHud || !snapshot.active()) {
             return;
         }
 
@@ -48,25 +46,23 @@ final class LagMonitorHud {
             return;
         }
 
-        HudElement element =
-                layoutManager.get(HudLayoutManager.LAG_MONITOR);
+        HudElement element = layoutManager.get(HudLayoutManager.LAG_MONITOR);
 
         if (element == null) {
             return;
         }
 
         Minecraft client = Minecraft.getInstance();
-        List<String> lines = buildLines(snapshot);
+        List<String> lines = buildLines(snapshot, config);
+        if (lines.isEmpty()) return;
 
         int contentWidth = 0;
         for (String line : lines) {
-            contentWidth = Math.max(
-                    contentWidth,
-                    client.font.width(line)
-            );
+            contentWidth = Math.max(contentWidth, client.font.width(line));
         }
 
-        int measuredWidth = contentWidth + 12;
+        int textX = config.showHudAccentBar ? 7 : 4;
+        int measuredWidth = contentWidth + textX + 4;
         int measuredHeight = lines.size() * 10 + 8;
 
         element.setMeasuredSize(measuredWidth, measuredHeight);
@@ -74,42 +70,45 @@ final class LagMonitorHud {
         float scale = (float) element.getScale();
 
         graphics.pose().pushMatrix();
-        graphics.pose().translate(
-                element.getX(),
-                element.getY()
-        );
+        graphics.pose().translate(element.getX(), element.getY());
         graphics.pose().scale(scale, scale);
 
-        graphics.fill(
-                0,
-                0,
-                measuredWidth,
-                measuredHeight,
-                0xB0101218
-        );
+        if (config.showHudBackground) {
+            int alpha = (config.hudBackgroundOpacity * 255 + 50) / 100;
+            graphics.fill(
+                    0,
+                    0,
+                    measuredWidth,
+                    measuredHeight,
+                    (alpha << 24) | 0x00101218
+            );
+        }
 
-        graphics.fill(
-                0,
-                0,
-                3,
-                measuredHeight,
-                snapshot.diagnosis().color()
-        );
+        if (config.showHudAccentBar) {
+            graphics.fill(
+                    0,
+                    0,
+                    3,
+                    measuredHeight,
+                    snapshot.diagnosis().color()
+            );
+        }
 
         int textY = 4;
 
         for (int index = 0; index < lines.size(); index++) {
-            int color = index == lines.size() - 1
+            boolean diagnosisLine = config.showHudDiagnosis && index == lines.size() - 1;
+            int color = diagnosisLine
                     ? snapshot.diagnosis().color()
                     : 0xFFFFFFFF;
 
             graphics.text(
                     client.font,
                     lines.get(index),
-                    7,
+                    textX,
                     textY,
                     color,
-                    true
+                    config.hudTextShadow
             );
 
             textY += 10;
@@ -119,32 +118,37 @@ final class LagMonitorHud {
     }
 
     private static List<String> buildLines(
-            LagSnapshot snapshot
+            LagSnapshot snapshot,
+            LagMonitorConfig config
     ) {
         List<String> lines = new ArrayList<>();
 
-        String tps = snapshot.hasTpsEstimate()
-                ? String.format(
-                Locale.US,
-                "%.1f",
-                snapshot.estimatedTps()
-        )
-                : "--";
+        if (config.showHudHeader) {
+            lines.add("Lag Monitor");
+        }
 
-        String ping = snapshot.hasPing()
-                ? snapshot.pingMillis() + " ms"
-                : "--";
+        if (config.showHudTps) {
+            String tps = snapshot.hasTpsEstimate()
+                    ? String.format(Locale.US, "%.1f", snapshot.estimatedTps())
+                    : "--";
+            lines.add("TPS     " + tps);
+        }
 
-        String jitter = Double.isFinite(snapshot.jitterMillis())
-                ? Math.round(snapshot.jitterMillis()) + " ms"
-                : "--";
+        if (config.showHudPing) {
+            String ping = snapshot.hasPing()
+                    ? snapshot.pingMillis() + " ms"
+                    : "--";
+            lines.add("Ping    " + ping);
+        }
 
-        lines.add("Lag Monitor");
-        lines.add("TPS     " + tps);
-        lines.add("Ping    " + ping);
-        lines.add("Jitter  " + jitter);
+        if (config.showHudJitter) {
+            String jitter = Double.isFinite(snapshot.jitterMillis())
+                    ? Math.round(snapshot.jitterMillis()) + " ms"
+                    : "--";
+            lines.add("Jitter  " + jitter);
+        }
 
-        if (snapshot.packetGapMillis() >= 500L) {
+        if (config.showHudPacketGap && snapshot.packetGapMillis() >= 500L) {
             lines.add(
                     "Gap     " + String.format(
                             Locale.US,
@@ -154,7 +158,9 @@ final class LagMonitorHud {
             );
         }
 
-        lines.add(snapshot.diagnosis().label());
+        if (config.showHudDiagnosis) {
+            lines.add(snapshot.diagnosis().label());
+        }
         return lines;
     }
 }
