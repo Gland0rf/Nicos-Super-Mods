@@ -42,8 +42,8 @@ public final class WikiBazaarEnricher {
             String requestedInternalId,
             BazaarService bazaarService
     ) {
-        if (page == null) {
-            return CompletableFuture.completedFuture(null);
+        if (page == null || bazaarService == null) {
+            return CompletableFuture.completedFuture(page);
         }
 
         String productId = firstNonBlank(page.infobox().findTextValue("Item ID"), requestedInternalId);
@@ -57,10 +57,6 @@ public final class WikiBazaarEnricher {
     }
 
     private static CompletableFuture<Map<String, PriceQuote>> loadProducts(BazaarService bazaarService) {
-        if (bazaarService == null) {
-            return WikiBazaarService.products().thenApply(WikiBazaarEnricher::fromFallbackProducts);
-        }
-
         return CompletableFuture.supplyAsync(() -> {
             try {
                 BazaarService.BazaarSnapshot snapshot = bazaarService.getSnapshot();
@@ -71,14 +67,7 @@ public final class WikiBazaarEnricher {
             } catch (IOException | RuntimeException exception) {
                 throw new java.util.concurrent.CompletionException(exception);
             }
-        }).handle((products, throwable) -> {
-            if (throwable == null && products != null && !products.isEmpty()) {
-                return CompletableFuture.completedFuture(products);
-            }
-            /* The Wiki integration must work even if the rest of the mod never
-             * called HypixelWikiService.setBazaarService(...). */
-            return WikiBazaarService.products().thenApply(WikiBazaarEnricher::fromFallbackProducts);
-        }).thenCompose(future -> future);
+        });
     }
 
     private static Map<String, PriceQuote> fromInjectedProducts(
@@ -96,23 +85,6 @@ public final class WikiBazaarEnricher {
             result.put(entry.getKey().toUpperCase(Locale.ROOT), new PriceQuote(
                     product.getInstantBuyPrice(),
                     product.getInstantSellPrice()
-            ));
-        }
-        return Map.copyOf(result);
-    }
-
-    private static Map<String, PriceQuote> fromFallbackProducts(
-            Map<String, WikiBazaarService.Product> source
-    ) {
-        if (source == null || source.isEmpty()) {
-            return Map.of();
-        }
-        Map<String, PriceQuote> result = new java.util.HashMap<>();
-        for (Map.Entry<String, WikiBazaarService.Product> entry : source.entrySet()) {
-            WikiBazaarService.Product product = entry.getValue();
-            result.put(entry.getKey().toUpperCase(Locale.ROOT), new PriceQuote(
-                    product.instantBuyPrice(),
-                    product.instantSellPrice()
             ));
         }
         return Map.copyOf(result);
