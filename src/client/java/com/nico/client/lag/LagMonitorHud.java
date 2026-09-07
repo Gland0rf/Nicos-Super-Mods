@@ -21,28 +21,24 @@ final class LagMonitorHud {
     private LagMonitorHud() {
     }
 
-    static void register() {
+    static void register(HudLayoutManager layoutManager) {
         HudElementRegistry.attachElementBefore(
                 VanillaHudElements.CHAT,
                 ID,
-                LagMonitorHud::render
+                (graphics, deltaTracker) -> render(graphics, deltaTracker, layoutManager)
         );
     }
 
     private static void render(
             GuiGraphicsExtractor graphics,
-            DeltaTracker deltaTracker
+            DeltaTracker deltaTracker,
+            HudLayoutManager layoutManager
     ) {
         LagMonitorService service = LagMonitorService.getInstance();
         LagMonitorConfig config = service.config();
         LagSnapshot snapshot = service.snapshot();
 
         if (!config.showHud || !snapshot.active()) {
-            return;
-        }
-
-        HudLayoutManager layoutManager = Main.HUD_LAYOUT;
-        if (layoutManager == null) {
             return;
         }
 

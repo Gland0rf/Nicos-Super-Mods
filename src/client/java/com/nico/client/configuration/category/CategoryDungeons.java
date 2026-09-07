@@ -5,13 +5,6 @@ import io.github.notenoughupdates.moulconfig.annotations.*;
 import net.minecraft.world.scores.Team;
 
 public class CategoryDungeons {
-    /*@ConfigOption(
-            name = "Secret Stacking Detector",
-            desc = "Detects when you and another player are likely doing secrets in the same room."
-    )
-    @ConfigEditorBoolean
-    public boolean secretStackingDetectorEnabled = false;*/
-
     @ConfigOption(
             name = "Room Stacking Detector",
             desc = "Detects when two or more dungeon teammates are in the same room."
@@ -25,13 +18,6 @@ public class CategoryDungeons {
     )
     @Accordion
     public SecretRoomTimer secretRoomTimer = new SecretRoomTimer();
-
-    /*@ConfigOption(
-            name = "Goldor Terminal Highlighter",
-            desc = "Highlights your designated terminals in f7/m7"
-    )
-    @Accordion
-    public GoldorTerminal goldorTerminal = new GoldorTerminal();*/
 
     public static class RoomStacking {
 
@@ -161,15 +147,4 @@ public class CategoryDungeons {
         @ConfigEditorButton(buttonText = "Reset All")
         public transient Runnable resetAllPbs = SecretRoomTimerClient::resetAllPbs;
     }
-
-
-    /*public static class GoldorTerminal {
-
-        @ConfigOption(
-                name = "Enabled",
-                desc = "Highlights your designated terminals in f7/m7"
-        )
-        @ConfigEditorBoolean
-        public boolean enabled = false;
-    }*/
 }

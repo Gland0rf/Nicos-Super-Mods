@@ -7,86 +7,89 @@ import net.minecraft.world.item.component.CustomData;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
+/** Extracts stable Hypixel item metadata from an ItemStack. */
 public final class SkyblockItemResolver {
+    private static final List<String> EXTRA_ATTRIBUTE_KEYS = List.of(
+            "ExtraAttributes",
+            "extra_attributes",
+            "extraAttributes"
+    );
+
     private SkyblockItemResolver() { }
 
     public static ItemIdentity resolveIdentity(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
-            return new ItemIdentity("", "");
+            return new ItemIdentity("", "", "");
         }
 
-        String internalId = readInternalId(stack);
-        String modifier = readModifier(stack);
+        String internalId = readAttribute(stack, "id");
+        String modifier = readAttribute(stack, "modifier");
 
-        String displayName = cleanDisplayName(
-                stack.getHoverName().getString(),
-                modifier
-        );
+        String displayName = cleanDisplayName(stack.getHoverName().getString());
 
-        return new ItemIdentity(internalId, displayName);
+        return new ItemIdentity(internalId, displayName, modifier);
     }
 
-    private static String readModifier(ItemStack stack) {
-        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-        if (customData == null) {
-            return "";
+    private static String readAttribute(ItemStack stack, String key) {
+        try {
+            CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+            if (customData != null) {
+                String value = readAttribute(customData.copyTag(), key);
+                if (!value.isBlank()) return value;
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // Keep compatibility paths for transformed mappings/older representations.
         }
 
-        CompoundTag data = customData.copyTag();
+        String legacy = readAttributeFromUnknownTag(tryLegacyTag(stack), key);
+        if (!legacy.isBlank()) return legacy;
 
-        String directModifier = data.getString("modifier").orElse("").trim();
-        if (!directModifier.isBlank()) {
-            return directModifier;
-        }
-
-        return data.getCompound("ExtraAttributes")
-                .flatMap(extra -> extra.getString("modifier"))
-                .orElse("")
-                .trim();
+        return readAttributeFromUnknownTag(tryCustomDataReflectively(stack), key);
     }
 
-    private static String readInternalId(ItemStack stack) {
-        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-        if (customData == null) {
-            return "";
+    private static String readAttribute(CompoundTag root, String key) {
+        if (root == null) return "";
+
+        String direct = root.getString(key).orElse("").trim();
+        if (!direct.isBlank()) return direct;
+
+        for (String extraKey : EXTRA_ATTRIBUTE_KEYS) {
+            Optional<CompoundTag> extra = root.getCompound(extraKey);
+            if (extra.isEmpty()) continue;
+
+            String value = extra.get().getString(key).orElse("").trim();
+            if (!value.isBlank()) return value;
         }
 
-        CompoundTag data = customData.copyTag();
-
-        String directId = data.getString("id").orElse("").trim();
-        if (!directId.isBlank()) {
-            return directId;
-        }
-
-        return data.getCompound("ExtraAttributes")
-                .flatMap(extra -> extra.getString("id"))
-                .orElse("")
-                .trim();
+        return "";
     }
 
-    private static String readIdFromCustomDataRoot(Object rootTag) {
+    private static String readAttributeFromUnknownTag(Object rootTag, String key) {
         Object root = unwrapOptional(rootTag);
+        if (root instanceof CompoundTag compoundTag) {
+            return readAttribute(compoundTag, key);
+        }
         if (root == null) {
             return "";
         }
 
-        // Current component representation: {id:"ASPECT_OF_THE_END", ...}
-        String directId = readString(root, "id");
-        if (!directId.isBlank()) {
-            return directId;
+        String direct = readString(root, key);
+        if (!direct.isBlank()) return direct;
+
+        for (String extraKey : EXTRA_ATTRIBUTE_KEYS) {
+            Object extraAttributes = invokeKeyMethod(root, List.of("getCompound", "getCompoundOrEmpty"), extraKey);
+            extraAttributes = unwrapOptional(extraAttributes);
+            if (extraAttributes == null) continue;
+
+            String value = readString(extraAttributes, key);
+            if (!value.isBlank()) return value;
         }
 
-        // Legacy representation: {ExtraAttributes:{id:"ASPECT_OF_THE_END", ...}}
-        Object extraAttributes = invokeKeyMethod(
-                root,
-                List.of("getCompound", "getCompoundOrEmpty"),
-                "ExtraAttributes"
-        );
-
-        extraAttributes = unwrapOptional(extraAttributes);
-        return extraAttributes == null ? "" : readString(extraAttributes, "id");
+        return "";
     }
 
     private static String readString(Object compound, String key) {
@@ -99,7 +102,7 @@ public final class SkyblockItemResolver {
         try {
             Method method = stack.getClass().getMethod("getTag");
             return unwrapOptional(method.invoke(stack));
-        } catch (ReflectiveOperationException ignored) {
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
             return null;
         }
     }
@@ -126,13 +129,13 @@ public final class SkyblockItemResolver {
                     if (result != null) {
                         return result;
                     }
-                } catch (ReflectiveOperationException ignored) {
+                } catch (ReflectiveOperationException | RuntimeException ignored) {
                     // Try the next mapping name.
                 }
             }
 
             return customData;
-        } catch (ReflectiveOperationException ignored) {
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
             return null;
         }
     }
@@ -170,7 +173,7 @@ public final class SkyblockItemResolver {
                             && method.getParameterTypes()[1] == String.class) {
                         return method.invoke(target, key, "");
                     }
-                } catch (ReflectiveOperationException ignored) {
+                } catch (ReflectiveOperationException | RuntimeException ignored) {
                     // Try another overload or mapping name.
                 }
             }
@@ -182,27 +185,27 @@ public final class SkyblockItemResolver {
         return value instanceof Optional<?> optional ? optional.orElse(null) : value;
     }
 
-    private static String cleanDisplayName(String input, String modifier) {
+    private static String cleanDisplayName(String input) {
         if (input == null || input.isBlank()) {
             return "";
         }
 
-        String cleaned = input
+        return input
                 .replaceAll("(?i)\\u00a7[0-9A-FK-ORX]", "")
                 .replaceAll("[\\u278A-\\u2793\\u272A\\u2726\\u2605\\u2606]+", "")
                 .replaceFirst("(?i)^\\s*\\[\\s*Lvl\\s+\\d+\\s*]\\s*", "")
                 .replaceAll("\\s+", " ")
                 .trim();
+    }
 
+    private static String stripModifierPrefix(String displayName, String modifier) {
         String reforgePrefix = formatModifier(modifier);
-        if (!reforgePrefix.isBlank()) {
-            cleaned = cleaned.replaceFirst(
-                    "(?i)^" + java.util.regex.Pattern.quote(reforgePrefix) + "\\s+",
-                    ""
-            );
-        }
+        if (displayName.isBlank() || reforgePrefix.isBlank()) return displayName;
 
-        return cleaned.trim();
+        return displayName.replaceFirst(
+                "(?i)^" + Pattern.compile(reforgePrefix) + "\\s+",
+                ""
+        ).trim();
     }
 
     private static String formatModifier(String modifier) {
@@ -212,7 +215,7 @@ public final class SkyblockItemResolver {
 
         String normalized = modifier
                 .trim()
-                .toLowerCase(java.util.Locale.ROOT)
+                .toLowerCase(Locale.ROOT)
                 .replaceFirst("_(sword|bow)$", "")
                 .replace('_', ' ');
 
@@ -223,7 +226,7 @@ public final class SkyblockItemResolver {
                 continue;
             }
 
-            if (result.length() > 0) {
+            if (!result.isEmpty()) {
                 result.append(' ');
             }
 
@@ -234,14 +237,23 @@ public final class SkyblockItemResolver {
         return result.toString();
     }
 
-    public record ItemIdentity(String internalId, String displayName) {
+    public record ItemIdentity(String internalId, String displayName, String modifier) {
+        public ItemIdentity(String internalId, String displayName) {
+            this(internalId, displayName, "");
+        }
+
         public ItemIdentity {
             internalId = internalId == null ? "" : internalId.trim();
             displayName = displayName == null ? "" : displayName.trim();
+            modifier = modifier == null ? "" : modifier.trim();
         }
 
         public boolean hasInternalId() {
             return !internalId.isBlank();
+        }
+
+        public String displayNameWithoutModifier() {
+            return stripModifierPrefix(displayName, modifier);
         }
     }
 }

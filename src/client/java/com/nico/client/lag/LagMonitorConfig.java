@@ -11,7 +11,13 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class LagMonitorConfig {
+/**
+ * Runtime lag-monitor settings.
+ *
+ * <p>User-facing values are copied from {@link CategoryOther.LagMonitor}. The remaining
+ * thresholds are internal tuning defaults and are intentionally not persisted separately.</p>
+ */
+public final class LagMonitorConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path PATH = FabricLoader.getInstance()
             .getConfigDir()
@@ -65,40 +71,6 @@ public class LagMonitorConfig {
     public int hudXOffset = 8;
     public int hudYOffset = 8;
 
-    public static LagMonitorConfig load() {
-        if (!Files.exists(PATH)) {
-            LagMonitorConfig config = new LagMonitorConfig();
-            config.save();
-            return config;
-        }
-
-        try (Reader reader = Files.newBufferedReader(PATH)) {
-            JsonElement rawConfig = JsonParser.parseReader(reader);
-            LagMonitorConfig loaded = GSON.fromJson(rawConfig, LagMonitorConfig.class);
-            if (loaded == null) {
-                loaded = new LagMonitorConfig();
-            }
-            loaded.migrateLegacyVisibility(rawConfig);
-            loaded.sanitize();
-            return loaded;
-        } catch (IOException | RuntimeException e) {
-            System.err.println("[NSM Lag] Could not load config: " + e.getMessage());
-            return new LagMonitorConfig();
-        }
-    }
-
-    public void save() {
-        sanitize();
-        try {
-            Files.createDirectories(PATH.getParent());
-            try (Writer writer = Files.newBufferedWriter(PATH)) {
-                GSON.toJson(this, writer);
-            }
-        } catch (IOException e) {
-            System.err.println("[NSM Lag] Could not save config: " + e.getMessage());
-        }
-    }
-
     public void sanitize() {
         hudBackgroundOpacity = clamp(hudBackgroundOpacity, 0, 100);
         warmupSeconds = clamp(warmupSeconds, 0, 30);
@@ -136,7 +108,7 @@ public class LagMonitorConfig {
 
         if (settings.visibility != null) {
             showInDungeons = settings.visibility.showInDungeons;
-            showOnHypixelOutsideDungeons =  settings.visibility.showOnHypixelOutsideDungeons;
+            showOnHypixelOutsideDungeons = settings.visibility.showOnHypixelOutsideDungeons;
             showOnOtherServers = settings.visibility.showOnOtherServers;
         }
 
@@ -152,18 +124,6 @@ public class LagMonitorConfig {
             showHudDiagnosis = settings.design.showDiagnosis;
             hudTextShadow = settings.design.textShadow;
         }
-    }
-
-    private void migrateLegacyVisibility(JsonElement rawConfig) {
-        if (rawConfig == null || !rawConfig.isJsonObject()) return;
-
-        JsonObject root = rawConfig.getAsJsonObject();
-        JsonElement onlyDungeons = root.get("onlyShowInDungeons");
-        if (onlyDungeons == null || !onlyDungeons.isJsonPrimitive() || !onlyDungeons.getAsJsonPrimitive().isBoolean()) return;
-
-        showInDungeons = true;
-        showOnHypixelOutsideDungeons = !onlyDungeons.getAsBoolean();
-        showOnOtherServers = false;
     }
 
     private static int clamp(int value, int min, int max) {

@@ -8,7 +8,7 @@ Doesnt even enter the SecretPacketHooks # Done
 #7 Show minion upgrade quality -> Tell them how long it takes to make the money back. # Done
 #8 Save inventory as "overlay" and when setting it up, select it and show what item goes where. # Done
 
-Secret timer is currently bugged, just hearing a bat counts as a secret
+Secret timer is currently bugged, just hearing a bat counts as a secret # Fixed
 Finish blood routes
 
 Room stacking concept:

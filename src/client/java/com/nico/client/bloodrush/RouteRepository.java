@@ -2,6 +2,7 @@ package com.nico.client.bloodrush;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.nico.client.utils.AtomicFiles;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
@@ -74,13 +75,7 @@ public final class RouteRepository {
             stored.breakerBlocks.add(storedBlock);
         }
 
-        Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
-        Files.writeString(temporary, GSON.toJson(stored), StandardCharsets.UTF_8);
-        try {
-            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException ignored) {
-            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
-        }
+        AtomicFiles.writeStringAtomically(file, GSON.toJson(stored), StandardCharsets.UTF_8);
 
         cache.put(
                 CacheKey.of(location, route),

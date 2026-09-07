@@ -387,7 +387,7 @@ public final class MemLeakService implements AutoCloseable {
 
     public List<String> modIndexLines() {
         var visibleMods = classIndex.mods().stream()
-                .filter(mod -> !isInfrastructureMod(mod.id()))
+                .filter(mod -> !ModIdentity.isInfrastructureId(mod.id()))
                 .sorted(
                         Comparator.comparing(
                                 mod -> mod.name().toLowerCase(Locale.ROOT)
@@ -640,15 +640,6 @@ public final class MemLeakService implements AutoCloseable {
                     candidate.allocationShare()
             );
         }
-    }
-
-    private static boolean isInfrastructureMod(String modId) {
-        return modId.equals("minecraft")
-                || modId.equals("java")
-                || modId.equals("fabricloader")
-                || modId.equals("fabric-api")
-                || modId.startsWith("fabric-")
-                || modId.startsWith("fabric_");
     }
 
     private static String formatNumber(double value) {

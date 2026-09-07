@@ -38,16 +38,7 @@ public abstract class AbstractContainerScreenMixin {
             KeyEvent event,
             CallbackInfoReturnable<Boolean> callback
     ) {
-        CategoryOther config = NsmConfig.INSTANCE.other;
-        if (!config.wiki.wikiShortcutEnabled) {
-            return;
-        }
-
-        if (!event.hasControlDownWithQuirk()) {
-            return;
-        }
-
-        if (event.input() != config.wiki.wikiShortcut) {
+        if (!nsm$matchesWikiShortcut(event.hasControlDownWithQuirk(), event.input())) {
             return;
         }
 
@@ -66,17 +57,7 @@ public abstract class AbstractContainerScreenMixin {
             boolean doubleClick,
             CallbackInfoReturnable<Boolean> callback
     ) {
-        CategoryOther config = NsmConfig.INSTANCE.other;
-
-        if (!config.wiki.wikiShortcutEnabled) {
-            return;
-        }
-
-        if (!event.hasControlDownWithQuirk()) {
-            return;
-        }
-
-        if (event.input() != config.wiki.wikiShortcut) {
+        if (!nsm$matchesWikiShortcut(event.hasControlDownWithQuirk(), event.input())) {
             return;
         }
 
@@ -128,5 +109,10 @@ public abstract class AbstractContainerScreenMixin {
         );
 
         return true;
+    }
+
+    private boolean nsm$matchesWikiShortcut(boolean controlDown, int input) {
+        CategoryOther.IntegratedWiki wiki = NsmConfig.INSTANCE.other.wiki;
+        return wiki.wikiShortcutEnabled && controlDown && input == wiki.wikiShortcut;
     }
 }

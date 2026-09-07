@@ -393,7 +393,7 @@ public class RoomStackingDetector {
 
         for (Player player : players) {
             String name = player.getName().getString();
-            String clazz = getDungeonClassForPlayer(player);
+            String clazz = DungeonTeammateScanner.getDungeonClassForPlayer(player);
 
             names.add(name + " (" + clazz + ")");
         }
@@ -401,20 +401,6 @@ public class RoomStackingDetector {
         Collections.sort(names);
 
         return String.join(", ", names);
-    }
-
-    private static String getDungeonClassForPlayer(Player player) {
-        return DungeonTeammateScanner.getDungeonClassForPlayer(player);
-    }
-
-    private static String formatClassName(String name) {
-        if (name == null || name.isEmpty()) {
-            return "Unknown";
-        }
-
-        name = name.toLowerCase(Locale.ROOT);
-
-        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
     private static void copyStackingMessageToClipboard(String message) {

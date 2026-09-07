@@ -3,6 +3,7 @@ package com.nico.client.wiki.service;
 import com.google.gson.JsonObject;
 import com.nico.client.utils.BazaarService;
 import com.google.gson.JsonParser;
+import com.nico.client.utils.SkyblockItemResolver;
 import com.nico.client.wiki.*;
 import com.nico.client.wiki.service.bazaar.WikiBazaarEnricher;
 import net.minecraft.world.item.ItemStack;

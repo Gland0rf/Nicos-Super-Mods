@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.nico.client.inventoryLayouts.core.InventoryLayout;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutSlot;
+import com.nico.client.utils.AtomicFiles;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -87,23 +88,11 @@ public class InventoryLayoutStorage {
 
     public synchronized void save() {
         try {
-            Files.createDirectories(PATH.getParent());
-            Path temporaryPath = PATH.resolveSibling(PATH.getFileName().toString() + ".tmp");
-
-            try (Writer writer = Files.newBufferedWriter(temporaryPath)) {
-                GSON.toJson(new StoredLayouts(layouts), writer);
-            }
-
-            try {
-                Files.move(
-                        temporaryPath,
-                        PATH,
-                        StandardCopyOption.REPLACE_EXISTING,
-                        StandardCopyOption.ATOMIC_MOVE
-                );
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(temporaryPath, PATH, StandardCopyOption.REPLACE_EXISTING);
-            }
+            AtomicFiles.writeAtomically(PATH, temporaryPath -> {
+                try (Writer writer = Files.newBufferedWriter(temporaryPath)) {
+                    GSON.toJson(new StoredLayouts(layouts), writer);
+                }
+            });
         } catch (IOException e) {
             System.err.println("[NSM Inventory Layouts] Could not save layouts: " + e.getMessage());
         }

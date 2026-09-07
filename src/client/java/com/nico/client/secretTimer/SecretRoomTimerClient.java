@@ -7,6 +7,7 @@ import com.nico.client.configuration.NsmConfig;
 import com.nico.client.configuration.category.CategoryDungeons;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonState;
+import com.nico.client.utils.AtomicFiles;
 import com.nico.client.utils.LocationUtils;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -504,27 +505,9 @@ public final class SecretRoomTimerClient {
 
     private static void savePbs() {
         try {
-            Files.createDirectories(PB_FILE.getParent());
-
-            Path tmpFile = PB_FILE.resolveSibling(PB_FILE.getFileName().toString() + ".tmp");
             String json = GSON.toJson(personalBests, PB_MAP_TYPE);
 
-            Files.write(tmpFile, json.getBytes(StandardCharsets.UTF_8));
-
-            try {
-                Files.move(
-                        tmpFile,
-                        PB_FILE,
-                        StandardCopyOption.REPLACE_EXISTING,
-                        StandardCopyOption.ATOMIC_MOVE
-                );
-            } catch (AtomicMoveNotSupportedException ignored) {
-                Files.move(
-                        tmpFile,
-                        PB_FILE,
-                        StandardCopyOption.REPLACE_EXISTING
-                );
-            }
+            AtomicFiles.writeStringAtomically(PB_FILE, json, StandardCharsets.UTF_8);
         } catch (Throwable throwable) {
             System.out.println("[NSM] Failed to save secret room PBs.");
             throwable.printStackTrace();
