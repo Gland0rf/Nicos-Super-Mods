@@ -2,6 +2,7 @@ package com.nico.client.configuration.category;
 
 import com.nico.client.secretTimer.SecretRoomTimerClient;
 import io.github.notenoughupdates.moulconfig.annotations.*;
+import net.minecraft.world.scores.Team;
 
 public class CategoryDungeons {
     /*@ConfigOption(
@@ -31,13 +32,6 @@ public class CategoryDungeons {
     )
     @Accordion
     public GoldorTerminal goldorTerminal = new GoldorTerminal();*/
-
-    @ConfigOption(
-            name = "Lag Monitor",
-            desc = "Tracks TPS, ping, and estimated time lost during dungeon runs."
-    )
-    @Accordion
-    public DungeonLagMonitor dungeonLagMonitor = new DungeonLagMonitor();
 
     public static class RoomStacking {
 
@@ -178,53 +172,4 @@ public class CategoryDungeons {
         @ConfigEditorBoolean
         public boolean enabled = false;
     }*/
-
-    public static class DungeonLagMonitor {
-        @ConfigOption(
-                name = "Enabled",
-                desc = "Tracks TPS and ping during dungeon runs."
-        )
-        @ConfigEditorBoolean
-        public boolean enabled = true;
-
-        @ConfigOption(
-                name = "Show HUD",
-                desc = "Displays TPS, ping, jitter, and the current lag diagnosis."
-        )
-        @ConfigEditorBoolean
-        public boolean showHud = true;
-
-        @ConfigOption(
-                name = "Only Show in Dungeons",
-                desc = """
-                    Only displays and samples the lag monitor during dungeon runs.
-
-                    When disabled, the monitor remains active outside dungeons
-                    and displays TPS, ping, and jitter everywhere.
-                    """
-        )
-        @ConfigEditorBoolean
-        public boolean onlyShowInDungeons = false;
-
-        @ConfigOption(
-                name = "Show Warning Titles",
-                desc = "Shows title alerts for low TPS, high ping, and connection stalls."
-        )
-        @ConfigEditorBoolean
-        public boolean showTitles = true;
-
-        @ConfigOption(
-                name = "Show End Report",
-                desc = "Shows a lag report when your dungeon run ends."
-        )
-        @ConfigEditorBoolean
-        public boolean showEndReport = true;
-
-        @ConfigOption(
-                name = "Copy TPS Loss",
-                desc = "Copies the estimated TPS time loss to your clipboard after the run."
-        )
-        @ConfigEditorBoolean
-        public boolean copyTpsLossToClipboard = true;
-    }
 }

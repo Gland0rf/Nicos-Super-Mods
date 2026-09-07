@@ -55,7 +55,7 @@ public final class Main implements ClientModInitializer {
             DungeonTeammateScanner.reset();
         });
 
-        LagMonitorFeature.initialize(() -> NsmConfigManager.getConfig().dungeons.dungeonLagMonitor);
+        LagMonitorFeature.initialize();
     }
 
     public HypixelApiClient getApiClient() {

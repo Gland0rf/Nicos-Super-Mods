@@ -1,7 +1,9 @@
 package com.nico.client.lag;
 
 import com.nico.client.configuration.NsmConfig;
+import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.configuration.category.CategoryDungeons;
+import com.nico.client.configuration.category.CategoryOther;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
@@ -13,14 +15,12 @@ public class LagMonitorFeature {
     private static boolean initialized;
 
     private static final LagMonitorConfig config = LagMonitorConfig.load();
-    private static Supplier<CategoryDungeons.DungeonLagMonitor> settingsSupplier;
 
     private LagMonitorFeature() { }
 
-    public static synchronized void initialize(Supplier<CategoryDungeons.DungeonLagMonitor> supplier) {
+    public static synchronized void initialize() {
         if (initialized) return;
 
-        settingsSupplier = supplier;
         syncConfig();
 
         LagMonitorService service = LagMonitorService.getInstance();
@@ -46,12 +46,10 @@ public class LagMonitorFeature {
     }
 
     private static void syncConfig() {
-        if (settingsSupplier == null) {
-            return;
-        }
-
-        CategoryDungeons.DungeonLagMonitor settings =
-                settingsSupplier.get();
+        NsmConfig current = NsmConfigManager.getConfig();
+        CategoryOther.LagMonitor settings = current != null && current.other != null
+                ? current.other.lagMonitor
+                : null;
 
         config.applyMoulConfig(settings);
         config.sanitize();
@@ -62,9 +60,7 @@ public class LagMonitorFeature {
     }
 
     public static void saveConfig() {
-        if (config != null) {
-            config.save();
-        }
+        config.save();
     }
 
     public static void openLastSummary(Screen parent) {
