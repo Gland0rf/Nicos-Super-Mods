@@ -1,5 +1,6 @@
 package com.nico.client.party;
 
+import com.nico.client.configuration.NsmConfig;
 import com.nico.client.configuration.NsmConfigManager;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
@@ -97,11 +98,11 @@ public final class PartySafety {
     }
 
     private static boolean enabled() {
-        return NsmConfigManager.getConfig().other.partySafety.enabled;
+        return NsmConfig.INSTANCE.other.partySafety.enabled;
     }
 
     private static boolean prefillWarningEnabled() {
-        return NsmConfigManager.getConfig().other.partySafety.prefillPartyWarning;
+        return NsmConfig.INSTANCE.other.partySafety.prefillPartyWarning;
     }
 
     private static void cleanupExpired(long now) {
