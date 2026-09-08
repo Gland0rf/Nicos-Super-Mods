@@ -17,9 +17,11 @@ public final class DungeonRunPacketDetector {
 
     public static void handle(Packet<?> packet) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!HypixelServerDetector.isHypixel(minecraft) || !LocationUtils.isInDungeon()) return;
+        if (!HypixelServerDetector.isHypixel(minecraft)) return;
 
         LagMonitorService service = LagMonitorService.getInstance();
+        if (!LocationUtils.isInDungeon() && !service.isDungeonRunActive()) return;
+
         Component component = extractText(packet);
         if (component == null) {
             return;

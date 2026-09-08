@@ -320,7 +320,7 @@ public class CategoryOther {
     public static class PartySafety {
         @ConfigOption(
                 name = "Enable",
-                desc = "Blocks automatic party transfers triggered by a player that just joined."
+                desc = "Blocks automatic party transfers through commands like \"!pt\" triggered by a player that just joined."
         )
         @ConfigEditorBoolean
         public boolean enabled = true;
@@ -338,7 +338,7 @@ public class CategoryOther {
 
         @ConfigOption(
                 name = "Prefill Party Warning",
-                desc = "After blocking a suspicious transfer, open chat with a party warning ready to send.\n"
+                desc = "After blocking a transfer, open chat with a party warning ready to send.\n"
                         + "§7You still have to press Enter yourself."
         )
         @ConfigEditorBoolean
