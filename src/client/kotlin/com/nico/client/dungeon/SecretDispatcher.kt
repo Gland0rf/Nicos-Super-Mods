@@ -1,11 +1,9 @@
 package com.nico.client.dungeon
 
 import com.nico.client.secretTimer.SecretRoomTimerClient
-import com.nico.client.stacking.SecretStackingDetector
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.network.protocol.Packet
-import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket
 import net.minecraft.network.protocol.game.ClientboundSoundPacket
 import net.minecraft.network.protocol.game.ClientboundSystemChatPacket
 import net.minecraft.network.protocol.game.ClientboundTakeItemEntityPacket
@@ -71,7 +69,6 @@ object SecretDispatcher {
         if (packet.playerId != player.id) return
         val entity = client.level?.getEntity(packet.itemId) as? ItemEntity ?: return
 
-        if (packet.playerId != player.id) return;
         if (!isDungeonItemDrop(entity.item.hoverName.string)) return
         if (entity.distanceTo(player) > 8) return
 
@@ -113,9 +110,7 @@ object SecretDispatcher {
         if (DungeonSecretClassifier.isSecret(level, blockState, pos)) {
             if (blockState.`is`(Blocks.CHEST) || blockState.`is`(Blocks.TRAPPED_CHEST)) {
                 dispatchChestSecret(pos)
-            } else if (blockState.block is SkullBlock) {
-                SecretStackingDetector.onSecretPickup(pos)
-            } else {
+            } else if (blockState.block !is SkullBlock) {
                 dispatchSecret(pos)
             }
         }
@@ -129,7 +124,6 @@ object SecretDispatcher {
             val found = match.groupValues[1].toInt()
             val total = match.groupValues[2].toInt()
 
-            SecretStackingDetector.onRoomSecretsPacket(found, total)
             SecretRoomTimerClient.onRoomSecretsPacket(found, total)
 
             return
@@ -145,12 +139,10 @@ object SecretDispatcher {
     }
 
     private fun dispatchSecret(pos: BlockPos) {
-        SecretStackingDetector.onSecretPickup(pos)
         SecretRoomTimerClient.onSecretPickup(pos)
     }
 
     private fun dispatchItemSecret(pos: BlockPos) {
-        SecretStackingDetector.onSecretPickup(pos)
         SecretRoomTimerClient.onItemSecretPickup(pos)
     }
 

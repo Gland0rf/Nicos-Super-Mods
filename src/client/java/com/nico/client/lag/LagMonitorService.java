@@ -1,5 +1,6 @@
 package com.nico.client.lag;
 
+import com.nico.client.utils.LocationUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.protocol.Packet;
@@ -147,10 +148,10 @@ public class LagMonitorService {
         dungeonStats = null;
         dungeonRunActive = false;
 
-        if (config.showEndReport) {
+        if (config.showInDungeons && config.showEndReport) {
             sendSummary(client, completedSummary);
         }
-        if (config.copyTpsLossToClipboard) {
+        if (config.showInDungeons && config.copyTpsLossToClipboard) {
             copyTpsLossToClipboard(client, completedSummary);
         }
     }
@@ -176,14 +177,10 @@ public class LagMonitorService {
         boolean connected = client.player != null
                 && client.level != null
                 && client.getConnection() != null;
-        boolean allowedServer = HypixelServerDetector.isHypixel(client);
-        boolean correctContext =
-                !config.onlyShowInDungeons || dungeonRunActive;
 
         boolean active = config.enabled
                 && connected
-                && correctContext
-                && (dungeonRunActive || allowedServer);
+                && isLocationEnabled(client);
 
         if (!active) {
             snapshot = LagSnapshot.inactive();
@@ -244,6 +241,15 @@ public class LagMonitorService {
         }
 
         titleNotifier.tick(client, next, config, now);
+    }
+
+    private boolean isLocationEnabled(Minecraft client) {
+        boolean inDungeon = dungeonRunActive || LocationUtils.isInDungeon();
+        if (inDungeon) return config.showInDungeons;
+
+        if (HypixelServerDetector.isHypixel(client)) return config.showOnHypixelOutsideDungeons;
+
+        return client.getCurrentServer() != null && config.showOnOtherServers;
     }
 
     private LagDiagnosis diagnose(

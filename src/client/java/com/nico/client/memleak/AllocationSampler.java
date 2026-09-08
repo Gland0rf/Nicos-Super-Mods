@@ -11,10 +11,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
 
 public final class AllocationSampler implements AutoCloseable {
-    private static final Set<String> NON_CANDIDATE_MODS = Set.of(
-            "minecraft", "java", "fabricloader", "fabric-api"
-    );
-
     private final ModClassIndex classIndex;
     private final int maximumStackFrames;
     private final Map<String, LongAdder> sampledBytes = new ConcurrentHashMap<>();
@@ -58,20 +54,11 @@ public final class AllocationSampler implements AutoCloseable {
             String className = frame.getMethod().getType().getName();
             if (className.startsWith("com.nico.client.memleak.")) continue;
             var owner = classIndex.ownerOf(className);
-            if (owner.isPresent() && !isInfrastructureMod(owner.get().id())) {
+            if (owner.isPresent() && !ModIdentity.isInfrastructureId(owner.get().id())) {
                 sampledBytes.computeIfAbsent(owner.get().id(), ignored -> new LongAdder()).add(weight);
                 return;
             }
         }
-    }
-
-    private static boolean isInfrastructureMod(String modId) {
-        return modId.equals("minecraft")
-                || modId.equals("java")
-                || modId.equals("fabricloader")
-                || modId.equals("fabric-api")
-                || modId.startsWith("fabric-")
-                || modId.startsWith("fabric_");
     }
 
     public Map<String, Long> snapshot() {

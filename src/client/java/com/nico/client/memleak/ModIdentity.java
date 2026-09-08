@@ -38,6 +38,17 @@ public record ModIdentity(
         return homepageUrl;
     }
 
+    public static boolean isInfrastructureId(String modId) {
+        if (modId == null) return false;
+
+        return modId.equals("minecraft")
+                || modId.equals("java")
+                || modId.equals("fabricloader")
+                || modId.equals("fabric-api")
+                || modId.startsWith("fabric-")
+                || modId.startsWith("fabric_");
+    }
+
     private static String safe(String value) {
         return value == null ? "" : value.strip();
     }

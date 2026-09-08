@@ -25,7 +25,7 @@ public final class SkyblockItemIdentity {
                 inventorySlot,
                 baseItemId,
                 identity.internalId(),
-                identity.displayName(),
+                identity.displayNameWithoutModifier(),
                 stack.getCount(),
                 InventoryLayoutStackSnapshot.capture(stack)
         );
@@ -61,7 +61,7 @@ public final class SkyblockItemIdentity {
             }
 
             String expectedName = normalizeName(expected.displayName());
-            String actualName = normalizeName(actualIdentity.displayName());
+            String actualName = normalizeName(actualIdentity.displayNameWithoutModifier());
 
             if (!expectedName.equals(actualName)) {
                 return false;

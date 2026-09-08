@@ -1,7 +1,10 @@
 package com.nico.client.lag;
 
 import com.nico.client.configuration.NsmConfig;
+import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.configuration.category.CategoryDungeons;
+import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.hud.HudLayoutManager;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
@@ -12,15 +15,13 @@ import java.util.function.Supplier;
 public class LagMonitorFeature {
     private static boolean initialized;
 
-    private static final LagMonitorConfig config = LagMonitorConfig.load();
-    private static Supplier<CategoryDungeons.DungeonLagMonitor> settingsSupplier;
+    private static final LagMonitorConfig config = new LagMonitorConfig();
 
     private LagMonitorFeature() { }
 
-    public static synchronized void initialize(Supplier<CategoryDungeons.DungeonLagMonitor> supplier) {
+    public static synchronized void initialize(HudLayoutManager hudLayout) {
         if (initialized) return;
 
-        settingsSupplier = supplier;
         syncConfig();
 
         LagMonitorService service = LagMonitorService.getInstance();
@@ -39,19 +40,16 @@ public class LagMonitorFeature {
                 (handler, client) -> service.onDisconnect()
         );
 
-        LagMonitorHud.register();
+        LagMonitorHud.register(hudLayout);
 
         initialized = true;
         System.out.println("[NSM Lag] Lag monitor initialized");
     }
 
     private static void syncConfig() {
-        if (settingsSupplier == null) {
-            return;
-        }
-
-        CategoryDungeons.DungeonLagMonitor settings =
-                settingsSupplier.get();
+        CategoryOther.LagMonitor settings = NsmConfig.INSTANCE.other == null
+                ? null
+                : NsmConfig.INSTANCE.other.lagMonitor;
 
         config.applyMoulConfig(settings);
         config.sanitize();
@@ -59,12 +57,6 @@ public class LagMonitorFeature {
 
     public static LagMonitorConfig config() {
         return config;
-    }
-
-    public static void saveConfig() {
-        if (config != null) {
-            config.save();
-        }
     }
 
     public static void openLastSummary(Screen parent) {

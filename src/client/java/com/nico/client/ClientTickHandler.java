@@ -1,7 +1,6 @@
 package com.nico.client;
 
 import com.nico.client.configuration.NsmConfig;
-//import com.nico.client.goldor.GoldorTerminalHighlighter;
 import com.nico.client.dungeon.DungeonState;
 import com.nico.client.stacking.RoomStackingDetector;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -24,17 +23,9 @@ public final class ClientTickHandler {
 
         DungeonState.tick();
 
-        tickGoldorTerminalHighlighter();
-
         if (tickCounter % TICKS_PER_SECOND == 0) {
             tickOncePerSecond();
         }
-    }
-
-    private static void tickGoldorTerminalHighlighter() {
-        /*if (NsmConfig.INSTANCE.dungeons.goldorTerminal.enabled) {
-            GoldorTerminalHighlighter.tick();
-        }*/ // temporary
     }
 
     private static void tickOncePerSecond() {
