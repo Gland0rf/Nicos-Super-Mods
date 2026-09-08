@@ -3,6 +3,7 @@ package com.nico.mixin;
 import com.nico.client.dungeon.SecretDispatcher;
 import com.nico.client.lag.DungeonRunPacketDetector;
 import com.nico.client.lag.LagMonitorService;
+import com.nico.client.party.PartySafety;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import net.minecraft.client.Minecraft;
@@ -17,13 +18,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = Connection.class, priority = 100)
 public abstract class ConnectionMixin {
 
-    @Inject(method = "sendPacket", at = @At("HEAD"), require = 1, order = 900)
+    @Inject(method = "sendPacket", at = @At("HEAD"), cancellable = true, require = 1, order = 900)
     private void nsm$sendPacket(
             Packet<?> packet,
             ChannelFutureListener listener,
             boolean flush,
             CallbackInfo ci
     ) {
+        if (packet instanceof ServerboundChatCommandPacket chatCommandPacket
+                && PartySafety.interceptOutgoingCommand(chatCommandPacket.command())) {
+            ci.cancel();
+            return;
+        }
+
         if (packet instanceof ServerboundUseItemOnPacket useItemOnPacket) {
             runOnClientThread(() -> {
                 SecretDispatcher.onSend(useItemOnPacket);
@@ -43,6 +50,10 @@ public abstract class ConnectionMixin {
             CallbackInfo ci
     ) {
         LagMonitorService.getInstance().onInboundPacket(packet);
+
+        if (packet instanceof ClientboundSystemChatPacket systemChatPacket) {
+            PartySafety.onSystemChat(systemChatPacket.content());
+        }
 
         runOnClientThread(() -> {
             DungeonRunPacketDetector.handle(packet);

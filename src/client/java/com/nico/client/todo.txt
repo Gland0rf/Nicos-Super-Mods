@@ -7,8 +7,9 @@ Doesnt even enter the SecretPacketHooks # Done
 #6 Scam / Rat protection? Example tier boosted pets
 #7 Show minion upgrade quality -> Tell them how long it takes to make the money back. # Done
 #8 Save inventory as "overlay" and when setting it up, select it and show what item goes where. # Done
+#9 Secret timer is currently bugged, just hearing a bat counts as a secret # Done
 
-Secret timer is currently bugged, just hearing a bat counts as a secret # Fixed
+
 Finish blood routes
 
 Room stacking concept:
