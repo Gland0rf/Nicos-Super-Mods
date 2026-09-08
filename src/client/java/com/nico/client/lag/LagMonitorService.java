@@ -99,7 +99,7 @@ public class LagMonitorService {
         Minecraft client = Minecraft.getInstance();
         long nowNanos = System.nanoTime();
 
-        if (!config.enabled || dungeonRunActive) {
+        if (!config.enabled || !config.showInDungeons || dungeonRunActive) {
             return;
         }
 
@@ -128,10 +128,6 @@ public class LagMonitorService {
     }
 
     public synchronized void onDungeonRunEnd(Minecraft client) {
-        if (!dungeonRunActive) {
-            return;
-        }
-
         if (!dungeonRunActive || dungeonStats == null) {
             return;
         }
@@ -148,10 +144,10 @@ public class LagMonitorService {
         dungeonStats = null;
         dungeonRunActive = false;
 
-        if (config.showInDungeons && config.showEndReport) {
+        if (config.showEndReport) {
             sendSummary(client, completedSummary);
         }
-        if (config.showInDungeons && config.copyTpsLossToClipboard) {
+        if (config.copyTpsLossToClipboard) {
             copyTpsLossToClipboard(client, completedSummary);
         }
     }
