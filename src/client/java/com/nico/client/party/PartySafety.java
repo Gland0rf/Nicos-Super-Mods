@@ -155,7 +155,7 @@ public final class PartySafety {
 
     private static String stripFormatting(String text) {
         if (text == null) return "";
-        return text.replaceAll("(?i)\\u00a7[0-9A-FK-OR]]", "");
+        return text.replaceAll("(?i)\\u00a7[0-9A-FK-OR]", "");
     }
 
     private static String normalizePlayerName(String name) {
