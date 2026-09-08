@@ -33,6 +33,29 @@ public class CategoryOther {
     @Accordion
     public MemLeak memLeak = new MemLeak();
 
+    @ConfigOption(
+            name = "Party Safety",
+            desc = "Blocks automatic party transfers triggered by a player that just joined"
+    )
+    @Accordion
+    public PartySafety partySafety = new PartySafety();
+
+    public static class IntegratedWiki {
+        @ConfigOption(
+                name = "Enable",
+                desc = "Allows opening the Wiki from inventory items."
+        )
+        @ConfigEditorBoolean
+        public boolean wikiShortcutEnabled = true;
+
+        @ConfigOption(
+                name = "Wiki Shortcut",
+                desc = "The key or mouse button used with Ctrl."
+        )
+        @ConfigEditorKeybind(defaultKey = GLFW.GLFW_MOUSE_BUTTON_RIGHT)
+        public int wikiShortcut = GLFW.GLFW_MOUSE_BUTTON_RIGHT;
+    }
+
     public static class LagMonitor {
         @ConfigOption(
                 name = "Enabled",
@@ -183,22 +206,6 @@ public class CategoryOther {
         }
     }
 
-    public static class IntegratedWiki {
-        @ConfigOption(
-                name = "Enable",
-                desc = "Allows opening the Wiki from inventory items."
-        )
-        @ConfigEditorBoolean
-        public boolean wikiShortcutEnabled = true;
-
-        @ConfigOption(
-                name = "Wiki Shortcut",
-                desc = "The key or mouse button used with Ctrl."
-        )
-        @ConfigEditorKeybind(defaultKey = GLFW.GLFW_MOUSE_BUTTON_RIGHT)
-        public int wikiShortcut = GLFW.GLFW_MOUSE_BUTTON_RIGHT;
-    }
-
     public static class InventoryLayouts {
         @ConfigOption(
                 name = "Enable",
@@ -308,6 +315,23 @@ public class CategoryOther {
                 minStep = 1
         )
         public int minimumGrowthMiBPerMinute = 8;
+    }
+
+    public static class PartySafety {
+        @ConfigOption(
+                name = "Enable",
+                desc = "Blocks automatic party transfers triggered by a player that just joined."
+        )
+        @ConfigEditorBoolean
+        public boolean enabled = true;
+
+        @ConfigOption(
+                name = "Prefill Party Warning",
+                desc = "After blocking a suspicious transfer, open chat with a party warning ready to send.\n"
+                        + "§7You still have to press Enter yourself."
+        )
+        @ConfigEditorBoolean
+        public boolean prefillPartyWarning = true;
     }
 
 }
