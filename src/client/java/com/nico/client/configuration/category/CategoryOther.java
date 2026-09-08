@@ -326,6 +326,17 @@ public class CategoryOther {
         public boolean enabled = true;
 
         @ConfigOption(
+                name = "Window",
+                desc = "How many seconds after a player joins that this feature should watch for transfers."
+        )
+        @ConfigEditorSlider(
+                minValue = 1,
+                maxValue = 60,
+                minStep = 1
+        )
+        public int checkWindowSeconds = 15;
+
+        @ConfigOption(
                 name = "Prefill Party Warning",
                 desc = "After blocking a suspicious transfer, open chat with a party warning ready to send.\n"
                         + "§7You still have to press Enter yourself."
