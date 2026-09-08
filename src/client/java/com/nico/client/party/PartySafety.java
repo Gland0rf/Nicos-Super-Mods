@@ -16,8 +16,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class PartySafety {
-    private static final long RECENT_JOIN_WINDOW_MILLIS = 15_000L;
-
     private static final Pattern USERNAME_AT_END = Pattern.compile("([A-Za-z0-9_]{1,16})$");
     private static final Pattern PARTY_TRANSFER_COMMAND =
             Pattern.compile("^(?:p|party)\\s+transfer\\s+([A-Za-z0-9_]{1,16})(?:\\s+.*)?$", Pattern.CASE_INSENSITIVE);
@@ -30,6 +28,7 @@ public final class PartySafety {
 
     private static final Map<String, Long> RECENT_JOINS = new HashMap<>();
     private static final Map<String, PartyChatTrigger> RECENT_CHAT_TRIGGERS = new HashMap<>();
+    private static final Set<String> PREFILLED_WARNING_PLAYERS = new HashSet<>();
 
     private PartySafety() { }
 
@@ -47,6 +46,7 @@ public final class PartySafety {
             String key = normalizePlayerName(joinedPlayer);
             RECENT_JOINS.put(key, now);
             RECENT_CHAT_TRIGGERS.remove(key);
+            PREFILLED_WARNING_PLAYERS.remove(joinedPlayer);
             return;
         }
 
@@ -55,7 +55,7 @@ public final class PartySafety {
 
         String key = normalizePlayerName(partyMessage.playerName());
         Long joinedAt = RECENT_JOINS.get(key);
-        if (joinedAt == null || now - joinedAt > RECENT_JOIN_WINDOW_MILLIS) return;
+        if (joinedAt == null || now - joinedAt > recentJoinWindowMillis()) return;
 
         RECENT_CHAT_TRIGGERS.put(key, new PartyChatTrigger(now, partyMessage.message().strip()));
     }
@@ -84,15 +84,16 @@ public final class PartySafety {
         String key = normalizePlayerName(targetName);
 
         Long joinedAt = RECENT_JOINS.get(key);
-        if (joinedAt == null || now - joinedAt > RECENT_JOIN_WINDOW_MILLIS) return false;
+        long windowMillis = recentJoinWindowMillis();
+        if (joinedAt == null || now - joinedAt > windowMillis) return false;
 
         PartyChatTrigger trigger = RECENT_CHAT_TRIGGERS.get(key);
-        if (trigger == null || trigger.timeMillis() < joinedAt || now - trigger.timeMillis() > RECENT_JOIN_WINDOW_MILLIS) return false;
+        if (trigger == null || trigger.timeMillis() < joinedAt || now - trigger.timeMillis() > windowMillis) return false;
 
         String sourceMod = resolveSourceMod();
         showBlockedWarning(targetName, joinedAt, now, trigger.command(), sourceMod);
 
-        if (prefillWarningEnabled()) openPrefilledPartyWarning(sourceMod);
+        if (prefillWarningEnabled()) openPrefilledPartyWarning(key, sourceMod);
 
         return true;
     }
@@ -105,14 +106,21 @@ public final class PartySafety {
         return NsmConfig.INSTANCE.other.partySafety.prefillPartyWarning;
     }
 
+    private static long recentJoinWindowMillis() {
+        int seconds = NsmConfig.INSTANCE.other.partySafety.checkWindowSeconds;
+        return Math.max(1, seconds) * 1_000L;
+    }
+
     private static void cleanupExpired(long now) {
-        RECENT_JOINS.entrySet().removeIf(entry -> now - entry.getValue() > RECENT_JOIN_WINDOW_MILLIS);
+        long windowMillis = recentJoinWindowMillis();
+        RECENT_JOINS.entrySet().removeIf(entry -> now - entry.getValue() > windowMillis);
         RECENT_CHAT_TRIGGERS.entrySet().removeIf(entry -> {
             Long joinedAt = RECENT_JOINS.get(entry.getKey());
             return joinedAt == null
                     || entry.getValue().timeMillis() < joinedAt
-                    || now - entry.getValue().timeMillis() > RECENT_JOIN_WINDOW_MILLIS;
+                    || now - entry.getValue().timeMillis() > windowMillis;
         });
+        PREFILLED_WARNING_PLAYERS.removeIf(key -> !RECENT_JOINS.containsKey(key));
     }
 
     private static String extractJoinedPlayer(String text) {
@@ -274,15 +282,22 @@ public final class PartySafety {
         minecraft.execute(() -> minecraft.gui.getChat().addClientSystemMessage(Component.literal(message)));
     }
 
-    private static void openPrefilledPartyWarning(String sourceMod) {
+    private static void openPrefilledPartyWarning(String playerKey, String sourceMod) {
         String warning = WARNING_MESSAGE_PREFIX + sourceMod + WARNING_MESSAGE_SUFFIX;
         String chatInput = "/pc" + warning;
 
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.execute(() -> {
-            // Do not replace another open screen or anything the user is already typing.
-            if (minecraft.screen != null) return;
-            minecraft.setScreen(new ChatScreen(chatInput, true));
+            synchronized (PartySafety.class) {
+                if (PREFILLED_WARNING_PLAYERS.contains(playerKey)) return;
+                if (!RECENT_JOINS.containsKey(playerKey)) return;
+
+                // Do not replace another open screen or anything the user is already typing.
+                if (minecraft.screen != null) return;
+
+                PREFILLED_WARNING_PLAYERS.add(playerKey);
+                minecraft.setScreen(new ChatScreen(chatInput, true));
+            }
         });
     }
 
