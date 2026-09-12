@@ -2,7 +2,6 @@ package com.nico.client.lag;
 
 import com.nico.client.utils.LocationUtils;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundPingPacket;
 import net.minecraft.network.protocol.ping.ClientboundPongResponsePacket;
@@ -309,12 +308,6 @@ public class LagMonitorService {
         var lines = summary.compactChatLines();
         for (var line : lines) {
             client.getInstance().gui.getChat().addClientSystemMessage(line);
-        }
-    }
-
-    private void debug(String message) {
-        if (config != null && config.debugLogging) {
-            System.out.println("[NSM Lag][Debug] " + message);
         }
     }
 }
