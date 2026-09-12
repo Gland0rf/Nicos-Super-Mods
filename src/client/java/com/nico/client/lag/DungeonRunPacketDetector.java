@@ -2,6 +2,7 @@ package com.nico.client.lag;
 
 import com.nico.client.utils.LocationUtils;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
@@ -17,10 +18,7 @@ public final class DungeonRunPacketDetector {
 
     public static void handle(Packet<?> packet) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!HypixelServerDetector.isHypixel(minecraft)) return;
-
         LagMonitorService service = LagMonitorService.getInstance();
-        if (!LocationUtils.isInDungeon() && !service.isDungeonRunActive()) return;
 
         Component component = extractText(packet);
         if (component == null) {
@@ -33,13 +31,34 @@ public final class DungeonRunPacketDetector {
             return;
         }
 
-        if (packet instanceof ClientboundSystemChatPacket && isDungeonStart(text)) {
-            service.onDungeonRunStart();
+        boolean startMarker = packet instanceof ClientboundSystemChatPacket && isDungeonStart(text);
+        boolean mortDungeonStart = packet instanceof ClientboundSystemChatPacket && isMortDungeonStart(text);
+        boolean endMarker = isDungeonEnd(text);
+
+        if (startMarker) {
+            if (LocationUtils.isInSkyblock()) {
+                service.onDungeonRunStart();
+            }
             return;
         }
 
-        if (isDungeonEnd(text)) {
-            service.onDungeonRunEnd(Minecraft.getInstance());
+        // Lunar can replace the client world during the dungeon transfer. The memory
+        // cleanup resets LocationUtils before the SkyBlock scoreboard is rebuilt, so
+        // the normal countdown can be rejected for a few ticks. Mort's map line is
+        // dungeon-specific, so it is a safe fallback start signal on Hypixel.
+        if (mortDungeonStart) {
+            if (!service.isDungeonRunActive()) {
+                service.onDungeonRunStart();
+            }
+            return;
+        }
+
+        if (!LocationUtils.isInDungeon() && !service.isDungeonRunActive()) {
+            return;
+        }
+
+        if (endMarker) {
+            service.onDungeonRunEnd(minecraft);
         }
     }
 
@@ -60,10 +79,20 @@ public final class DungeonRunPacketDetector {
     }
 
     private static boolean isDungeonStart(String text) {
-        boolean finalCountdown = text.contains("starting in 1 second")
+        return text.contains("starting in 1 second")
                 || text.contains("starts in one second");
+    }
 
-        return finalCountdown;
+    private static boolean isMortDungeonStart(String text) {
+        return text.contains("mort: here, i found this map when i first entered the dungeon");
+    }
+
+    private static boolean isDungeonStartClue(String text) {
+        return text.contains("starting in ")
+                || text.contains("starts in ")
+                || text.contains("first entered the dungeon")
+                || text.contains("found this map")
+                || text.contains("the catacombs");
     }
 
     private static boolean isDungeonEnd(String text) {
@@ -74,6 +103,16 @@ public final class DungeonRunPacketDetector {
                 || text.contains("team score:")
                 || text.equals("defeat")
                 || text.equals("defeat!");
+    }
+
+    private static String markerName(boolean startMarker, boolean endMarker) {
+        if (startMarker) {
+            return "START";
+        }
+        if (endMarker) {
+            return "END";
+        }
+        return "CLUE";
     }
 
     private static String normalize(String text) {

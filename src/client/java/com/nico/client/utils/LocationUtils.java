@@ -91,10 +91,6 @@ public class LocationUtils {
 
     public static void onScoreboardObjective(String objectiveName) {
         if ("SBScoreboard".equals(objectiveName)) {
-            if (!inSkyBlock) {
-                debug("inSkyblock false -> true");
-            }
-
             inSkyBlock = true;
         }
     }
@@ -104,15 +100,18 @@ public class LocationUtils {
             return;
         }
 
-        String text = clean(displayName.getString());
+        String raw = displayName.getString();
+        String text = clean(raw);
+        String lower = text.toLowerCase(Locale.ROOT);
 
-        if (!text.startsWith("Location: ")
-                && !text.startsWith("Area: ")
-                && !text.startsWith("Dungeon: ")) {
+        boolean areaPrefix = text.startsWith("Location: ")
+                || text.startsWith("Area: ")
+                || text.startsWith("Dungeon: ");
+        boolean dungeonClue = lower.contains("catacombs") || lower.contains("dungeon");
+
+        if (!areaPrefix) {
             return;
         }
-
-        debug("tab area line: " + text);
 
         Island detected = detectIsland(text);
 
@@ -140,7 +139,6 @@ public class LocationUtils {
 
     private static void setCurrentArea(Island area, String reason) {
         if (currentArea != area) {
-            debug("area " + currentArea + " -> " + area + " because " + reason);
             currentArea = area;
         }
     }
