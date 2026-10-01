@@ -1,21 +1,36 @@
 package com.nico.client.dungeon
 
 import com.nico.client.secretTimer.SecretRoomTimerClient
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientEntityEvents
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback
+import net.fabricmc.fabric.api.event.player.UseBlockCallback
+import net.minecraft.client.ClientRecipeBook
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.network.protocol.Packet
+import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket
 import net.minecraft.network.protocol.game.ClientboundSoundPacket
 import net.minecraft.network.protocol.game.ClientboundSystemChatPacket
 import net.minecraft.network.protocol.game.ClientboundTakeItemEntityPacket
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.world.InteractionHand
+import net.minecraft.world.InteractionResult
+import net.minecraft.world.entity.ambient.Bat
 import net.minecraft.world.entity.item.ItemEntity
+import net.minecraft.world.entity.player.Player
+import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.SkullBlock
 import net.minecraft.world.phys.Vec3
 
 object SecretDispatcher {
+    private var initialized = false
+    private var lastGameMessage = ""
+    private var lastGameMessageOverlay = false
+    private var lastGameMessageAtNanos = 0L
+
     private val dungeonItemDrops = arrayOf(
         "Health Potion VIII Splash Potion",
         "Healing Potion 8 Splash Potion",
@@ -36,8 +51,41 @@ object SecretDispatcher {
         "Candycomb"
     )
 
-    private val secretCounterRegex =
-        Regex("""(\d+)/(\d+) Secrets""")
+    private val secretCounterRegexes = listOf(
+        Regex("""(\d+)\s*/\s*(\d+)\s+Secrets?""", RegexOption.IGNORE_CASE),
+        Regex("""Secrets?\s*:?\s*(\d+)\s*/\s*(\d+)""", RegexOption.IGNORE_CASE)
+    )
+
+    @JvmStatic
+    fun init() {
+        if (initialized) return
+
+        ClientReceiveMessageEvents.ALLOW_GAME.register { message, overlay ->
+            handleGameMessage(message.string, overlay)
+            true
+        }
+
+        UseBlockCallback.EVENT.register { player, level, hand, hitResult ->
+            handleBlockUse(player, level, hand, hitResult.blockPos)
+            InteractionResult.PASS
+        }
+
+        AttackEntityCallback.EVENT.register { _, _, hand, entity, _ ->
+            if (hand != InteractionHand.OFF_HAND && entity is Bat && isDungeonClearContext()) {
+                SecretRoomTimerClient.onPotentialCombatSecretPickup(entity.blockPosition())
+            }
+            InteractionResult.PASS
+        }
+
+        ClientEntityEvents.ENTITY_UNLOAD.register { entity, _ ->
+            if (entity is ItemEntity) {
+                handlePotentialItemUnload(entity)
+            }
+        }
+
+        initialized = true
+        println("[NSM] SecretDispatcher Fabric compatibility hooks registered")
+    }
 
     @JvmStatic
     fun onReceive(packet: Packet<*>) {
@@ -50,6 +98,9 @@ object SecretDispatcher {
 
             is ClientboundSystemChatPacket ->
                 handleSystemChat(packet)
+
+            is ClientboundSetActionBarTextPacket ->
+                handleActionBar(packet)
         }
     }
 
@@ -61,7 +112,7 @@ object SecretDispatcher {
     }
 
     private fun handleTakeItem(packet: ClientboundTakeItemEntityPacket) {
-        if (!DungeonState.inClear) return
+        if (!isDungeonClearContext()) return
 
 
         val client = Minecraft.getInstance()
@@ -76,25 +127,22 @@ object SecretDispatcher {
     }
 
     private fun handleSound(packet: ClientboundSoundPacket) {
-        if (!DungeonState.inClear) return
-
-        val sound = packet.sound.value()
-
-        if (sound != SoundEvents.BAT_DEATH) return
-        if (packet.volume > 0.3f) return
-
-        dispatchSecret(BlockPos.containing(packet.x, packet.y, packet.z))
+        // Kept only as a compatibility no-op. Bat secrets are now attributed from the
+        // local attack callback and confirmed by the room secret counter, which avoids
+        // crediting a teammate's bat just because its death sound was audible.
     }
 
     private fun handleUseItemOn(packet: ServerboundUseItemOnPacket) {
-        if (!DungeonState.inClear) return
-        if (packet.hand == InteractionHand.OFF_HAND) return
-
         val client = Minecraft.getInstance()
         val player = client.player ?: return
         val level = client.level ?: return
+        handleBlockUse(player, level, packet.hand, packet.hitResult.blockPos)
+    }
 
-        val pos = packet.hitResult.blockPos
+    private fun handleBlockUse(player: Player, level: Level, hand: InteractionHand, pos: BlockPos) {
+        if (!isDungeonClearContext()) return;
+        if (hand == InteractionHand.OFF_HAND) return
+
         val blockState = level.getBlockState(pos)
 
         if (blockState.block is SkullBlock) {
@@ -110,32 +158,92 @@ object SecretDispatcher {
         if (DungeonSecretClassifier.isSecret(level, blockState, pos)) {
             if (blockState.`is`(Blocks.CHEST) || blockState.`is`(Blocks.TRAPPED_CHEST)) {
                 dispatchChestSecret(pos)
-            } else if (blockState.block !is SkullBlock) {
+            } else {
                 dispatchSecret(pos)
             }
         }
     }
 
     private fun handleSystemChat(packet: ClientboundSystemChatPacket) {
-        val clean = packet.content.string
-            .replace(Regex("§[0-9A-FK-OR]", RegexOption.IGNORE_CASE), "")
+        handleGameMessage(packet.content.string, packet.overlay())
+    }
 
-        secretCounterRegex.find(clean)?.let { match ->
-            val found = match.groupValues[1].toInt()
-            val total = match.groupValues[2].toInt()
+    private fun handleActionBar(packet: ClientboundSetActionBarTextPacket) {
+        handleGameMessage(packet.text.string, true)
+    }
 
-            SecretRoomTimerClient.onRoomSecretsPacket(found, total)
+    private fun handleGameMessage(raw: String, overlay: Boolean) {
+        val clean = cleanText(raw)
+        val now = System.nanoTime()
 
+        // The same message can arrive through both the vanilla packet fallback and the
+        // Fabric event path on a normal Fabric client.
+        if (clean == lastGameMessage
+            && overlay == lastGameMessageOverlay
+            && now - lastGameMessageAtNanos < 100_000_000L) {
             return
         }
 
-        if (packet.overlay()) return
+        lastGameMessage = clean
+        lastGameMessageOverlay = overlay
+        lastGameMessageAtNanos = now
+
+        if (handleSecretCounter(clean)) return
+        if (overlay) return
 
         if (clean.contains("That chest is locked!")) {
             SecretRoomTimerClient.onLockedChestMessage()
         }
 
         SecretRoomTimerClient.onChatMessage(clean)
+    }
+
+    private fun handleSecretCounter(text: String): Boolean {
+        val match = secretCounterRegexes.firstNotNullOfOrNull { it.find(text) } ?: return false
+        val found = match.groupValues[1].toIntOrNull() ?: return false
+        val total = match.groupValues[2].toIntOrNull() ?: return false
+
+        SecretRoomTimerClient.onRoomSecretsPacket(found, total)
+        return true
+    }
+
+    private fun cleanText(text: String): String =
+        text.replace(Regex("§[0-9A-FK-OR]", RegexOption.IGNORE_CASE), "")
+
+    private fun handlePotentialItemUnload(entity: ItemEntity) {
+        if (!isDungeonClearContext()) return
+
+        val client = Minecraft.getInstance()
+        val player = client.player ?: return
+        val level = client.level ?: return
+
+        if (!isDungeonItemDrop(entity.item.hoverName.string)) return
+
+        val selfDistance = entity.distanceTo(player)
+        if (selfDistance > 3.0) return
+
+        for (other in level.players()) {
+            if (other === player) continue
+            if (entity.distanceTo(other) + 0.25 < selfDistance) return
+        }
+
+        SecretRoomTimerClient.onPotentialItemSecretPickup(entity.blockPosition())
+    }
+
+    private fun isDungeonClearContext(): Boolean {
+        val client = Minecraft.getInstance()
+        val player = client.player ?: return false
+        if (client.level == null) return false
+
+        if (DungeonState.inClear) return true
+
+        // Fallback for clients whose tab/scoreboard rendering changes prevent
+        // LocationUtils from being updated by packet mixins.
+        return try {
+            DungeonScanner.isInDungeon(player)
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     private fun dispatchSecret(pos: BlockPos) {

@@ -2,6 +2,7 @@ package com.nico.mixin;
 
 import com.nico.client.dungeon.DungeonState;
 import com.nico.client.dungeon.DungeonStatsTracker;
+import com.nico.client.dungeon.SecretDispatcher;
 import com.nico.client.utils.LocationUtils;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.*;
@@ -12,6 +13,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(value = ClientPacketListener.class, priority = 100)
 public abstract class ClientPacketListenerMixin {
+    @Inject(method = "handleTakeItemEntity", at = @At("HEAD"), require = 1, order = 900)
+    private void nsm$handleTakeItemEntity(
+            ClientboundTakeItemEntityPacket packet,
+            CallbackInfo ci
+    ) {
+        SecretDispatcher.onReceive(packet);
+    }
+
+    @Inject(method = "setActionBarText", at = @At("HEAD"), require = 1, order = 900)
+    private void nsm$setActionBarText(
+            ClientboundSetActionBarTextPacket packet,
+            CallbackInfo ci
+    ) {
+        SecretDispatcher.onReceive(packet);
+    }
+
     @Inject(method = "handlePlayerInfoUpdate", at = @At("HEAD"), require = 1, order = 900)
     private void nsm$handlePlayerInfoUpdate(
             ClientboundPlayerInfoUpdatePacket packet,
