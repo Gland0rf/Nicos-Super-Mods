@@ -1,5 +1,6 @@
 package com.nico.client;
 
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.nico.client.bloodrush.BloodRoutes;
 import com.nico.client.bloodrush.RouteCommands;
@@ -8,6 +9,8 @@ import com.nico.client.bloodrush.RouteEditor;
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonTeammateScanner;
+import com.nico.client.history.WrappedConfig;
+import com.nico.client.history.WrappedScreen;
 import com.nico.client.memleak.MemLeakFeature;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
@@ -66,6 +69,7 @@ public final class NsmClientCommands {
                         .then(RouteCommands.node(routeEditor))
                         .then(createMemoryNode("memory"))
                         .then(createMemoryNode("memleak"))
+                        .then(createWrappedNode())
         );
     }
 
@@ -205,6 +209,14 @@ public final class NsmClientCommands {
                 );
     }
 
+    private static LiteralArgumentBuilder<FabricClientCommandSource> createWrappedNode() {
+        return ClientCommands.literal("wrapped")
+                .executes(context -> openWrappedScreen(30))
+                .then(ClientCommands.literal("config").executes(context -> openWrappedConfig()))
+                .then(ClientCommands.argument("days", IntegerArgumentType.integer(1, 3650))
+                            .executes(context -> openWrappedScreen(IntegerArgumentType.getInteger(context, "days"))));
+    }
+
     private static int sendMemLeakLines(Iterable<String> lines) {
         for (String line : lines) {
             sendMessage(Component.literal(line));
@@ -246,6 +258,17 @@ public final class NsmClientCommands {
             sendMessage(Component.literal("§c[NSM Memory Check] Could not create the report: " + exception.getMessage()));
             return 0;
         }
+    }
+
+    private static int openWrappedScreen(int days) {
+        Minecraft minecraft = Minecraft.getInstance();
+        minecraft.execute(() -> minecraft.setScreen(new WrappedScreen(minecraft.screen, days)));
+        return 1;
+    }
+
+    private static int openWrappedConfig() {
+        WrappedConfig.openConfigFile();
+        return 1;
     }
 
     public static RouteEditor getRouteEditor() {
