@@ -39,6 +39,16 @@ public final class SkyblockHistoryFeature {
     private static final long SKYBLOCK_YEAR_MILLIS = 372L * SKYBLOCK_DAY_MILLIS;
 
     private static final Pattern USERNAME_AT_END = Pattern.compile("([A-Za-z0-9_]{1,16})$");
+    private static final Pattern JOINED_EXISTING_PARTY = Pattern.compile(
+                  "(?i)^you have joined\\s+(?:\\[[^]]+]\\s*)?([A-Za-z0-9_]{1,16})['’]s party!$"
+    );
+    private static final Pattern PARTY_CHAT_SENDER = Pattern.compile(
+            "(?i)^party\\s*>\\s*(?:\\[[^]]+]\\s*)?([A-Za-z0-9_]{1,16})\\s*:"
+    );
+    private static final Pattern PARTY_MEMBER_LEFT = Pattern.compile(
+            "(?i)^(?:\\[[^]]+]\\s*)?([A-Za-z0-9_]{1,16})\\s+(?:left the party\\.?|has left the party\\.?|has been removed from the party\\.?|was removed from your party.*|was kicked from the party.*|has been kicked from the party.*)$"
+    );
+
     private static final Pattern COINS = Pattern.compile("(?i)([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*([kmbt])?\\s+coins?");
     private static final Pattern PURSE = Pattern.compile("(?i)\\b(?:purse|piggy)\\s*:\\s*([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*([kmbt])?");
     private static final Pattern MOTES = Pattern.compile("(?i)\\bmotes?\\s*:?\\s*([0-9][0-9,]*)");
@@ -76,6 +86,7 @@ public final class SkyblockHistoryFeature {
     private static long dungeonStartMillis;
     private static String dungeonFloor = "Unknown";
     private static final Set<String> dungeonTeammates = new LinkedHashSet<>();
+    private static final Set<String> currentPartyMembers = new HashSet<>();
 
     private static String currentSlayer = "";
     private static long slayerBossStartMillis;
@@ -330,7 +341,8 @@ public final class SkyblockHistoryFeature {
         if (text.isBlank()) return;
 
         long now = System.currentTimeMillis();
-        if (partyMemoryEnabled()) parsePartyJoin(text, now);
+        if (partyMemoryEnabled()) parsePartyMemory(text, now);
+        else currentPartyMembers.clear();
         parsePet(text);
         parseKuudraTierHint(text);
         parseFinancials(text);
@@ -341,26 +353,80 @@ public final class SkyblockHistoryFeature {
         parseDeath(text);
     }
 
-    private static void parsePartyJoin(String text, long now) {
+    private static void parsePartyMemory(String text, long now) {
         if (!partyMemoryEnabled()) return;
         String lower = text.toLowerCase(Locale.ROOT);
-        int index = lower.indexOf(" joined the party.");
-        if (index < 0) return;
+        Matcher joinedExisting = JOINED_EXISTING_PARTY.matcher(text);
+        if (joinedExisting.matches()) {
+            currentPartyMembers.clear();
+            trackPartyMember(joinedExisting.group(1), now);
+            return;
+        }
 
-        String prefix = text.substring(0, index).trim();
-        int arrow = prefix.lastIndexOf('>');
-        if (arrow >= 0) prefix = prefix.substring(arrow + 1).trim();
-        prefix = prefix.replaceAll("\\[[^]]+]", " ").trim();
-        Matcher matcher = USERNAME_AT_END.matcher(prefix);
-        if (!matcher.find()) return;
+        String rosterPrefix = lower.startsWith("you'll be partying with:")
+                ? "you'll be partying with:"
+                : lower.startsWith("you’ll be partying with:") ? "you’ll be partying with:" : "";
+        if (!rosterPrefix.isBlank()) {
+            String roster = text.substring(rosterPrefix.length()).trim();
+            for (String rawMember : roster.split(",")) {
+                String playerName = extractPartyUsername(rawMember);
+                if (!playerName.isBlank()) trackPartyMember(playerName, now);
+            }
+            return;
+        }
 
-        String playerName = matcher.group(1);
+        // Somebody joined a party we were already in.
+        int joinedIndex = lower.indexOf(" joined the party.");
+        if (joinedIndex >= 0) {
+            String playerName = extractPartyUsername(text.substring(0, joinedIndex));
+            if (!playerName.isBlank()) trackPartyMember(playerName, now);
+            return;
+        }
+
+        // Party chat is also a strong membership signal and recovers if the
+        // initial roster announcement was missed because of a whatever idk
+        Matcher partyChat = PARTY_CHAT_SENDER.matcher(text);
+        if (partyChat.find()) {
+            trackPartyMember(partyChat.group(1), now);
+            return;
+        }
+
+        // A later party should count as a new encounter, so forget the current roster when
+        // the local player leaves or the party ceases to exist.
+        if (lower.equals("you have left the party.")
+                || lower.equals("you have left the party")
+                || lower.contains("you have been kicked from the party")
+                || lower.contains("you were kicked from the party")
+                || lower.contains("the party was disbanded")
+                || lower.contains("the party has been disbanded")
+                || lower.contains("you are not currently in a party")) {
+            currentPartyMembers.clear();
+            return;
+        }
+
+        // If another member leaves, allow a later rejoin to count as another encounter.
+        Matcher memberLeft = PARTY_MEMBER_LEFT.matcher(text);
+        if (memberLeft.matches()) {
+            currentPartyMembers.remove(memberLeft.group(1).toLowerCase(Locale.ROOT));
+        }
+    }
+
+    private static void trackPartyMember(String playerName, long now) {
+        if (playerName == null || playerName.isBlank()) return;
+
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player != null && playerName.equalsIgnoreCase(minecraft.player.getName().getString())) return;
 
+        String key = playerName.toLowerCase(Locale.ROOT);
+        if (!currentPartyMembers.add(key)) {
+            // Refresh recency, but do not turn every party-chat message into a new encounter.
+            PLAYER_MEMORY.observePlayer(playerName, now);
+            return;
+        }
+
         PreviousEncounter previous = PLAYER_MEMORY.recordPartyJoin(playerName, now);
         DayStats day = WRAPPED.today();
-        day.encounteredPlayers.put(playerName, 1);
+        day.encounteredPlayers.merge(playerName, 1, Integer::sum);
 
         if (previous.known()) {
             long days = previous.daysSince(now);
@@ -371,6 +437,18 @@ public final class SkyblockHistoryFeature {
             showPlayerMemoryLine(playerName, previous, days);
         }
         WRAPPED.markDirty();
+    }
+
+    private static String extractPartyUsername(String raw) {
+        if (raw == null || raw.isBlank()) return "";
+        String cleaned = raw
+                .replaceAll("\\[[^]]+]", "")
+                .replace("●", " ")
+                .replace("○", " ")
+                .replaceAll("[.!]+$", "")
+                .trim();
+        Matcher matcher = USERNAME_AT_END.matcher(cleaned);
+        return matcher.find() ? matcher.group(1) : "";
     }
 
     private static void showPlayerMemoryLine(String playerName, PreviousEncounter previous, long days) {
@@ -992,6 +1070,7 @@ public final class SkyblockHistoryFeature {
         lastCompletedSlayer = "";
         lastSlayerCompleteMillis = 0L;
         previousArea = LocationUtils.Island.UNKNOWN;
+        currentPartyMembers.clear();
         WRAPPED.save();
         PLAYER_MEMORY.save();
     }
