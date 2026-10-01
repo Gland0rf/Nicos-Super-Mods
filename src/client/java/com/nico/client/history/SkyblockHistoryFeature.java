@@ -39,7 +39,8 @@ public final class SkyblockHistoryFeature {
     private static final long SKYBLOCK_YEAR_MILLIS = 372L * SKYBLOCK_DAY_MILLIS;
 
     private static final Pattern USERNAME_AT_END = Pattern.compile("([A-Za-z0-9_]{1,16})$");
-    private static final Pattern COINS = Pattern.compile("(?i)([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*([kmb])?\\s+coins?");
+    private static final Pattern COINS = Pattern.compile("(?i)([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*([kmbt])?\\s+coins?");
+    private static final Pattern PURSE = Pattern.compile("(?i)\\b(?:purse|piggy)\\s*:\\s*([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*([kmbt])?");
     private static final Pattern MOTES = Pattern.compile("(?i)\\bmotes?\\s*:?\\s*([0-9][0-9,]*)");
     private static final Pattern PET = Pattern.compile(
             "(?i)(?:you summoned your|autopet equipped your|you equipped your)\\s+(?:\\[lvl\\s+\\d+])?\\s*(.+?)(?:!|\\.)?$"
@@ -87,6 +88,18 @@ public final class SkyblockHistoryFeature {
     private static int lastObservedPestCount = -1;
 
     private static long currentMotes = -1L;
+
+    private static final long PURSE_IGNORE_WINDOW_MILLIS = 3_000L;
+    private static long lastObservedPurse = -1L;
+    private static boolean purseTrackingSeen;
+    private static long pendingIgnoredPurseAmount;
+    private static int pendingIgnoredPurseDirection;
+    private static long pendingIgnoredPurseUntilMillis;
+    private static long lastPurseDeltaAmount;
+    private static int lastPurseDeltaDirection;
+    private static long lastPurseDeltaMillis;
+    private static boolean lastPurseDeltaCounted;
+
     private static final Set<String> runtimeEventInstances = new HashSet<>();
 
     private SkyblockHistoryFeature() { }
@@ -119,6 +132,15 @@ public final class SkyblockHistoryFeature {
         if (!tracking()) return;
         WRAPPED.today().chatMessagesSent++;
         WRAPPED.markDirty();
+    }
+
+    public static void onHudText(String rawText) {
+        if (!tracking() || rawText == null || rawText.isBlank()) return;
+        Matcher matcher = PURSE.matcher(clean(rawText));
+        if (!matcher.find()) return;
+
+        long purse = parseCompactNumber(matcher.group(1), matcher.group(2));
+        observePurse(purse, System.currentTimeMillis());
     }
 
     public static void onBlockBreakAttempt(BlockPos pos) {
@@ -235,7 +257,9 @@ public final class SkyblockHistoryFeature {
         day.longestSessionSeconds = Math.max(day.longestSessionSeconds, sessionSeconds);
 
         LocationUtils.Island area = LocationUtils.getCurrentArea();
-        day.areaSeconds.merge(area.displayName, 1L, Long::sum);
+        if (area != LocationUtils.Island.UNKNOWN && area != LocationUtils.Island.SINGLE_PLAYER) {
+            day.areaSeconds.merge(area.displayName, 1L, Long::sum);
+        }
         observeAreaTransition(area);
 
         ItemStack held = minecraft.player.getMainHandItem();
@@ -366,8 +390,11 @@ public final class SkyblockHistoryFeature {
             currentPet = "";
             return;
         }
-        Matcher matcher = PET.matcher(text);
-        if (matcher.find()) currentPet = matcher.group(1).replaceAll("\\[[^]]+]", "").trim();
+
+        // Remove autopet messages
+        String normalized = text.replaceFirst("(?i)\\s*!?\\s*VIEW RULE\\s*$", "").trim();
+        Matcher matcher = PET.matcher(normalized);
+        if (matcher.find()) currentPet = sanitizePetName(matcher.group(1));
     }
 
     private static void parseFinancials(String text) {
@@ -377,38 +404,131 @@ public final class SkyblockHistoryFeature {
         if (amount <= 0) return;
 
         String lower = text.toLowerCase(Locale.ROOT);
+        String body = lower.replaceFirst("^\\[[^]]+]\\s*", "").trim();
+        long now = System.currentTimeMillis();
+
+        // These move the purse without representing income/spending. We ignore those
+        if (body.contains("deposited") && body.contains("coins")) {
+            ignorePurseDelta(amount, -1, now);
+            return;
+        }
+        if ((body.contains("withdrew") || body.contains("withdrawn")) && body.contains("coins")) {
+            ignorePurseDelta(amount, 1, now);
+            return;
+        }
+        if ((body.contains("lost") || body.contains("died")) && body.contains("coins")) {
+            ignorePurseDelta(amount, -1, now);
+            return;
+        }
+        if (body.contains("refunded") && body.contains("coins")) {
+            ignorePurseDelta(amount, 1, now);
+            return;
+        }
+
         DayStats day = WRAPPED.today();
-        boolean earned = lower.startsWith("you sold")
-                || lower.startsWith("sold ")
-                || lower.startsWith("you earned")
-                || lower.startsWith("you collected") || lower.contains("from selling")
-                || lower.startsWith("claiming ")
-                || lower.startsWith("coins from selling")
-                || lower.startsWith("sold for");
-        boolean tax = !earned && (lower.contains("tax") || lower.contains("fee"));
-        boolean spent = lower.startsWith("you bought")
-                || lower.startsWith("bought ")
-                || lower.startsWith("you purchased")
-                || lower.startsWith("you paid")
-                || lower.startsWith("purchase cost")
+        boolean earned = body.startsWith("you sold")
+                || body.startsWith("sold ")
+                || body.startsWith("you earned")
+                || body.startsWith("you collected") || body.contains("from selling")
+                || body.startsWith("claiming ")
+                || body.startsWith("coins from selling")
+                || body.startsWith("sold for");
+        boolean tax = !earned && (body.contains("tax") || body.contains("fee"));
+        boolean spent = body.startsWith("you bought")
+                || body.startsWith("bought ")
+                || body.startsWith("you purchased")
+                || body.startsWith("you paid")
+                || body.startsWith("purchase cost")
                 || tax;
 
+        if (!earned && !spent) return;
+
+        if (!purseTrackingSeen) {
+            if (earned) day.coinsEarned += amount;
+            else day.coinsSpent += amount;
+        }
+
         if (earned) {
-            day.coinsEarned += amount;
             if (amount > day.biggestSale) {
                 day.biggestSale = amount;
                 day.biggestSaleItem = transactionSubject(text);
             }
-        } else if (spent) {
-            day.coinsSpent += amount;
+        } else {
             if (tax) day.taxesPaid += amount;
             if (!tax && amount > day.biggestPurchase) {
                 day.biggestPurchase = amount;
                 day.biggestPurchaseItem = transactionSubject(text);
             }
-        } else return;
+        }
 
         WRAPPED.markDirty();
+    }
+
+    private static void observePurse(long purse, long now) {
+        if (purse < 0) return;
+        purseTrackingSeen = true;
+
+        if (lastObservedPurse < 0) {
+            lastObservedPurse = purse;
+            return;
+        }
+
+        long delta = purse - lastObservedPurse;
+        lastObservedPurse = purse;
+        if (delta == 0) return;
+
+        int direction = delta > 0 ? 1 : -1;
+        long amount = Math.abs(delta);
+        boolean ignored = now < pendingIgnoredPurseUntilMillis
+                && pendingIgnoredPurseDirection == direction
+                && amountsMatch(pendingIgnoredPurseAmount, amount);
+
+        if (ignored) {
+            clearPendingPurseIgnore();
+            rememberPurseDelta(amount, direction, now, false);
+            return;
+        }
+
+        DayStats day = WRAPPED.today();
+        if (direction > 0) day.coinsEarned += amount;
+        else day.coinsSpent += amount;
+        rememberPurseDelta(amount, direction, now, true);
+        WRAPPED.markDirty();
+    }
+
+    private static void ignorePurseDelta(long amount, int direction, long now) {
+        if (lastPurseDeltaCounted
+                && now - lastPurseDeltaMillis <= PURSE_IGNORE_WINDOW_MILLIS
+                && lastPurseDeltaDirection == direction
+                && amountsMatch(lastPurseDeltaAmount, amount)) {
+            DayStats day = WRAPPED.today();
+            if (direction > 0) day.coinsEarned = Math.max(0L, day.coinsEarned - lastPurseDeltaAmount);
+            else day.coinsSpent = Math.max(0L, day.coinsSpent - lastPurseDeltaAmount);
+            lastPurseDeltaCounted = false;
+            WRAPPED.markDirty();
+            return;
+        }
+
+        pendingIgnoredPurseAmount = amount;
+        pendingIgnoredPurseDirection = direction;
+        pendingIgnoredPurseUntilMillis = now + PURSE_IGNORE_WINDOW_MILLIS;
+    }
+
+    private static boolean amountsMatch(long expected, long actual) {
+        return expected == actual || Math.abs(expected - actual) <= 1L;
+    }
+
+    private static void rememberPurseDelta(long amount, int direction, long now, boolean counted) {
+        lastPurseDeltaAmount = amount;
+        lastPurseDeltaDirection = direction;
+        lastPurseDeltaMillis = now;
+        lastPurseDeltaCounted = counted;
+    }
+
+    private static void clearPendingPurseIgnore() {
+        pendingIgnoredPurseAmount = 0L;
+        pendingIgnoredPurseDirection = 0;
+        pendingIgnoredPurseUntilMillis = 0L;
     }
 
     private static void parseDungeon(String text) {
@@ -644,10 +764,19 @@ public final class SkyblockHistoryFeature {
             String lower = line.toLowerCase(Locale.ROOT);
             int index = lower.indexOf("pet:");
             if (index < 0) continue;
-            String pet = line.substring(index + 4).replaceAll("\\[[^]]+]", "").trim();
+            String pet = sanitizePetName(line.substring(index + 4));
             if (!pet.isBlank() && !pet.equalsIgnoreCase("none")) return pet;
         }
         return "";
+    }
+
+    private static String sanitizePetName(String raw) {
+        if (raw == null) return "";
+        return raw
+                .replaceFirst("(?i)\\s*!?\\s*VIEW RULE\\s*$", "")
+                .replaceAll("\\[[^]]+]", "")
+                .replaceAll("[!.]+$", "")
+                .trim();
     }
 
     private static String armorSetName(Player player) {
@@ -771,7 +900,8 @@ public final class SkyblockHistoryFeature {
     }
 
     private static String transactionSubject(String text) {
-        String cleaned = text.replaceFirst("(?i)^(you\\s+)?(bought|purchased|sold|claiming)\\s+", "");
+        String cleaned = text.replaceFirst("(?i)^\\[[^]]+]\\s*", "")
+                .replaceFirst("(?i)^(you\\s+)?(bought|purchased|sold|claiming)\\s+", "");
         int forIndex = cleaned.toLowerCase(Locale.ROOT).lastIndexOf(" for ");
         if (forIndex > 0) cleaned = cleaned.substring(0, forIndex);
         return cleaned.length() > 80 ? cleaned.substring(0, 80) : cleaned.trim();
@@ -785,6 +915,7 @@ public final class SkyblockHistoryFeature {
                     case "k" -> 1_000D;
                     case "m" -> 1_000_000D;
                     case "b" -> 1_000_000_000D;
+                    case "t" -> 1_000_000_000_000D;
                     default -> 1D;
                 };
             }
@@ -851,6 +982,13 @@ public final class SkyblockHistoryFeature {
         slayerBossStartMillis = 0L;
         currentMotes = -1L;
         lastObservedPestCount = -1;
+        lastObservedPurse = -1L;
+        purseTrackingSeen = false;
+        clearPendingPurseIgnore();
+        lastPurseDeltaAmount = 0L;
+        lastPurseDeltaDirection = 0;
+        lastPurseDeltaMillis = 0L;
+        lastPurseDeltaCounted = false;
         lastCompletedSlayer = "";
         lastSlayerCompleteMillis = 0L;
         previousArea = LocationUtils.Island.UNKNOWN;

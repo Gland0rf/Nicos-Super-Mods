@@ -2,6 +2,7 @@ package com.nico.mixin;
 
 import com.nico.client.dungeon.DungeonState;
 import com.nico.client.dungeon.DungeonStatsTracker;
+import com.nico.client.history.SkyblockHistoryFeature;
 import com.nico.client.utils.LocationUtils;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.*;
@@ -20,6 +21,7 @@ public abstract class ClientPacketListenerMixin {
         for (ClientboundPlayerInfoUpdatePacket.Entry entry : packet.entries()) {
             LocationUtils.onTabDisplayName(entry.displayName());
             DungeonStatsTracker.onTabDisplayName(entry.displayName());
+            if (entry.displayName() != null) SkyblockHistoryFeature.onHudText(entry.displayName().getString());
         }
     }
 
@@ -41,6 +43,7 @@ public abstract class ClientPacketListenerMixin {
                     parameters.getPlayerPrefix(),
                     parameters.getPlayerSuffix()
             );
+            SkyblockHistoryFeature.onHudText(parameters.getPlayerPrefix().getString() + parameters.getPlayerSuffix().getString());
         });
     }
 

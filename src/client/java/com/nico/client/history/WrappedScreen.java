@@ -293,7 +293,7 @@ public final class WrappedScreen extends Screen {
         }
 
         int palette = 0;
-        result.add(new Slide("YOUR SKYBLOCK", "Wrapped", "A recap built from your SkyBlock history.",
+        result.add(new Slide("Your Skyblock", "Wrapped", "A recap built from your SkyBlock history.",
                 List.of(), palette++, SlideKind.INTRO));
 
         // TIME
@@ -303,7 +303,7 @@ public final class WrappedScreen extends Screen {
             if (settings.time.numberOfSessions) stats.add(new Stat("Sessions", formatCount(snapshot.sessions)));
             if (settings.time.longestSession) stats.add(new Stat("Longest session", formatDuration(snapshot.longestSessionSeconds)));
             if (settings.time.averageSessionLength) stats.add(new Stat("Average session", formatDuration(snapshot.averageSessionSeconds())));
-            result.add(new Slide("THE TIME YOU GAVE SKYBLOCK", "Time well spent?", dateRange(), stats, palette++, SlideKind.TIME));
+            result.add(new Slide("", "Time well spent?", dateRange(), stats, palette++, SlideKind.TIME));
         }
 
         // FINANCIALS
@@ -317,7 +317,7 @@ public final class WrappedScreen extends Screen {
             }
             if (settings.financials.taxesPaid) stats.add(new Stat("Taxes / fees paid", formatCoins(snapshot.taxesPaid)));
             if (!stats.isEmpty()) {
-                result.add(new Slide("WHERE THE COINS WENT", "Financials", "Income, spending, and the purchase that hurt most.", stats, palette++, SlideKind.STANDARD));
+                result.add(new Slide("", "Financials", "Income, spending, and the purchase that hurt most.", stats, palette++, SlideKind.STANDARD));
             }
         }
 
@@ -333,7 +333,7 @@ public final class WrappedScreen extends Screen {
             if (settings.mostUsed.item && !snapshot.itemSeconds.isEmpty()) {
                 stats.add(usedStat("Most held item", snapshot.itemSeconds));
             }
-            result.add(new Slide("YOUR CONSTANT COMPANIONS", "Favorites", "The things that spent the most time with you.", stats, palette++, SlideKind.STANDARD));
+            result.add(new Slide("", "Your favorite companions", "The things that spent the most time with you.", stats, palette++, SlideKind.STANDARD));
         }
 
         // DUNGEONS, min 3
@@ -357,7 +357,7 @@ public final class WrappedScreen extends Screen {
                     if (reunion != null) stats.add(new Stat("Reunion", reunion.getKey() + " · " + reunion.getValue() + "d apart"));
                 }
             }
-            result.add(new Slide("YOU KEPT GOING BACK", "The Catacombs", "Your dungeon chapter.", stats, palette++, SlideKind.STANDARD));
+            result.add(new Slide("", "The Catacombs", "Your dungeon chapter.", stats, palette++, SlideKind.STANDARD));
         }
 
         // SLAYERS, min 2
@@ -372,7 +372,7 @@ public final class WrappedScreen extends Screen {
                 if (fastest != null) stats.add(new Stat("Fastest boss", fastest.getKey() + " · " + formatMillis(fastest.getValue())));
             }
             if (settings.slayers.rngDrops) stats.add(new Stat("RNG drops", formatCount(snapshot.slayerRngDrops)));
-            result.add(new Slide("ONE MORE BOSS", "Slayers", "Kill, Summon, Kill, Summon, ...", stats, palette++, SlideKind.STANDARD));
+            result.add(new Slide("", "Slayers", "Kill, Summon, Kill, Summon, ...", stats, palette++, SlideKind.STANDARD));
         }
 
         // MINING, min 50 ores mined, 1 commission, or forge used
@@ -381,7 +381,7 @@ public final class WrappedScreen extends Screen {
             if (settings.mining.mostMinedResource) stats.add(new Stat("Most mined resource", fallback(snapshot.topLong(snapshot.minedResources))));
             if (settings.mining.commissionsCompleted) stats.add(new Stat("Commissions", formatCount(snapshot.commissionsCompleted)));
             if (settings.mining.forgeWorkingTime) stats.add(new Stat("Forge working time", formatDuration(snapshot.forgeBusySeconds)));
-            result.add(new Slide("DOWN IN THE MINES", "Mining", "So much better than farming", stats, palette++, SlideKind.STANDARD));
+            result.add(new Slide("", "Mining", "So much better than farming", stats, palette++, SlideKind.STANDARD));
         }
 
         // FARMING, min 100 crops broken, 1 contest, or 1 pest killed
@@ -391,7 +391,7 @@ public final class WrappedScreen extends Screen {
             if (settings.farming.mostFarmedCrop) stats.add(new Stat("Favorite crop", fallback(snapshot.topLong(snapshot.farmedCrops))));
             if (settings.farming.jacobContestsEntered) stats.add(new Stat("Jacobs contests", formatCount(snapshot.jacobContests)));
             if (settings.farming.pestsKilled) stats.add(new Stat("Pests cleared", formatCount(snapshot.pestsKilled)));
-            result.add(new Slide("YOUR GARDEN HAD A YEAR", "Farming", "So much better than mining", stats, palette++, SlideKind.STANDARD));
+            result.add(new Slide("", "Farming", "So much better than mining", stats, palette++, SlideKind.STANDARD));
         }
 
         // FISHING, min 60 seconds fishing or 1 sea creature killed
@@ -407,7 +407,7 @@ public final class WrappedScreen extends Screen {
             if (settings.fishing.seaCreaturesKilled) stats.add(new Stat("Sea creatures", formatCount(snapshot.seaCreaturesKilled)));
             if (settings.fishing.rareSeaCreatureCount) stats.add(new Stat("Rare sea creatures", formatCount(snapshot.rareSeaCreatures)));
             if (settings.fishing.deaths) stats.add(new Stat("Fishing deaths", formatCount(snapshot.fishingDeaths)));
-            result.add(new Slide("STARING AT LIQUIDS", "Fishing", "Do you really enjoy this? " + formatDuration(fishingSeconds) + " with a rod out.", stats, palette++, SlideKind.STANDARD));
+            result.add(new Slide("", "Fishing", "Do you really enjoy this? " + formatDuration(fishingSeconds) + " with a rod out.", stats, palette++, SlideKind.STANDARD));
         }
 
         // FORAGING, min 50 logs broken
@@ -415,7 +415,7 @@ public final class WrappedScreen extends Screen {
             List<Stat> stats = new ArrayList<>();
             if (settings.foraging.logsBroken) stats.add(new Stat("Logs broken", formatCount(snapshot.logsBroken)));
             if (settings.foraging.mostChoppedWood) stats.add(new Stat("Most chopped wood", fallback(snapshot.topLong(snapshot.choppedWoods))));
-            result.add(new Slide("TREES WERE HARMED", "Foraging", "The axe forgets, but the tree remembers.", stats, palette++, SlideKind.STANDARD));
+            result.add(new Slide("", "Foraging", "The axe forgets, but the tree remembers.", stats, palette++, SlideKind.STANDARD));
         }
 
         // KUUDRA, min 1 run
@@ -426,7 +426,7 @@ public final class WrappedScreen extends Screen {
             if (settings.kuudra.favoriteTier && !snapshot.kuudraTierRuns.isEmpty()) stats.add(new Stat("Favorite Tier", fallback(snapshot.topInt(snapshot.kuudraTierRuns))));
             if (settings.kuudra.fastestRun && snapshot.fastestKuudraSeconds > 0) stats.add(new Stat("Fastest run", formatDuration(snapshot.fastestKuudraSeconds)));
             if (settings.kuudra.slowestRun && snapshot.slowestKuudraSeconds > 0) stats.add(new Stat("Slowest run", formatDuration(snapshot.slowestKuudraSeconds)));
-            result.add(new Slide("THE LAVA BOSS", "Kuudra", "Got a little bored from dungeons?", stats, palette++, SlideKind.STANDARD));
+            result.add(new Slide("", "Kuudra", "Got a little bored from dungeons?", stats, palette++, SlideKind.STANDARD));
         }
 
         // TIMED EVENTS, min 1 participation
@@ -444,7 +444,7 @@ public final class WrappedScreen extends Screen {
                             entry.getKey()
                     ))
                     .toList();
-            result.add(new Slide("YOU SHOWED UP", "Events", "The events you participated in", stats, palette++, SlideKind.STANDARD));
+            result.add(new Slide("", "Events", "The events you participated in", stats, palette++, SlideKind.STANDARD));
         }
 
         // RIFT, at least motes spent or earned, or death
@@ -453,7 +453,7 @@ public final class WrappedScreen extends Screen {
             if (settings.rift.motesEarned) stats.add(new Stat("Motes earned", formatCount(snapshot.riftMotesEarned)));
             if (settings.rift.motesSpent) stats.add(new Stat("Motes spent", formatCount(snapshot.riftMotesSpent)));
             if (settings.rift.deathsByMob && !snapshot.riftDeathsByCause.isEmpty()) stats.add(new Stat("Top death cause", topWithCount(snapshot.riftDeathsByCause)));
-            result.add(new Slide("TIME WORKS DIFFERENTLY HERE", "The Rift", "Another dimension wont stop you", stats, palette++, SlideKind.STANDARD));
+            result.add(new Slide("", "The Rift", "Another dimension wont stop you", stats, palette++, SlideKind.STANDARD));
         }
 
         // Memory, chat messages
@@ -486,10 +486,21 @@ public final class WrappedScreen extends Screen {
         List<Stat> ending = new ArrayList<>();
         ending.add(new Stat("Playtime", formatDuration(snapshot.playtimeSeconds)));
         if (snapshot.coinsEarned > 0 || snapshot.coinsSpent > 0) ending.add(new Stat("Net coins", signedCoins(snapshot.netCoins())));
-        if (!snapshot.areaSeconds.isEmpty()) ending.add(new Stat("Second home", fallback(snapshot.topLong(snapshot.areaSeconds))));
-        result.add(new Slide("THAT WAS YOUR SKYBLOCK", "See you next time.", dateRange(), ending, palette++, SlideKind.STANDARD));
+        String secondHome = topKnownArea(snapshot.areaSeconds);
+        if (!snapshot.areaSeconds.isEmpty()) ending.add(new Stat("Second home", secondHome));
+        result.add(new Slide("That was your Skyblock!", "See you next time.", dateRange(), ending, palette++, SlideKind.STANDARD));
 
         return result;
+    }
+
+    private static String topKnownArea(Map<String, Long> areas) {
+        return areas.entrySet().stream()
+                .filter(entry -> entry.getKey() != null && !entry.getKey().isBlank())
+                .filter(entry -> !entry.getKey().equalsIgnoreCase("(Unknown)"))
+                .filter(entry -> !entry.getKey().equalsIgnoreCase("Unknown"))
+                .max(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .orElse("");
     }
 
     @Override
