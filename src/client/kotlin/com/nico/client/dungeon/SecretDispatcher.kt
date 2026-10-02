@@ -9,6 +9,7 @@ import net.minecraft.client.ClientRecipeBook
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.network.protocol.Packet
+import net.minecraft.network.protocol.game.ClientboundDamageEventPacket
 import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket
 import net.minecraft.network.protocol.game.ClientboundSoundPacket
 import net.minecraft.network.protocol.game.ClientboundSystemChatPacket
@@ -30,6 +31,24 @@ object SecretDispatcher {
     private var lastGameMessage = ""
     private var lastGameMessageOverlay = false
     private var lastGameMessageAtNanos = 0L
+
+    private const val BAT_DAMAGE_EVIDENCE_WINDOW_MS = 2500L
+    private const val BAT_ABILITY_MATCH_WINDOW_MS = 900L
+
+    private val recentBatDamage = mutableMapOf<Int, RecentBatDamage>()
+    private var lastSelfAbilityDamageAtMs = 0L
+    private var pendingBatSlainAtMs = 0L
+
+    private val selfAbilityDamageRegex = Regex(
+        """^Your .+ hit \d+ (?:enemy|enemies) for .+ damage\.?$""",
+        RegexOption.IGNORE_CASE
+    )
+
+    private data class RecentBatDamage(
+        val pos: BlockPos,
+        val observedAtMs: Long,
+        val bySelf: Boolean
+    )
 
     private val dungeonItemDrops = arrayOf(
         "Health Potion VIII Splash Potion",
@@ -72,7 +91,7 @@ object SecretDispatcher {
 
         AttackEntityCallback.EVENT.register { _, _, hand, entity, _ ->
             if (hand != InteractionHand.OFF_HAND && entity is Bat && isDungeonClearContext()) {
-                SecretRoomTimerClient.onPotentialCombatSecretPickup(entity.blockPosition())
+                noteSelfBatDamage(entity)
             }
             InteractionResult.PASS
         }
@@ -89,18 +108,26 @@ object SecretDispatcher {
 
     @JvmStatic
     fun onReceive(packet: Packet<*>) {
-        when (packet) {
-            is ClientboundTakeItemEntityPacket ->
-                handleTakeItem(packet)
+        try{
+            when (packet) {
+                is ClientboundTakeItemEntityPacket ->
+                    handleTakeItem(packet)
 
-            is ClientboundSoundPacket ->
-                handleSound(packet)
+                is ClientboundDamageEventPacket ->
+                    handleDamageEvent(packet)
 
-            is ClientboundSystemChatPacket ->
-                handleSystemChat(packet)
+                is ClientboundSoundPacket ->
+                    handleSound(packet)
 
-            is ClientboundSetActionBarTextPacket ->
-                handleActionBar(packet)
+                is ClientboundSystemChatPacket ->
+                    handleSystemChat(packet)
+
+                is ClientboundSetActionBarTextPacket ->
+                    handleActionBar(packet)
+            }
+        } catch (throwable: Throwable) {
+            System.err.println("[NSM] SecretDispatcher failed while handling ${packet.javaClass.simpleName}: ${throwable.message}")
+            throwable.printStackTrace()
         }
     }
 
@@ -124,6 +151,90 @@ object SecretDispatcher {
         if (entity.distanceTo(player) > 8) return
 
         dispatchItemSecret(entity.blockPosition())
+    }
+
+    private fun handleDamageEvent(packet: ClientboundDamageEventPacket) {
+        if (!isDungeonClearContext()) return
+
+        val client = Minecraft.getInstance()
+        val player = client.player ?: return
+        val level = client.level ?: return
+        val bat = level.getEntity(packet.entityId()) as? Bat ?: return
+        val bySelf = packet.sourceCauseId() == player.id || packet.sourceDirectId() == player.id
+        val now = System.currentTimeMillis()
+
+        pruneBatDamageEvidence(now)
+        recentBatDamage[bat.id] = RecentBatDamage(
+            bat.blockPosition().immutable(),
+            now,
+            bySelf
+        )
+    }
+
+    private fun noteSelfBatDamage(bat: Bat) {
+        val now = System.currentTimeMillis()
+        pruneBatDamageEvidence(now)
+        recentBatDamage[bat.id] = RecentBatDamage(
+            bat.blockPosition().immutable(),
+            now,
+            true
+        )
+    }
+
+    private fun handleBatCombatMessage(message: String) {
+        val now = System.currentTimeMillis()
+        pruneBatDamageEvidence(now)
+
+        if (message.startsWith("A Bat has been slain.", ignoreCase = true)) {
+            val directEvidence = recentBatDamage.entries
+                .filter { now - it.value.observedAtMs <= BAT_DAMAGE_EVIDENCE_WINDOW_MS }
+                .maxByOrNull { it.value.observedAtMs }
+
+            if (directEvidence != null) {
+                recentBatDamage.remove(directEvidence.key)
+
+                if (directEvidence.value.bySelf) {
+                    pendingBatSlainAtMs = 0L
+                    SecretRoomTimerClient.onPotentialCombatSecretPickup(directEvidence.value.pos)
+                    println("[NSM] Bat secret attributed from direct damage evidence")
+                    return
+                }
+            }
+
+            if (now - lastSelfAbilityDamageAtMs <= BAT_ABILITY_MATCH_WINDOW_MS) {
+                pendingBatSlainAtMs = 0L
+                SecretRoomTimerClient.onPotentialCombatSecretPickup(null)
+                println("[NSM] Bat secret attributed from recent self ability damage")
+                return
+            }
+
+            // Hypixel may send the bat-death line before its generic
+            // "Your <ability> hit ..." line (Implosion does this, for example).
+            pendingBatSlainAtMs = now
+            return
+        }
+
+        if (!selfAbilityDamageRegex.matches(message)) return
+
+        lastSelfAbilityDamageAtMs = now
+
+        if (pendingBatSlainAtMs > 0L
+            && now - pendingBatSlainAtMs <= BAT_ABILITY_MATCH_WINDOW_MS) {
+            pendingBatSlainAtMs = 0L
+            SecretRoomTimerClient.onPotentialCombatSecretPickup(null)
+            println("[NSM] Bat secret attributed from self ability damage fallback")
+        }
+    }
+
+    private fun pruneBatDamageEvidence(now: Long) {
+        recentBatDamage.entries.removeIf {
+            now - it.value.observedAtMs > BAT_DAMAGE_EVIDENCE_WINDOW_MS
+        }
+
+        if (pendingBatSlainAtMs > 0L
+            && now - pendingBatSlainAtMs > BAT_ABILITY_MATCH_WINDOW_MS) {
+            pendingBatSlainAtMs = 0L
+        }
     }
 
     private fun handleSound(packet: ClientboundSoundPacket) {
@@ -158,6 +269,8 @@ object SecretDispatcher {
         if (DungeonSecretClassifier.isSecret(level, blockState, pos)) {
             if (blockState.`is`(Blocks.CHEST) || blockState.`is`(Blocks.TRAPPED_CHEST)) {
                 dispatchChestSecret(pos)
+            }else if (blockState.block is SkullBlock) {
+                dispatchPotentialBlockSecret(pos)
             } else {
                 dispatchSecret(pos)
             }
@@ -191,6 +304,8 @@ object SecretDispatcher {
         if (handleSecretCounter(clean)) return
         if (overlay) return
 
+        handleBatCombatMessage(clean)
+
         if (clean.contains("That chest is locked!")) {
             SecretRoomTimerClient.onLockedChestMessage()
         }
@@ -208,7 +323,7 @@ object SecretDispatcher {
     }
 
     private fun cleanText(text: String): String =
-        text.replace(Regex("§[0-9A-FK-OR]", RegexOption.IGNORE_CASE), "")
+        text.replace(Regex("§[0-9A-FK-OR]", RegexOption.IGNORE_CASE), "").trim()
 
     private fun handlePotentialItemUnload(entity: ItemEntity) {
         if (!isDungeonClearContext()) return
@@ -252,6 +367,10 @@ object SecretDispatcher {
 
     private fun dispatchItemSecret(pos: BlockPos) {
         SecretRoomTimerClient.onItemSecretPickup(pos)
+    }
+
+    private fun dispatchPotentialBlockSecret(pos: BlockPos) {
+        SecretRoomTimerClient.onPotentialBlockSecretPickup(pos)
     }
 
     private fun dispatchChestSecret(pos: BlockPos) {

@@ -62,7 +62,8 @@ public abstract class ConnectionMixin {
             DungeonRunPacketDetector.handle(packet);
 
             if (packet instanceof ClientboundSoundPacket
-                    || packet instanceof ClientboundSystemChatPacket) {
+                    || packet instanceof ClientboundSystemChatPacket
+                    || packet instanceof ClientboundDamageEventPacket) {
 
                 SecretDispatcher.onReceive(packet);
             }

@@ -13,6 +13,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(value = ClientPacketListener.class, priority = 100)
 public abstract class ClientPacketListenerMixin {
+    @Inject(method = "handleDamageEvent", at = @At("HEAD"), require = 0, order = 900)
+    private void nsm$handleDamageEvent(
+            ClientboundDamageEventPacket packet,
+            CallbackInfo ci
+    ) {
+        SecretDispatcher.onReceive(packet);
+    }
+
     @Inject(method = "handleTakeItemEntity", at = @At("HEAD"), require = 1, order = 900)
     private void nsm$handleTakeItemEntity(
             ClientboundTakeItemEntityPacket packet,
