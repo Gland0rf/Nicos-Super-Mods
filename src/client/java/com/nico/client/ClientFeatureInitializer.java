@@ -1,6 +1,7 @@
 package com.nico.client;
 
 import com.nico.client.configuration.NsmConfigManager;
+import com.nico.client.dungeon.SecretDispatcher;
 import com.nico.client.hud.HudLayoutManager;
 import com.nico.client.hud.HudMoveCommand;
 import com.nico.client.minions.MinionRoiClient;
@@ -31,6 +32,7 @@ public final class ClientFeatureInitializer {
 
     private static void initializeSecretFeatures() {
         SecretRoomTimerClient.init();
+        SecretDispatcher.init();
     }
 
     private static HudLayoutManager initializeHud() {

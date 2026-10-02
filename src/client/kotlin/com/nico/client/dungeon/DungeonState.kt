@@ -15,7 +15,7 @@ object DungeonState {
         private set
 
     val inDungeons: Boolean
-        get() = LocationUtils.isInDungeon()
+        get() = LocationUtils.isInDungeon() || floorNumber != null
 
     val inBoss: Boolean
         get() {
@@ -46,13 +46,12 @@ object DungeonState {
 
     @JvmStatic
     fun tick() {
-        if (!inDungeons) {
+        val connection = Minecraft.getInstance().connection
+        if (connection == null) {
             floorNumber = null
             masterMode = false
             return
         }
-
-        val connection = Minecraft.getInstance().connection ?: return
 
         var detectedFloor: Int? = null
         var detectedMasterMode = false

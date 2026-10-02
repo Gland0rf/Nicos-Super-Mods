@@ -7,6 +7,7 @@ import com.nico.client.configuration.NsmConfig;
 import com.nico.client.configuration.category.CategoryDungeons;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonState;
+import com.nico.client.dungeon.DungeonTeammateScanner;
 import com.nico.client.utils.AtomicFiles;
 import com.nico.client.utils.LocationUtils;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -38,7 +39,8 @@ import java.util.Set;
 public final class SecretRoomTimerClient {
     private SecretRoomTimerClient() {}
 
-    private static final long SELF_SECRET_CONFIRM_WINDOW_MS = 2500L;
+    private static final long SELF_SECRET_CONFIRM_WINDOW_MS = 5000L;
+    private static final long DUPLICATE_BLOCK_INTERACTION_WINDOW_MS = 250L;
     private static final double CHEST_DROP_IGNORE_RADIUS_SQ = 2.0D * 2.0D;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -60,6 +62,8 @@ public final class SecretRoomTimerClient {
     private static final Map<String, Deque<Long>> pendingCounterIncrements = new HashMap<>();
 
     private static final Map<String, Deque<Long>> pendingIgnoredSelfPickups = new HashMap<>();
+    private static final Map<String, Deque<PendingPotentialSecret>> pendingPotentialSelfSecrets = new HashMap<>();
+    private static final Map<String, Long> lastConfirmedBlockSecretAtByRoom = new HashMap<>();
     private static final Map<String, List<BlockPos>> chestSecretPositionsByRoom = new HashMap<>();
     private static final Map<String, Deque<PendingChestSecret>> pendingChestSecretsByRoom = new HashMap<>();
 
@@ -120,9 +124,14 @@ public final class SecretRoomTimerClient {
         if (roomName == null) return;
 
         if (shouldIgnoreSecretPickup(mc, secretPos)) {
-            pendingIgnoredSelfPickups
-                    .computeIfAbsent(roomName, ignored -> new ArrayDeque<>())
-                    .addLast(System.currentTimeMillis());
+            long now = System.currentTimeMillis();
+            Deque<Long> ignoredPickups = pendingIgnoredSelfPickups
+                    .computeIfAbsent(roomName, ignored -> new ArrayDeque<>());
+
+            if (ignoredPickups.isEmpty()
+                    || now - ignoredPickups.peekLast() > DUPLICATE_BLOCK_INTERACTION_WINDOW_MS) {
+                ignoredPickups.addLast(now);
+            }
 
             System.out.println("[NSM] Ignored lever secret pickup at " + secretPos + " in room " + roomName);
             return;
@@ -172,6 +181,30 @@ public final class SecretRoomTimerClient {
             knownFoundByRoom.put(roomName, foundSecrets);
 
             for (int i = 0; i < foundSecrets; i++) {
+                PendingChestSecret chestSecret = consumePendingChestSecret(roomName, now);
+                if (chestSecret != null) {
+                    Set<Long> seenPositions = seenSelfSecretPositions.computeIfAbsent(roomName, ignored -> new HashSet<>());
+                    if (seenPositions.add(chestSecret.pos.asLong())) {
+                        rememberChestSecretPosition(roomName, chestSecret.pos);
+                        countSelfSecret(roomName, now, true, chestSecret.pos);
+                    }
+                    continue;
+                }
+
+                PendingPotentialSecret potentialSecret = consumePendingPotentialSecret(roomName, now);
+                if (potentialSecret != null) {
+                    rememberConfirmedPotentialSecret(roomName, potentialSecret, now);
+                    if (potentialSecret.pos == null) {
+                        countSelfSecret(roomName, now, true, null);
+                    } else {
+                        Set<Long> seenPositions = seenSelfSecretPositions.computeIfAbsent(roomName, ignored -> new HashSet<>());
+                        if (seenPositions.add(potentialSecret.pos.asLong())) {
+                            countSelfSecret(roomName, now, true, potentialSecret.pos);
+                        }
+                    }
+                    continue;
+                }
+
                 if (consumePendingSelfPickup(roomName, now)) {
                     continue;
                 }
@@ -217,6 +250,20 @@ public final class SecretRoomTimerClient {
                     countSelfSecret(roomName, now, true, chestSecret.pos);
                     continue;
                 }
+            }
+
+            PendingPotentialSecret potentialSecret = consumePendingPotentialSecret(roomName, now);
+            if (potentialSecret != null) {
+                rememberConfirmedPotentialSecret(roomName, potentialSecret, now);
+                if (potentialSecret.pos == null) {
+                    countSelfSecret(roomName, now, true, null);
+                } else {
+                    Set<Long> seenPositions = seenSelfSecretPositions.computeIfAbsent(roomName, ignored -> new HashSet<>());
+                    if (seenPositions.add(potentialSecret.pos.asLong())) {
+                        countSelfSecret(roomName, now, true, potentialSecret.pos);
+                    }
+                }
+                continue;
             }
 
             if (consumePendingSelfPickup(roomName, now)) {
@@ -350,8 +397,8 @@ public final class SecretRoomTimerClient {
         if (queue == null) return false;
 
         while (!queue.isEmpty() && now - queue.peekFirst() > SELF_SECRET_CONFIRM_WINDOW_MS) {
-            queue.removeFirst();
-            markExternalSecret(roomName);
+            long observedAtMs = queue.removeFirst();
+            resolveUnmatchedCounerIncrement(roomName, observedAtMs);
         }
 
         boolean matched = !queue.isEmpty();
@@ -384,8 +431,8 @@ public final class SecretRoomTimerClient {
             Deque<Long> queue = entry.getValue();
 
             while (!queue.isEmpty() && now - queue.peekFirst() > SELF_SECRET_CONFIRM_WINDOW_MS) {
-                queue.removeFirst();
-                markExternalSecret(roomName);
+                long observedAtMs = queue.removeFirst();
+                resolveUnmatchedCounerIncrement(roomName, observedAtMs);
             }
 
             if (queue.isEmpty()) {
@@ -394,7 +441,15 @@ public final class SecretRoomTimerClient {
         }
     }
 
-    private static void markExternalSecret(String roomName) {
+    private static void resolveUnmatchedCounerIncrement(String roomName, long observedAtMs) {
+        // If no other player is physically in this dungeon room, an unmatched room
+        // counter increment cannot reasonably be a teammate's secret. Treat it as a
+        // missed local detection instead of invalidating an otherwise valid solo run.
+        if (!hasOtherPlayerInRoom(roomName)) {
+            creditMissedSoloSecret(roomName, observedAtMs);
+            return;
+        }
+
         Attempt attempt = attempts.get(roomName);
 
         if (attempt == null) return;
@@ -403,7 +458,96 @@ public final class SecretRoomTimerClient {
 
         attempt.invalidated = true;
 
-        System.out.println("[NSM] ATTEMPT INVALIDATED for " + roomName);
+        System.out.println("[NSM] ATTEMPT INVALIDATED for " + roomName
+                + " because an unmatched counter increment occurred while another player was in the room");
+    }
+
+    private static boolean hasOtherPlayerInRoom(String roomName) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null || roomName == null) return true;
+        try {
+            Set<String> dungeonTeammates = DungeonTeammateScanner.getDungeonTeammateNames();
+
+            for (net.minecraft.world.entity.player.Player player : mc.level.players()) {
+                if (player == mc.player) continue;
+
+                String playerName = player.getName().getString();
+                if (!containsIgnoreCase(dungeonTeammates, playerName)) continue;
+
+                String otherRoom = DungeonScanner.getRoomNameForPlayer(player);
+                if (roomName.equals(otherRoom)) {
+                    System.out.println("[NSM] Secret timer saw dungeon teammate "
+                            + playerName + " in room " + roomName);
+                    return true;
+                }
+            }
+
+            return false;
+        } catch (Throwable throwable) {
+            throwable.printStackTrace();
+            // Be conservative if room/player detection fails.
+            return true;
+        }
+    }
+
+    private static boolean containsIgnoreCase(Set<String> names, String wantedName) {
+        if (names == null || names.isEmpty() || wantedName == null) return false;
+
+        for (String name : names) {
+            if (name != null && name.equalsIgnoreCase(wantedName)) return true;
+        }
+
+        return false;
+    }
+
+    private static void creditMissedSoloSecret(String roomName, long observedAtMs) {
+        int knownFound = knownFoundByRoom.getOrDefault(roomName, 0);
+        int knownTotal = knownTotalByRoom.getOrDefault(roomName, -1);
+        if (knownFound <= 0) return;
+
+        Attempt attempt = attempts.get(roomName);
+
+        if (attempt == null) {
+            attempt = new Attempt(roomName, observedAtMs, knownTotal);
+            attempts.put(roomName, attempt);
+
+            if (config().showStartMessage) {
+                send("§a[NSM] Timer started for §b" + roomName + "§a.");
+            }
+        }
+
+        if (attempt.invalidated || attempt.finished) return;
+
+           // A local pickup may already have been counted but its pending confirmation can
+        // expire before a very delayed counter packet arrives. Never let the fallback
+        // push selfSecrets past the authoritative room counter.
+        if (attempt.selfSecrets >= knownFound) {
+                System.out.println("[NSM] Unmatched solo counter for " + roomName
+                        + " was already accounted for by local pickup detection");
+                return;
+        }
+
+        attempt.selfSecrets++;
+        attempt.lastSecretAtMs = Math.max(attempt.lastSecretAtMs, observedAtMs);
+
+        if (knownTotal > 0) {
+            attempt.totalSecrets = knownTotal;
+        }
+
+        System.out.println("[NSM] Recovered unmatched secret counter as self pickup for " + roomName
+                + " because no other player was in the room");
+
+        if (config().showProgressMessages) {
+            if (attempt.totalSecrets > 0) {
+                send("§7[NSM] §b" + roomName + "§7: §e"
+                        + attempt.selfSecrets + "§7/§e" + attempt.totalSecrets + " §7secrets.");
+            } else {
+                send("§7[NSM] §b" + roomName + "§7: §e"
+                        + attempt.selfSecrets + " §7secrets.");
+            }
+        }
+
+        tryFinish(roomName, attempt);
     }
 
     private static void tick() {
@@ -427,9 +571,13 @@ public final class SecretRoomTimerClient {
 
     private static boolean isDungeonRoomContext(Minecraft mc, boolean log) {
         try {
-            return mc.level != null
-                    && mc.player != null
-                    && LocationUtils.isInDungeon()
+            if (mc.level == null || mc.player == null) return false;
+
+            boolean roomScannerDetectedDungeon = DungeonScanner.isInDungeon(mc.player);
+
+            return (LocationUtils.isInDungeon()
+                    || DungeonState.INSTANCE.getInDungeons()
+                    || roomScannerDetectedDungeon)
                     && !DungeonState.INSTANCE.getInBoss();
         } catch (Throwable throwable) {
             throwable.printStackTrace();
@@ -468,6 +616,8 @@ public final class SecretRoomTimerClient {
         pendingCounterIncrements.clear();
         seenSelfSecretPositions.clear();
         pendingIgnoredSelfPickups.clear();
+        pendingPotentialSelfSecrets.clear();
+        lastConfirmedBlockSecretAtByRoom.clear();
         chestSecretPositionsByRoom.clear();
         pendingChestSecretsByRoom.clear();
     }
@@ -480,6 +630,8 @@ public final class SecretRoomTimerClient {
         pendingCounterIncrements.remove(roomName);
         seenSelfSecretPositions.remove(roomName);
         pendingIgnoredSelfPickups.remove(roomName);
+        pendingPotentialSelfSecrets.remove(roomName);
+        lastConfirmedBlockSecretAtByRoom.remove(roomName);
         chestSecretPositionsByRoom.remove(roomName);
         pendingChestSecretsByRoom.remove(roomName);
     }
@@ -669,6 +821,8 @@ public final class SecretRoomTimerClient {
 
         long now = System.currentTimeMillis();
 
+        if (hasRecentPendingBlockSecret(roomName, now) || wasBlockSecretRecentlyConfirmed(roomName, now)) return;
+
         boolean matchedEarlierCounterIncrement = consumePendingCounterIncrement(roomName, now);
 
         if (!matchedEarlierCounterIncrement) {
@@ -739,6 +893,105 @@ public final class SecretRoomTimerClient {
         }
 
         tryFinish(roomName, attempt);
+    }
+
+    public static void onPotentialItemSecretPickup(BlockPos itemPos) {
+        queuePotentialSecret(itemPos, PotentialSecretKind.ITEM, false);
+    }
+
+    public static void onPotentialCombatSecretPickup(BlockPos secretPos) {
+        queuePotentialSecret(secretPos, PotentialSecretKind.COMBAT, true);
+    }
+
+    public static void onPotentialBlockSecretPickup(BlockPos secretPos) {
+        queuePotentialSecret(secretPos, PotentialSecretKind.BLOCK, false);
+    }
+
+    private static void queuePotentialSecret(BlockPos secretPos, PotentialSecretKind kind, boolean matchEarlierCounterIncrement) {
+        boolean itemSecret = kind == PotentialSecretKind.ITEM;
+        Minecraft mc = Minecraft.getInstance();
+
+        if (!mc.isSameThread()) {
+            BlockPos immutablePos = secretPos == null ? null : secretPos.immutable();
+            mc.execute(() -> queuePotentialSecret(immutablePos, kind, matchEarlierCounterIncrement));
+            return;
+        }
+
+        if (!enabled()) return;
+        if (!isDungeonRoomContext(mc, true)) return;
+
+        String roomName = getCurrentRoomName(mc);
+        if (roomName == null) return;
+        if (itemSecret && secretPos == null) return;
+
+        if (itemSecret && isNearRememberedChestSecret(roomName, secretPos)) return;
+
+        Set<Long> seenPositions = seenSelfSecretPositions.get(roomName);
+        if (secretPos != null && seenPositions != null && seenPositions.contains(secretPos.asLong())) return;
+
+        long now = System.currentTimeMillis();
+
+        if (matchEarlierCounterIncrement && consumePendingCounterIncrement(roomName, now)) {
+            if (secretPos != null) {
+                Set<Long> seen = seenSelfSecretPositions.computeIfAbsent(roomName, ignored -> new HashSet<>());
+                if (!seen.add(secretPos.asLong())) return;
+            }
+
+            PendingPotentialSecret confirmed = new PendingPotentialSecret(
+                    secretPos == null ? null : secretPos.immutable(),
+                    now,
+                    kind
+            );
+            rememberConfirmedPotentialSecret(roomName, confirmed, now);
+
+            countSelfSecret(roomName, now, true, secretPos);
+            return;
+        }
+
+        Deque<PendingPotentialSecret> queue = pendingPotentialSelfSecrets
+                .computeIfAbsent(roomName, ignored -> new ArrayDeque<>());
+
+        if (secretPos != null) {
+            queue.removeIf(pending -> secretPos.equals(pending.pos));
+        }
+        queue.addLast(new PendingPotentialSecret(secretPos == null ? null : secretPos.immutable(), now, kind));
+    }
+
+    private static void rememberConfirmedPotentialSecret(String roomName, PendingPotentialSecret secret, long now) {
+        if (secret != null && secret.kind == PotentialSecretKind.BLOCK) {
+            lastConfirmedBlockSecretAtByRoom.put(roomName, now);
+        }
+    }
+
+    private static boolean hasRecentPendingBlockSecret(String roomName, long now) {
+        Deque<PendingPotentialSecret> queue = pendingPotentialSelfSecrets.get(roomName);
+        if (queue == null || queue.isEmpty()) return false;
+
+        while (!queue.isEmpty() && now - queue.peekFirst().observedAtMs > SELF_SECRET_CONFIRM_WINDOW_MS) {
+            queue.removeFirst();
+        }
+
+        if (queue.isEmpty()) {
+            pendingPotentialSelfSecrets.remove(roomName);
+            return false;
+        }
+
+        for (PendingPotentialSecret secret : queue) {
+            if (secret.kind == PotentialSecretKind.BLOCK) return true;
+        }
+        return false;
+    }
+
+    private static boolean wasBlockSecretRecentlyConfirmed(String roomName, long now) {
+        Long confirmedAt = lastConfirmedBlockSecretAtByRoom.get(roomName);
+        if (confirmedAt == null) return false;
+
+        if (now - confirmedAt > SELF_SECRET_CONFIRM_WINDOW_MS) {
+            lastConfirmedBlockSecretAtByRoom.remove(roomName);
+            return false;
+        }
+
+        return true;
     }
 
     public static void onItemSecretPickup(BlockPos itemPos) {
@@ -834,6 +1087,22 @@ public final class SecretRoomTimerClient {
         return matched;
     }
 
+    private static PendingPotentialSecret consumePendingPotentialSecret(String roomName, long now) {
+        Deque<PendingPotentialSecret> queue = pendingPotentialSelfSecrets.get(roomName);
+        if (queue == null || queue.isEmpty()) return null;
+
+        while (!queue.isEmpty() && now - queue.peekFirst().observedAtMs > SELF_SECRET_CONFIRM_WINDOW_MS) {
+            queue.removeFirst();
+        }
+
+        PendingPotentialSecret matched = queue.pollLast();
+        if (queue.isEmpty()) {
+            pendingPotentialSelfSecrets.remove(roomName);
+        }
+
+        return matched;
+    }
+
     public static int getKnownFoundSecrets(String roomName) {
         if (roomName == null) return -1;
 
@@ -851,6 +1120,24 @@ public final class SecretRoomTimerClient {
         int total = getKnownTotalSecrets(roomName);
 
         return total > 0 && found >= total;
+    }
+
+    private enum PotentialSecretKind {
+        ITEM,
+        COMBAT,
+        BLOCK
+    }
+
+    private static final class PendingPotentialSecret {
+        private final BlockPos pos;
+        private final long observedAtMs;
+        private final PotentialSecretKind kind;
+
+        private PendingPotentialSecret(BlockPos pos, long observedAtMs, PotentialSecretKind kind) {
+            this.pos = pos;
+            this.observedAtMs = observedAtMs;
+            this.kind = kind;
+        }
     }
 
     private static final class PendingChestSecret {
