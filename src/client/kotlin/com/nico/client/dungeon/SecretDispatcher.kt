@@ -34,10 +34,16 @@ object SecretDispatcher {
 
     private const val BAT_DAMAGE_EVIDENCE_WINDOW_MS = 2500L
     private const val BAT_ABILITY_MATCH_WINDOW_MS = 900L
+    private const val BAT_UNLOAD_ABILITY_MATCH_WINDOW_MS = 3000L
+    private const val BAT_ATTRIBUTION_DEDUPE_MS = 1500L
+    private const val BAT_UNLOAD_MAX_DISTANCE = 20.0f
+    private var lastBatAttributionRoom: String? = null
 
     private val recentBatDamage = mutableMapOf<Int, RecentBatDamage>()
     private var lastSelfAbilityDamageAtMs = 0L
     private var pendingBatSlainAtMs = 0L
+    private var pendingBatAbilityMatchWindowMs = BAT_ABILITY_MATCH_WINDOW_MS
+    private var lastBatAttributionAtMs = 0L
 
     private val selfAbilityDamageRegex = Regex(
         """^Your .+ hit \d+ (?:enemy|enemies) for .+ damage\.?$""",
@@ -97,8 +103,9 @@ object SecretDispatcher {
         }
 
         ClientEntityEvents.ENTITY_UNLOAD.register { entity, _ ->
-            if (entity is ItemEntity) {
-                handlePotentialItemUnload(entity)
+            when (entity) {
+                is ItemEntity -> handlePotentialItemUnload(entity)
+                is Bat -> handlePotentialBatUnload(entity)
             }
         }
 
@@ -194,23 +201,20 @@ object SecretDispatcher {
                 recentBatDamage.remove(directEvidence.key)
 
                 if (directEvidence.value.bySelf) {
-                    pendingBatSlainAtMs = 0L
-                    SecretRoomTimerClient.onPotentialCombatSecretPickup(directEvidence.value.pos)
-                    println("[NSM] Bat secret attributed from direct damage evidence")
+                    dispatchBatSecret(directEvidence.value.pos, "direct damage evidence")
                     return
                 }
             }
 
             if (now - lastSelfAbilityDamageAtMs <= BAT_ABILITY_MATCH_WINDOW_MS) {
-                pendingBatSlainAtMs = 0L
-                SecretRoomTimerClient.onPotentialCombatSecretPickup(null)
-                println("[NSM] Bat secret attributed from recent self ability damage")
+                dispatchBatSecret(null, "recent self ability damage")
                 return
             }
 
             // Hypixel may send the bat-death line before its generic
             // "Your <ability> hit ..." line (Implosion does this, for example).
             pendingBatSlainAtMs = now
+            pendingBatAbilityMatchWindowMs = BAT_ABILITY_MATCH_WINDOW_MS
             return
         }
 
@@ -219,10 +223,8 @@ object SecretDispatcher {
         lastSelfAbilityDamageAtMs = now
 
         if (pendingBatSlainAtMs > 0L
-            && now - pendingBatSlainAtMs <= BAT_ABILITY_MATCH_WINDOW_MS) {
-            pendingBatSlainAtMs = 0L
-            SecretRoomTimerClient.onPotentialCombatSecretPickup(null)
-            println("[NSM] Bat secret attributed from self ability damage fallback")
+            && now - pendingBatSlainAtMs <= pendingBatAbilityMatchWindowMs) {
+            dispatchBatSecret(null, "self ability damage fallback")
         }
     }
 
@@ -232,9 +234,95 @@ object SecretDispatcher {
         }
 
         if (pendingBatSlainAtMs > 0L
-            && now - pendingBatSlainAtMs > BAT_ABILITY_MATCH_WINDOW_MS) {
+            && now - pendingBatSlainAtMs > pendingBatAbilityMatchWindowMs) {
             pendingBatSlainAtMs = 0L
+            pendingBatAbilityMatchWindowMs = BAT_ABILITY_MATCH_WINDOW_MS
         }
+    }
+
+    /**
+    +     * Compatibility fallback for clients where another mod filters, compacts or delays the
+    +     * "A Bat has been slain" chat line. A bat disappearing very close to the player is
+    +     * treated as the same death candidate that the chat path would have produced. Final
+    +     * credit still goes through the room secret counter in SecretRoomTimerClient.
+    +     */
+    private fun handlePotentialBatUnload(bat: Bat) {
+        if (!isDungeonClearContext()) return
+
+        val client = Minecraft.getInstance()
+        val player = client.player ?: return
+        if (bat.distanceTo(player) > BAT_UNLOAD_MAX_DISTANCE) return
+
+        val now = System.currentTimeMillis()
+        pruneBatDamageEvidence(now)
+
+        val directEvidence = recentBatDamage.remove(bat.id)
+        if (directEvidence != null
+                && now - directEvidence.observedAtMs <= BAT_DAMAGE_EVIDENCE_WINDOW_MS
+                && directEvidence.bySelf) {
+                dispatchBatSecret(directEvidence.pos, "bat entity unload with direct self damage")
+            return
+        }
+
+        val abilityAgeMs = if (lastSelfAbilityDamageAtMs > 0L) {
+            now - lastSelfAbilityDamageAtMs
+        } else {
+             Long.MAX_VALUE
+        }
+
+        if (abilityAgeMs <= BAT_UNLOAD_ABILITY_MATCH_WINDOW_MS) {
+            dispatchBatSecret(bat.blockPosition().immutable(),
+                "bat entity unload after self ability damage (${abilityAgeMs}ms)")
+            return
+        }
+
+        pendingBatSlainAtMs = now
+        pendingBatAbilityMatchWindowMs = BAT_UNLOAD_ABILITY_MATCH_WINDOW_MS
+        val ageText = if (abilityAgeMs == Long.MAX_VALUE) "none" else "${abilityAgeMs}ms"
+        println("[NSM] Bat death candidate observed from entity unload (last self ability: $ageText ago)")
+    }
+
+    private fun dispatchBatSecret(pos: BlockPos?, reason: String) {
+        val now = System.currentTimeMillis()
+        pendingBatSlainAtMs = 0L
+        pendingBatAbilityMatchWindowMs = BAT_ABILITY_MATCH_WINDOW_MS
+
+        val client = Minecraft.getInstance()
+        val player = client.player
+        val roomName = if (player != null) {
+            try {
+                DungeonScanner.getRoomNameForPlayer(player)
+                    .takeUnless { it.isBlank() || it == "Unknown" }
+            } catch (_: Throwable) {
+                null
+            }
+        } else {
+            null
+        }
+
+        val sameRoom = roomName == lastBatAttributionRoom
+        if (sameRoom && now - lastBatAttributionAtMs <= BAT_ATTRIBUTION_DEDUPE_MS) {
+            println("[NSM] Ignored duplicate bat attribution in ${roomName ?: "unknown room"} ($reason)")
+            return
+        }
+
+        lastBatAttributionAtMs = now
+        lastBatAttributionRoom = roomName
+        SecretRoomTimerClient.onPotentialCombatSecretPickup(pos)
+        println("[NSM] Bat secret attributed from $reason")
+    }
+
+    @JvmStatic
+    fun clearTransientState() {
+        recentBatDamage.clear()
+        lastSelfAbilityDamageAtMs = 0L
+        pendingBatSlainAtMs = 0L
+        pendingBatAbilityMatchWindowMs = BAT_ABILITY_MATCH_WINDOW_MS
+        lastBatAttributionAtMs = 0L
+        lastBatAttributionRoom = null
+        lastGameMessage = ""
+        lastGameMessageOverlay = false
+        lastGameMessageAtNanos = 0L
     }
 
     private fun handleSound(packet: ClientboundSoundPacket) {

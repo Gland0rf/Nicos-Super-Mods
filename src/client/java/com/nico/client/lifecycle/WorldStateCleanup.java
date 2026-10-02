@@ -1,9 +1,6 @@
 package com.nico.client.lifecycle;
 
-import com.nico.client.dungeon.DungeonScanner;
-import com.nico.client.dungeon.DungeonState;
-import com.nico.client.dungeon.DungeonStatsTracker;
-import com.nico.client.dungeon.DungeonTeammateScanner;
+import com.nico.client.dungeon.*;
 import com.nico.client.secretTimer.SecretRoomTimerClient;
 import com.nico.client.stacking.RoomStackingDetector;
 import com.nico.client.utils.LocationUtils;
@@ -50,6 +47,7 @@ public final class WorldStateCleanup {
         run("dungeon stats", DungeonStatsTracker::reset, cleaned, failed);
         run("dungeon scanner", DungeonScanner::clearTransientState, cleaned, failed);
         run("dungeon teammate cache", DungeonTeammateScanner::clearTransientState, cleaned, failed);
+        run("secret dispatcher", SecretDispatcher::clearTransientState, cleaned, failed);
         run("secret timer", SecretRoomTimerClient::clearTransientState, cleaned, failed);
         run("room stacking", RoomStackingDetector::clearTransientState, cleaned, failed);
 
