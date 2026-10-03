@@ -25,7 +25,7 @@ public class InventoryLayoutsFeature {
 
     private static final InventoryLayoutStorage STORAGE = new InventoryLayoutStorage();
     private static final InventoryLayoutManager MANAGER = new InventoryLayoutManager(STORAGE);
-    private static final Map<InventoryScreen, ButtonBounds> BUTTON_BOUNDS = new WeakHashMap<>();
+    private static final Map<InventoryScreen, InventoryButtonState> INVENTORY_BUTTONS = new WeakHashMap<>();
 
     private static HudLayoutManager hudLayoutManager;
     private static boolean initialized;
@@ -45,7 +45,10 @@ public class InventoryLayoutsFeature {
         if (initialized) return;
 
         STORAGE.load();
-        ClientTickEvents.END_CLIENT_TICK.register(MANAGER::tick);
+        ClientTickEvents.END_CLIENT_TICK.register(minecraft -> {
+            MANAGER.tick(minecraft);
+            refreshInventoryButton(minecraft);
+        });
 
         ScreenEvents.AFTER_INIT.register((minecraft, screen, scaledWidth, scaledHeight) -> {
             if (!(screen instanceof InventoryScreen inventoryScreen)) {
@@ -92,16 +95,15 @@ public class InventoryLayoutsFeature {
 
     private static void addInventoryLayoutsButton(InventoryScreen screen) {
         ButtonBounds bounds = getButtonBounds(screen);
-        BUTTON_BOUNDS.put(screen, bounds);
+        Button button = Button.builder(
+                    inventoryButtonLabel(),
+                    ignored -> handleInventoryButtonPress(screen)
+                )
+                .bounds(bounds.x(), bounds.y(), bounds.width(), bounds.height())
+                .build();
 
-        Screens.getWidgets(screen).add(
-                Button.builder(
-                                Component.literal(MANAGER.activeLayout() == null ? "Layouts" : "Layouts *"),
-                                button -> openLayoutsScreen(screen)
-                        )
-                        .bounds(bounds.x(), bounds.y(), bounds.width(), bounds.height())
-                        .build()
-        );
+        INVENTORY_BUTTONS.put(screen, new InventoryButtonState(button, bounds));
+        Screens.getWidgets(screen).add(button);
     }
 
     public static boolean handleInventoryLayoutsClick(InventoryScreen screen, MouseButtonEvent event) {
@@ -109,13 +111,40 @@ public class InventoryLayoutsFeature {
             return false;
         }
 
-        ButtonBounds bounds = BUTTON_BOUNDS.get(screen);
-        if (bounds == null || !bounds.contains(event.x(), event.y())) {
+        InventoryButtonState state = INVENTORY_BUTTONS.get(screen);
+        if (state == null || !state.bounds().contains(event.x(), event.y())) {
             return false;
         }
 
-        openLayoutsScreen(screen);
+        handleInventoryButtonPress(screen);
         return true;
+    }
+
+    private static void handleInventoryButtonPress(InventoryScreen screen) {
+        if (MANAGER.activeLayout() != null) {
+            MANAGER.deactivate(true);
+            refreshInventoryButton(screen);
+            return;
+        }
+
+        openLayoutsScreen(screen);
+    }
+
+    private static void refreshInventoryButton(Minecraft minecraft) {
+        if (minecraft.screen instanceof InventoryScreen inventoryScreen) {
+            refreshInventoryButton(inventoryScreen);
+        }
+    }
+
+    private static void refreshInventoryButton(InventoryScreen screen) {
+        InventoryButtonState state = INVENTORY_BUTTONS.get(screen);
+        if (state != null) {
+            state.button().setMessage(inventoryButtonLabel());
+        }
+    }
+
+    private static Component inventoryButtonLabel() {
+        return Component.literal(MANAGER.activeLayout() == null ? "Layouts" : "Stop Layout");
     }
 
     private static void openLayoutsScreen(InventoryScreen screen) {
@@ -160,6 +189,8 @@ public class InventoryLayoutsFeature {
         if (value < min) return min;
         return Math.min(value, max);
     }
+
+    private record InventoryButtonState(Button button, ButtonBounds bounds) { }
 
     private record ButtonBounds(int x, int y, int width, int height) {
         private boolean contains(double mouseX, double mouseY) {

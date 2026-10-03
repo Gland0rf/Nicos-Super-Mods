@@ -105,12 +105,7 @@ public class InventoryLayoutsScreen extends Screen {
     private void addFooterButtons(int left, int panelWidth) {
         int footerTop = height - 80;
         int saveWidth = 112;
-        int stopWidth = 100;
-        int gap = 8;
-        int totalWidth = manager.activeLayout() == null
-                ? saveWidth
-                : saveWidth + gap + stopWidth;
-        int startX = left + Math.max(0, (panelWidth - totalWidth) / 2);
+        int startX = left + Math.max(0, (panelWidth - saveWidth) / 2);
 
         addRenderableWidget(
                 Button.builder(Component.literal("Save current"), button ->
@@ -120,17 +115,6 @@ public class InventoryLayoutsScreen extends Screen {
                         .bounds(startX, footerTop, saveWidth, 20)
                         .build()
         );
-
-        if (manager.activeLayout() != null) {
-            addRenderableWidget(
-                    Button.builder(Component.literal("Stop active"), button -> {
-                                manager.deactivate(true);
-                                InventoryLayoutsScreen.this.rebuildWidgets();
-                            })
-                            .bounds(startX + saveWidth + gap, footerTop, stopWidth, 20)
-                            .build()
-            );
-        }
     }
 
     @Override

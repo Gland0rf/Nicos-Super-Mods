@@ -6,7 +6,9 @@ import com.nico.client.inventoryLayouts.storage.InventoryLayoutMatcher;
 import com.nico.client.inventoryLayouts.storage.InventoryLayoutStorage;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.world.entity.player.Player;
 
 public class InventoryLayoutManager {
@@ -56,6 +58,15 @@ public class InventoryLayoutManager {
                     Component.literal("[NSM] Loaded inventory layout: ")
                             .withStyle(ChatFormatting.GREEN)
                             .append(Component.literal(layout.name()).withStyle(ChatFormatting.WHITE))
+                            .append(
+                                    Component.literal(" [STOP]")
+                                            .withStyle(ChatFormatting.RED)
+                                            .withStyle(style -> style
+                                                    .withClickEvent(new ClickEvent.RunCommand("/nsm layout stop"))
+                                                    .withHoverEvent(new HoverEvent.ShowText(
+                                                            Component.literal("Stop this inventory layout")
+                                                    )))
+                            )
             );
         }
     }

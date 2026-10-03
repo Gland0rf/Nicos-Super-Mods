@@ -9,6 +9,8 @@ import com.nico.client.bloodrush.RouteEditor;
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonTeammateScanner;
+import com.nico.client.inventoryLayouts.core.InventoryLayout;
+import com.nico.client.inventoryLayouts.core.InventoryLayoutsFeature;
 import com.nico.client.memleak.MemLeakFeature;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
@@ -57,6 +59,7 @@ public final class NsmClientCommands {
                 ClientCommands.literal("nsm")
                         .executes(context -> openConfigScreen())
                         .then(RouteCommands.node(routeEditor))
+                        .then(createInventoryLayoutNode())
                         .then(createMemoryNode("memory"))
                         .then(createMemoryNode("memleak"))
         );
@@ -140,6 +143,24 @@ public final class NsmClientCommands {
                                 + " §8(" + x + ", " + y + ", " + z + ")"
                 )
         );
+    }
+
+    private static LiteralArgumentBuilder<FabricClientCommandSource> createInventoryLayoutNode() {
+        return ClientCommands.literal("layout")
+                .then(
+                        ClientCommands.literal("stop")
+                                .executes(content -> stopInventoryLayout())
+                );
+    }
+
+    private static int stopInventoryLayout() {
+        if (InventoryLayoutsFeature.manager().activeLayout() == null) {
+            sendMessage(Component.literal("§e[NSM] No inventory layout is currently active."));
+            return 0;
+        }
+
+        InventoryLayoutsFeature.manager().deactivate(true);
+        return 1;
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> createMemoryNode(String literal) {
