@@ -16,7 +16,7 @@ import net.minecraft.world.entity.player.Player;
 
 import java.util.*;
 
-public class RoomStackingDetector {
+public final class RoomStackingDetector {
 
     public static final long ROOM_STACK_ALERT_COOLDOWN_MS = 5000L;
 
@@ -38,15 +38,7 @@ public class RoomStackingDetector {
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
 
-        if (mc.level == null || mc.player == null) {
-            resetAllState();
-            return;
-        }
-        if (!LocationUtils.isInDungeon()) {
-            resetAllState();
-            return;
-        }
-        if (DungeonState.INSTANCE.getInBoss()) {
+        if (mc.level == null || mc.player == null || !LocationUtils.isInDungeon() || DungeonState.INSTANCE.getInBoss()) {
             resetAllState();
             return;
         }
@@ -78,17 +70,17 @@ public class RoomStackingDetector {
                     ignored -> new RoomStackState()
             );
 
-            updateRoomScore(state, roomName, players, globalSecretDelta, now);
+            updateRoomScore(state, players, globalSecretDelta, now);
 
             if (state.score >= ALERT_THRESHOLD) {
-                trySendAlert(roomName, players, state.score, now);
+                sendAlertIfAllowed(roomName, players, now);
             }
         }
 
         removeInactiveRoomStates(activeRoomsThisTick);
-     }
+    }
 
-     private static boolean shouldDisregardRoom(String roomName, List<Player> players) {
+    private static boolean shouldDisregardRoom(String roomName, List<Player> players) {
         if (roomName == null || roomName.isBlank() || roomName.equals("Unknown")) {
             return true;
         }
@@ -111,8 +103,8 @@ public class RoomStackingDetector {
             return true;
         }
 
-        return isRoomFullyComplete(roomName);
-     }
+        return SecretRoomTimerClient.isRoomSecretCountComplete(roomName);
+    }
 
     private static boolean isStartRoom(String roomName) {
         return roomName.equalsIgnoreCase("Entrance");
@@ -126,17 +118,8 @@ public class RoomStackingDetector {
         return roomName.equalsIgnoreCase("Blood");
     }
 
-    private static boolean isRoomFullyComplete(String roomName) {
-        if (!SecretRoomTimerClient.isRoomSecretCountComplete(roomName)) {
-            return false;
-        }
-
-        return true;
-    }
-
     private static void updateRoomScore(
             RoomStackState state,
-            String roomName,
             List<Player> players,
             int globalSecretDelta,
             long now
@@ -167,28 +150,23 @@ public class RoomStackingDetector {
         if (globalSecretDelta > 0) {
             state.score += globalSecretDelta * SCORE_GLOBAL_SECRET_INCREASE;
         }
-
-        if (state.score < 0) {
-            state.score = 0;
-        }
     }
 
-    private static boolean trySendAlert(String roomName, List<Player> players, int score, long now) {
+    private static void sendAlertIfAllowed(String roomName, List<Player> players, long now) {
         Long lastForRoom = lastAlertByRoom.get(roomName);
 
         if (lastForRoom != null && now - lastForRoom < ROOM_STACK_ALERT_COOLDOWN_MS) {
-            return false;
+            return;
         }
 
         if (now - lastGlobalAlertAt < 1000L) {
-            return false;
+            return;
         }
 
         lastGlobalAlertAt = now;
         lastAlertByRoom.put(roomName, now);
 
-        onRoomStackingDetected(roomName, players, score);
-        return true;
+        onRoomStackingDetected(roomName, players);
     }
 
     private static int getGlobalSecretDelta() {
@@ -239,7 +217,7 @@ public class RoomStackingDetector {
         lastKnownGlobalSecretCount = -1;
     }
 
-     private static Map<String, List<Player>> getDungeonPlayersByRoom(Minecraft mc) {
+    private static Map<String, List<Player>> getDungeonPlayersByRoom(Minecraft mc) {
         Map<String, List<Player>> playersByRoom = new HashMap<>();
         Set<String> teammateNames = DungeonTeammateScanner.getDungeonTeammateNames();
 
@@ -261,18 +239,18 @@ public class RoomStackingDetector {
         }
 
         return playersByRoom;
-     }
+    }
 
-     private static boolean isSecretCountAtOrAboveConfiguredPercent() {
+    private static boolean isSecretCountAtOrAboveConfiguredPercent() {
         int found = DungeonStatsTracker.getSecretCount();
-        int total = DungeonStatsTracker.INSTANCE.getTotalSecrets();
+        int total = DungeonStatsTracker.getTotalSecrets();
 
         if (total <= 0) return false;
 
         double configuredPercent = NsmConfig.INSTANCE.dungeons.roomStacking.disableRoomStackingAtSecretPercent / 100.0;
 
         return found / (double) total >= configuredPercent;
-     }
+    }
 
     private static Set<String> getPlayerNameSet(List<Player> players) {
         Set<String> names = new TreeSet<>();
@@ -284,7 +262,7 @@ public class RoomStackingDetector {
         return names;
     }
 
-     private static boolean hasLockedWitherDoor(List<Player> players) {
+    private static boolean hasLockedWitherDoor(List<Player> players) {
         for (Player player : players) {
             if (DungeonScanner.hasLockedWitherDoorForPlayer(player)) {
                 return true;
@@ -292,66 +270,66 @@ public class RoomStackingDetector {
         }
 
         return false;
-     }
+    }
 
-     private static void onRoomStackingDetected(String roomName, List<Player> players, int score) {
+    private static void onRoomStackingDetected(String roomName, List<Player> players) {
         Minecraft mc = Minecraft.getInstance();
 
         if (mc.player == null) return;
 
-         String allNames = NsmConfig.INSTANCE.dungeons.roomStacking.includeClassesInChat
-                    ? getPlayerNamesWithClasses(players)
-                    : getPlayerNames(players);
+        String allNames = NsmConfig.INSTANCE.dungeons.roomStacking.includeClassesInChat
+                ? getPlayerNamesWithClasses(players)
+                : getPlayerNames(players);
 
-         String otherNames = getOtherPlayerNames(players, mc.player);
+        String otherNames = getOtherPlayerNames(players, mc.player);
 
-         boolean includesSelf = players.stream().anyMatch(player ->
-                 player == mc.player || player.getName().getString().equals(mc.player.getName().getString())
-         );
+        boolean includesSelf = players.stream().anyMatch(player ->
+                player == mc.player || player.getName().getString().equals(mc.player.getName().getString())
+        );
 
-         if (includesSelf) {
-             if (NsmConfig.INSTANCE.dungeons.roomStacking.showSelfTitleAlert) {
-                 mc.gui.setTimes(10, 35, 20);
+        if (includesSelf) {
+            if (NsmConfig.INSTANCE.dungeons.roomStacking.showSelfTitleAlert) {
+                mc.gui.setTimes(10, 35, 20);
 
-                 mc.gui.setTitle(
-                         Component.literal("You are stacking!")
-                                 .withStyle(ChatFormatting.RED)
-                 );
+                mc.gui.setTitle(
+                        Component.literal("You are stacking!")
+                                .withStyle(ChatFormatting.RED)
+                );
 
-                 mc.gui.setSubtitle(
-                         Component.literal("With " + otherNames)
-                 );
-             }
+                mc.gui.setSubtitle(
+                        Component.literal("With " + otherNames)
+                );
+            }
 
-             copyStackingMessageToClipboard("[NSM] Stacking with " + otherNames);
+            copyStackingMessageToClipboard("[NSM] Stacking with " + otherNames);
 
-             if (NsmConfig.INSTANCE.dungeons.roomStacking.playAlertSounds) {
-                 mc.player.playSound(
-                         SoundEvents.BELL_BLOCK,
-                         1.0F,
-                         1.0F
-                 );
-             }
-         } else {
-             if (NsmConfig.INSTANCE.dungeons.roomStacking.showOtherStackingChatAlert) {
-                 mc.getInstance().gui.getChat().addClientSystemMessage(
-                         Component.literal("[NSM] ")
-                                 .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
-                                 .append(Component.literal(allNames + " are stacking in " + roomName + "!")
-                                         .withStyle(ChatFormatting.RED))
-                 );
-             }
+            if (NsmConfig.INSTANCE.dungeons.roomStacking.playAlertSounds) {
+                mc.player.playSound(
+                        SoundEvents.BELL_BLOCK,
+                        1.0F,
+                        1.0F
+                );
+            }
+        } else {
+            if (NsmConfig.INSTANCE.dungeons.roomStacking.showOtherStackingChatAlert) {
+                mc.gui.getChat().addClientSystemMessage(
+                        Component.literal("[NSM] ")
+                                .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
+                                .append(Component.literal(allNames + " are stacking in " + roomName + "!")
+                                        .withStyle(ChatFormatting.RED))
+                );
+            }
 
-             copyStackingMessageToClipboard("[NSM] " + allNames + " are stacking in " + roomName + "!");
+            copyStackingMessageToClipboard("[NSM] " + allNames + " are stacking in " + roomName + "!");
 
-             if (NsmConfig.INSTANCE.dungeons.roomStacking.playAlertSounds) {
-                 mc.player.playSound(
-                         SoundEvents.NOTE_BLOCK_BELL.value(),
-                         1.0F,
-                         1.0F
-                 );
-             }
-         }
+            if (NsmConfig.INSTANCE.dungeons.roomStacking.playAlertSounds) {
+                mc.player.playSound(
+                        SoundEvents.NOTE_BLOCK_BELL.value(),
+                        1.0F,
+                        1.0F
+                );
+            }
+        }
     }
 
     private static String getPlayerNames(List<Player> players) {

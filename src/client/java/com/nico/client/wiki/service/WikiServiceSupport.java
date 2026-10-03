@@ -7,11 +7,9 @@ import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
 
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -486,18 +484,7 @@ public class WikiServiceSupport {
     }
 
     protected static URI buildApiUri(Map<String, String> parameters) {
-        StringBuilder result = new StringBuilder(WIKI_API_ENDPOINT).append('?');
-        boolean first = true;
-        for (Map.Entry<String, String> entry : parameters.entrySet()) {
-            if (!first) {
-                result.append('&');
-            }
-            first = false;
-            result.append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8))
-                    .append('=')
-                    .append(URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
-        }
-        return URI.create(result.toString());
+        return WikiHttp.buildQueryUri(WIKI_API_ENDPOINT, parameters);
     }
 
     protected static void logContractElements(Element root) {

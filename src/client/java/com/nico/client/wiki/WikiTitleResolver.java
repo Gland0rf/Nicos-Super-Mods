@@ -266,7 +266,7 @@ public final class WikiTitleResolver {
                         : java.util.List.of(new SearchResult(result.title(), result.pageUri())))
                 .exceptionally(ignored -> java.util.List.<SearchResult>of());
 
-        URI prefixUri = buildApiUri(Map.of(
+        URI prefixUri = WikiHttp.buildQueryUri(WIKI_API_ENDPOINT, Map.of(
                 "action", "query",
                 "format", "json",
                 "formatversion", "2",
@@ -276,7 +276,7 @@ public final class WikiTitleResolver {
                 "pssearch", query
         ));
 
-        URI searchUri = buildApiUri(Map.of(
+        URI searchUri = WikiHttp.buildQueryUri(WIKI_API_ENDPOINT, Map.of(
                 "action", "query",
                 "format", "json",
                 "formatversion", "2",
@@ -404,7 +404,7 @@ public final class WikiTitleResolver {
     }
 
     private static CompletableFuture<ResolvedWikiTitle> resolveExact(String title) {
-        URI uri = buildApiUri(Map.of(
+        URI uri = WikiHttp.buildQueryUri(WIKI_API_ENDPOINT, Map.of(
                 "action", "query",
                 "format", "json",
                 "formatversion", "2",
@@ -507,19 +507,6 @@ public final class WikiTitleResolver {
             throw new WikiResolutionException("Empty response from " + response.uri());
         }
         return response.body();
-    }
-
-    private static URI buildApiUri(Map<String, String> parameters) {
-        StringBuilder result = new StringBuilder(WIKI_API_ENDPOINT).append('?');
-        boolean first = true;
-        for (Map.Entry<String, String> entry : parameters.entrySet()) {
-            if (!first) {
-                result.append('&');
-            }
-            first = false;
-            result.append(encode(entry.getKey())).append('=').append(encode(entry.getValue()));
-        }
-        return URI.create(result.toString());
     }
 
     private static URI buildArticleUri(String title) {

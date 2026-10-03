@@ -1,5 +1,6 @@
 package com.nico.client;
 
+import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.nico.client.bloodrush.BloodRoutes;
 import com.nico.client.bloodrush.RouteCommands;
@@ -39,22 +40,14 @@ public final class NsmClientCommands {
         );
     }
 
-    private static void registerRoomsCommand(
-            com.mojang.brigadier.CommandDispatcher<
-                    net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
-                    > dispatcher
-    ) {
+    private static void registerRoomsCommand(CommandDispatcher<FabricClientCommandSource> dispatcher) {
         dispatcher.register(
                 ClientCommands.literal("nsmrooms")
                         .executes(context -> executeRoomsCommand())
         );
     }
 
-    private static void registerConfigCommands(
-            com.mojang.brigadier.CommandDispatcher<
-                    net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
-                    > dispatcher
-    ) {
+    private static void registerConfigCommands(CommandDispatcher<FabricClientCommandSource> dispatcher) {
         dispatcher.register(
                 ClientCommands.literal("nsmconfig")
                         .executes(context -> openConfigScreen())
@@ -105,7 +98,7 @@ public final class NsmClientCommands {
             return;
         }
 
-        Set<String> teammateNames = getDungeonTeammateNames();
+        Set<String> teammateNames = DungeonTeammateScanner.getDungeonTeammateNames();
 
         sendMessage(
                 Component.literal(
@@ -115,7 +108,7 @@ public final class NsmClientCommands {
 
         sendMessage(
                 Component.literal(
-                        "§7Odin teammates found: §e" + teammateNames.size()
+                        "7§Dungeon teammates found: §e" + teammateNames.size()
                 )
         );
 
@@ -147,23 +140,6 @@ public final class NsmClientCommands {
                                 + " §8(" + x + ", " + y + ", " + z + ")"
                 )
         );
-    }
-
-    public static Set<String> getDungeonTeammateNames() {
-        Set<String> names = new HashSet<>();
-
-        try {
-            Set<String> teammateNames = DungeonTeammateScanner.getDungeonTeammateNames();
-            for (String name : teammateNames) {
-                if (name != null && !name.isBlank()) {
-                    names.add(name);
-                }
-            }
-        } catch (Throwable throwable) {
-            throwable.printStackTrace();
-        }
-
-        return names;
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> createMemoryNode(String literal) {
