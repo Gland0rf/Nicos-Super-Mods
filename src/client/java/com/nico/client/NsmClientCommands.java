@@ -9,13 +9,13 @@ import com.nico.client.bloodrush.RouteEditor;
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonTeammateScanner;
-import com.nico.client.inventoryLayouts.core.InventoryLayout;
+import com.nico.client.history.WrappedArchiveScreen;
+import com.nico.client.history.WrappedConfig;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutsFeature;
 import com.nico.client.memleak.MemLeakFeature;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
@@ -29,7 +29,8 @@ public final class NsmClientCommands {
 
     private static RouteEditor routeEditor;
 
-    private NsmClientCommands() { }
+    private NsmClientCommands() {
+    }
 
     public static void register() {
         routeEditor = BloodRoutes.initialize(new RouteContext());
@@ -42,14 +43,18 @@ public final class NsmClientCommands {
         );
     }
 
-    private static void registerRoomsCommand(CommandDispatcher<FabricClientCommandSource> dispatcher) {
+    private static void registerRoomsCommand(
+            CommandDispatcher<FabricClientCommandSource> dispatcher
+    ) {
         dispatcher.register(
                 ClientCommands.literal("nsmrooms")
                         .executes(context -> executeRoomsCommand())
         );
     }
 
-    private static void registerConfigCommands(CommandDispatcher<FabricClientCommandSource> dispatcher) {
+    private static void registerConfigCommands(
+            CommandDispatcher<FabricClientCommandSource> dispatcher
+    ) {
         dispatcher.register(
                 ClientCommands.literal("nsmconfig")
                         .executes(context -> openConfigScreen())
@@ -62,8 +67,13 @@ public final class NsmClientCommands {
                         .then(createInventoryLayoutNode())
                         .then(createMemoryNode("memory"))
                         .then(createMemoryNode("memleak"))
+                        .then(createWrappedNode())
         );
     }
+
+    // ------------------------------------------------------------
+    // Room debug
+    // ------------------------------------------------------------
 
     private static int executeRoomsCommand() {
         try {
@@ -82,18 +92,6 @@ public final class NsmClientCommands {
         }
     }
 
-    private static int openConfigScreen() {
-        Minecraft minecraft = Minecraft.getInstance();
-
-        minecraft.execute(() ->
-                minecraft.setScreen(
-                        NsmConfigManager.createScreen(minecraft.screen)
-                )
-        );
-
-        return 1;
-    }
-
     private static void printPlayerRooms() {
         Minecraft minecraft = Minecraft.getInstance();
 
@@ -101,7 +99,7 @@ public final class NsmClientCommands {
             return;
         }
 
-        Set<String> teammateNames = DungeonTeammateScanner.getDungeonTeammateNames();
+        Set<String> teammateNames = getDungeonTeammateNames();
 
         sendMessage(
                 Component.literal(
@@ -111,7 +109,7 @@ public final class NsmClientCommands {
 
         sendMessage(
                 Component.literal(
-                        "7§Dungeon teammates found: §e" + teammateNames.size()
+                        "§7Dungeon teammates found: §e" + teammateNames.size()
                 )
         );
 
@@ -145,60 +143,147 @@ public final class NsmClientCommands {
         );
     }
 
-    private static LiteralArgumentBuilder<FabricClientCommandSource> createInventoryLayoutNode() {
+    public static Set<String> getDungeonTeammateNames() {
+        Set<String> names = new HashSet<>();
+
+        try {
+            Set<String> teammateNames =
+                    DungeonTeammateScanner.getDungeonTeammateNames();
+
+            if (teammateNames == null) {
+                return names;
+            }
+
+            for (String name : teammateNames) {
+                if (name != null && !name.isBlank()) {
+                    names.add(name);
+                }
+            }
+        } catch (Throwable throwable) {
+            throwable.printStackTrace();
+        }
+
+        return names;
+    }
+
+    // ------------------------------------------------------------
+    // Main config
+    // ------------------------------------------------------------
+
+    private static int openConfigScreen() {
+        Minecraft minecraft = Minecraft.getInstance();
+
+        minecraft.execute(() ->
+                minecraft.setScreen(
+                        NsmConfigManager.createScreen(minecraft.screen)
+                )
+        );
+
+        return 1;
+    }
+
+    // ------------------------------------------------------------
+    // Inventory layouts
+    // ------------------------------------------------------------
+
+    private static LiteralArgumentBuilder<FabricClientCommandSource>
+    createInventoryLayoutNode() {
         return ClientCommands.literal("layout")
                 .then(
                         ClientCommands.literal("stop")
-                                .executes(content -> stopInventoryLayout())
+                                .executes(context -> stopInventoryLayout())
                 );
     }
 
     private static int stopInventoryLayout() {
         if (InventoryLayoutsFeature.manager().activeLayout() == null) {
-            sendMessage(Component.literal("§e[NSM] No inventory layout is currently active."));
+            sendMessage(
+                    Component.literal(
+                            "§e[NSM] No inventory layout is currently active."
+                    )
+            );
+
             return 0;
         }
 
         InventoryLayoutsFeature.manager().deactivate(true);
+
+        sendMessage(
+                Component.literal(
+                        "§a[NSM] Inventory layout stopped."
+                )
+        );
+
         return 1;
     }
 
-    private static LiteralArgumentBuilder<FabricClientCommandSource> createMemoryNode(String literal) {
+    // ------------------------------------------------------------
+    // Memory leak commands
+    // ------------------------------------------------------------
+
+    private static LiteralArgumentBuilder<FabricClientCommandSource>
+    createMemoryNode(String literal) {
         return ClientCommands.literal(literal)
                 .executes(context ->
                         sendMemLeakLines(MemLeakFeature.statusLines())
                 )
                 .then(
                         ClientCommands.literal("status")
-                                .executes(context -> sendMemLeakLines(MemLeakFeature.statusLines()))
+                                .executes(context ->
+                                        sendMemLeakLines(
+                                                MemLeakFeature.statusLines()
+                                        )
+                                )
                 )
                 .then(
                         ClientCommands.literal("diagnose")
-                                .executes(context -> sendMemLeakLines(MemLeakFeature.diagnosisLines()))
+                                .executes(context ->
+                                        sendMemLeakLines(
+                                                MemLeakFeature.diagnosisLines()
+                                        )
+                                )
                 )
                 .then(
                         ClientCommands.literal("suspects")
-                                .executes(context -> sendMemLeakLines(MemLeakFeature.diagnosisLines()))
+                                .executes(context ->
+                                        sendMemLeakLines(
+                                                MemLeakFeature.diagnosisLines()
+                                        )
+                                )
                 )
                 .then(
                         ClientCommands.literal("mods")
-                                .executes(context -> sendMemLeakLines(MemLeakFeature.modIndexLines()))
+                                .executes(context ->
+                                        sendMemLeakLines(
+                                                MemLeakFeature.modIndexLines()
+                                        )
+                                )
                 )
                 .then(
                         ClientCommands.literal("cleanup")
-                                .executes(context -> sendMemLeakLines(MemLeakFeature.cleanupLines()))
+                                .executes(context ->
+                                        sendMemLeakLines(
+                                                MemLeakFeature.cleanupLines()
+                                        )
+                                )
                 )
                 .then(
                         ClientCommands.literal("reset")
-                                .executes(context -> resetMemLeakMonitor())
+                                .executes(context ->
+                                        resetMemLeakMonitor()
+                                )
                 )
                 .then(
                         ClientCommands.literal("report")
-                                .executes(context -> exportMemLeakReport())
+                                .executes(context ->
+                                        exportMemLeakReport()
+                                )
                 )
                 .then(
                         ClientCommands.literal("export")
-                                .executes(context -> exportMemLeakReport())
+                                .executes(context ->
+                                        exportMemLeakReport()
+                                )
                 );
     }
 
@@ -212,12 +297,20 @@ public final class NsmClientCommands {
 
     private static int resetMemLeakMonitor() {
         if (!MemLeakFeature.reset()) {
-            sendMessage(Component.literal("§c[NSM Memory Check] The detector is disabled."));
+            sendMessage(
+                    Component.literal(
+                            "§c[NSM Memory Check] The detector is disabled."
+                    )
+            );
 
             return 0;
         }
 
-        sendMessage(Component.literal("§a[NSM Memory Check] Monitoring baseline reset."));
+        sendMessage(
+                Component.literal(
+                        "§a[NSM Memory Check] Monitoring baseline reset."
+                )
+        );
 
         return 1;
     }
@@ -227,27 +320,86 @@ public final class NsmClientCommands {
             Path report = MemLeakFeature.exportReport();
 
             if (report == null) {
-                sendMessage(Component.literal("§c[NSM Memory Check] The detector is disabled."));
+                sendMessage(
+                        Component.literal(
+                                "§c[NSM Memory Check] The detector is disabled."
+                        )
+                );
 
                 return 0;
             }
 
-            sendMessage(Component.literal("§a[NSM Memory Check] Report created."));
-            sendMessage(Component.literal("§7Saved to: §f" + report.toAbsolutePath()));
+            sendMessage(
+                    Component.literal(
+                            "§a[NSM Memory Check] Report created."
+                    )
+            );
+
+            sendMessage(
+                    Component.literal(
+                            "§7Saved to: §f" + report.toAbsolutePath()
+                    )
+            );
+
             sendMemLeakLines(MemLeakFeature.statusLines());
 
             return 1;
         } catch (IOException exception) {
             exception.printStackTrace();
 
-            sendMessage(Component.literal("§c[NSM Memory Check] Could not create the report: " + exception.getMessage()));
+            sendMessage(
+                    Component.literal(
+                            "§c[NSM Memory Check] Could not create the report: "
+                                    + exception.getMessage()
+                    )
+            );
+
             return 0;
         }
     }
 
+    // ------------------------------------------------------------
+    // Wrapped
+    // ------------------------------------------------------------
+
+    private static LiteralArgumentBuilder<FabricClientCommandSource>
+    createWrappedNode() {
+        return ClientCommands.literal("wrapped")
+                .executes(context -> openWrappedArchive())
+                .then(
+                        ClientCommands.literal("config")
+                                .executes(context -> openWrappedConfig())
+                );
+    }
+
+    private static int openWrappedArchive() {
+        Minecraft minecraft = Minecraft.getInstance();
+
+        minecraft.execute(() ->
+                minecraft.setScreen(
+                        new WrappedArchiveScreen(minecraft.screen)
+                )
+        );
+
+        return 1;
+    }
+
+    private static int openWrappedConfig() {
+        WrappedConfig.openConfigFile();
+        return 1;
+    }
+
+    // ------------------------------------------------------------
+    // Route editor
+    // ------------------------------------------------------------
+
     public static RouteEditor getRouteEditor() {
         return routeEditor;
     }
+
+    // ------------------------------------------------------------
+    // Utility
+    // ------------------------------------------------------------
 
     private static void sendMessage(Component message) {
         Minecraft minecraft = Minecraft.getInstance();
