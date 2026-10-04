@@ -6,6 +6,3 @@
 
 # These are Windows script files and should use crlf
 *.bat           text eol=crlf
-
-gradle.properties merge=keepCurrent
-src/main/resources/fabric.mod.json merge=keepCurrent
