@@ -131,6 +131,14 @@ public final class SkyblockHistoryFeature {
         return WRAPPED.snapshot(days);
     }
 
+    public static WrappedStore.WrappedSnapshot snapshot(YearMonth month) {
+        return WRAPPED.snapshot(month);
+    }
+
+    public static List<YearMonth> completedWrappedMonths() {
+        return WRAPPED.completedMonths();
+    }
+
     public static PlayerMemory playerMemory(String playerName) {
         return PLAYER_MEMORY.get(playerName);
     }

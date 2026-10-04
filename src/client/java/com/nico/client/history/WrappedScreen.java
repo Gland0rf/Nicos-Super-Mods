@@ -4,13 +4,18 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
+import java.awt.*;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -20,10 +25,12 @@ import java.util.Map;
 
 public final class WrappedScreen extends Screen {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MMM d, yyyy");
+    private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("MMMM yyyy");
     private static final long AUTO_ADVANCE_MS = 9_000L;
     private static final long ENTER_ANIMATION_MS = 520L;
+    private static final int FOOTER_HEIGHT = 96;
 
-    private static final int[][] PALETTES = {
+    static final int[][] PALETTES = {
             {0xFF4D00FF, 0xFFFF3D81},
             {0xFF007A5A, 0xFF85E85A},
             {0xFF002F6C, 0xFF17B7FF},
@@ -35,7 +42,7 @@ public final class WrappedScreen extends Screen {
     };
 
     private final Screen parent;
-    private final int days;
+    private final YearMonth month;
     private final WrappedStore.WrappedSnapshot snapshot;
     private final WrappedConfig.Settings settings;
     private final List<Slide> slides;
@@ -44,12 +51,13 @@ public final class WrappedScreen extends Screen {
     private long slideStartedAt;
     private boolean paused;
     private long pausedAt;
+    private String exportStatus = "";
 
-    public WrappedScreen(Screen parent, int days) {
+    public WrappedScreen(Screen parent, YearMonth month) {
         super(Component.literal("SkyBlock Wrapped"));
         this.parent = parent;
-        this.days = Math.max(1, Math.min(3650, days));
-        this.snapshot = SkyblockHistoryFeature.snapshot(this.days);
+        this.month = month;
+        this.snapshot = SkyblockHistoryFeature.snapshot(month);
         this.settings = WrappedConfig.load();
         this.slides = buildSlides();
         this.slideStartedAt = System.currentTimeMillis();
@@ -59,6 +67,23 @@ public final class WrappedScreen extends Screen {
     protected void init() {
         slideIndex = Math.max(0, Math.min(slideIndex, slides.size() - 1));
         slideStartedAt = System.currentTimeMillis();
+
+        int buttonWidth = 116;
+        int buttonGap = 8;
+        int buttonY = height - 28;
+        int left = width / 2 - buttonWidth - buttonGap / 2;
+
+        addRenderableWidget(
+                Button.builder(Component.literal("Export as PDF"), button -> exportPdf())
+                        .bounds(left, buttonY, buttonWidth, 20)
+                        .build()
+        );
+
+        addRenderableWidget(
+                Button.builder(Component.literal("Open Export Folder"), button -> openExportFolder())
+                        .bounds(left + buttonWidth + buttonGap, buttonY, buttonWidth, 20)
+                        .build()
+        );
     }
 
     @Override
@@ -78,6 +103,7 @@ public final class WrappedScreen extends Screen {
         renderProgress(graphics, now);
         renderSlide(graphics, slide, now);
         renderNavigationHint(graphics);
+        renderExportFolder(graphics);
 
         super.extractRenderState(graphics, mouseX, mouseY, a);
     }
@@ -109,7 +135,7 @@ public final class WrappedScreen extends Screen {
 
         // Vignette-ish top/bottom bands for readability
         graphics.fill(0, 0, width, 32, 0x44000000);
-        graphics.fill(0, height - 34, width, height, 0x55000000);
+        graphics.fill(0, height - 78, width, height, 0x55000000);
     }
 
     private void renderProgress(GuiGraphicsExtractor graphics, long now) {
@@ -149,7 +175,7 @@ public final class WrappedScreen extends Screen {
 
         int contentWidth = Math.min(610, Math.max(280, width - 44));
         int left = (width - contentWidth) / 2;
-        int top = Math.max(42, height / 2 - 142) + offsetY;
+        int top = (slide.kind() == SlideKind.TIME ? Math.max(28, height / 2 - 190) : Math.max(42, height / 2 - 142)) + offsetY;
 
         renderScaledCentered(graphics, slide.kicker().toUpperCase(Locale.ROOT), width / 2, top, 0.95f, withAlpha(0xFFFFFFFF, Math.max(80, alpha * 3 / 4)), true);
         renderScaledCentered(graphics, slide.title(), width / 2, top + 23, titleScale(slide.title()), withAlpha(0xFFFFFFFF, Math.max(80, alpha * 3 / 4)), true);
@@ -165,8 +191,8 @@ public final class WrappedScreen extends Screen {
 
         int statTop = top + 78;
         if (slide.kind() == SlideKind.TIME) {
-            statTop = renderStatGrid(graphics, slide.stats(), left, statTop, contentWidth, alpha, 4);
-            renderHeatmap(graphics, statTop + 8, contentWidth, alpha);
+            statTop = renderTimeStats(graphics, slide.stats(), left, statTop, contentWidth, alpha);
+            renderHeatmap(graphics, statTop + 10, contentWidth, alpha);
         } else {
             renderStatGrid(graphics, slide.stats(), left, statTop, contentWidth, alpha, 8);
         }
@@ -175,7 +201,7 @@ public final class WrappedScreen extends Screen {
     private void renderIntro(GuiGraphicsExtractor graphics, Slide slide, int y, int alpha) {
         String range = snapshot.start.format(DATE) + "  -  " + snapshot.end.format(DATE);
         graphics.centeredText(font, range, width / 2, y, withAlpha(0xFFDADADA, alpha));
-        graphics.centeredText(font, days == 1 ? "One day of SkyBlock" : days + " days of SkyBlock", width / 2, y + 18, withAlpha(0xFFEFEFEF, alpha));
+        graphics.centeredText(font, month.format(MONTH) + " in SkyBlock", width / 2, y + 18, withAlpha(0xFFEFEFEF, alpha));
 
         if (snapshot.playtimeSeconds > 0) {
             renderScaledCentered(graphics, formatDuration(snapshot.playtimeSeconds), width / 2, y + 48, 1.65f, withAlpha(0xFFFFFFFF, alpha), true);
@@ -215,6 +241,42 @@ public final class WrappedScreen extends Screen {
         return top + rows * (cardHeight + gap);
     }
 
+    private int renderTimeStats(
+            GuiGraphicsExtractor graphics,
+            List<Stat> stats,
+            int left,
+            int top,
+            int contentWidth,
+            int alpha
+    ) {
+        int shown = Math.min(4, stats.size());
+        if (shown <= 0) return top;
+
+        int columns = contentWidth >= 420 ? shown : contentWidth >= 340 ? Math.min(2, shown) : 1;
+        int gap = 8;
+        int cardWidth = (contentWidth - gap * (columns - 1)) / columns;
+        int cardHeight = 34;
+        int rows = (shown + columns - 1) / columns;
+
+        for (int i = 0; i < shown; i++) {
+            Stat stat = stats.get(i);
+            int column = i % columns;
+            int row = i / columns;
+            int x = left + column * (cardWidth + gap);
+            int y = top + row * (cardHeight + gap);
+
+            graphics.fill(x, y, x + cardWidth, y + cardHeight, withAlpha(0xFF05050A, Math.max(55, alpha / 2)));
+            graphics.fill(x, y, x + 3, y + cardHeight, withAlpha(0xFFFFFFFF, Math.max(80, alpha * 3 / 4)));
+
+            String value = font.plainSubstrByWidth(stat.value(), Math.max(20, cardWidth - 18));
+            String label = font.plainSubstrByWidth(stat.label(), Math.max(20, cardWidth - 18));
+            graphics.text(font, value, x + 10, y + 5, withAlpha(0xFFFFFFFF, alpha), true);
+            graphics.text(font, label, x + 10, y + 19, withAlpha(0xFFDADADA, Math.max(75, alpha * 4 / 5)), false);
+        }
+
+        return top + rows * (cardHeight + gap);
+    }
+
     private void renderHeatmap(GuiGraphicsExtractor graphics, int top, int contentWidth, int alpha) {
         if (!settings.time.daysPlayedHeatmap || snapshot.playtimeByDay.isEmpty()) return;
 
@@ -224,15 +286,22 @@ public final class WrappedScreen extends Screen {
         LocalDate gridEnd = end.plusDays(7L - end.getDayOfWeek().getValue());
         int weeks = (int) Math.max(1L, ChronoUnit.WEEKS.between(gridStart, gridEnd.plusDays(1)));
         int gap = 2;
-        int labelWidth = 24;
+        int labelGap = 6;
+        int labelWidth = Math.max(font.width("Mon"), Math.max(font.width("Wed"), font.width("Fri")));
 
-        int gridTop = top + 28;
-        int safeBottom = Math.max(gridTop + 35, height - 46);
-        int maxCellByHeight = Math.max(4, (safeBottom - gridTop - 6 * gap) / 7);
-        int maxCellByWidth = Math.max(4, (contentWidth - labelWidth - (weeks - 1) * gap) / Math.max(1, weeks));
-        int cell = Math.max(4, Math.min(10, Math.min(maxCellByHeight, maxCellByWidth)));
+        int gridTop = top + 32;
+        // All slide content stops before the footer. The time slide uses the remaining
+        // space so day cells can grow without colliding with navigation or export controls.
+        int safeBottom = height - FOOTER_HEIGHT - 8;
+        int maxCellByHeight = Math.max(5, (safeBottom - gridTop - 6 * gap - 6) / 7);
+        int maxCellByWidth = Math.max(5, (contentWidth - labelWidth - labelGap - (weeks - 1) * gap) / Math.max(1, weeks));
+        int cell = Math.max(5, Math.min(24, Math.min(maxCellByHeight, maxCellByWidth)));
         int gridWidth = weeks * cell + (weeks - 1) * gap;
-        int left = (width - gridWidth) / 2;
+        int gridHeight = 7 * cell + 6 * gap;
+        // Center the weekday labels and day grid together as one visual block.
+        int heatmapWidth = labelWidth + labelGap + gridWidth;
+        int heatmapLeft = (width - heatmapWidth) / 2;
+        int left = heatmapLeft + labelWidth + labelGap;
 
         long max = 1L;
         int activeDays = 0;
@@ -248,9 +317,10 @@ public final class WrappedScreen extends Screen {
                 activeDays + " of " + totalDays + " days played  •  brighter = more playtime",
                 width / 2, top + 12, withAlpha(0xFFE3E3E3, Math.max(75, alpha * 3 / 4)));
 
-        graphics.text(font, "Mon", left - labelWidth, gridTop, withAlpha(0xFFDADADA, alpha), false);
-        graphics.text(font, "Wed", left - labelWidth, gridTop + 2 * (cell + gap), withAlpha(0xFFDADADA, alpha), false);
-        graphics.text(font, "Fri", left - labelWidth, gridTop + 4 * (cell + gap), withAlpha(0xFFDADADA, alpha), false);
+        int labelRight = left - labelGap;
+        graphics.text(font, "Mon", labelRight - font.width("Mon"), gridTop + 2, withAlpha(0xFFDADADA, alpha), false);
+        graphics.text(font, "Wed", labelRight - font.width("Wed"), gridTop + 2 * (cell + gap) + 2, withAlpha(0xFFDADADA, alpha), false);
+        graphics.text(font, "Fri", labelRight - font.width("Fri"), gridTop + 4 * (cell + gap) + 2, withAlpha(0xFFDADADA, alpha), false);
 
         for (LocalDate cursor = start; !cursor.isAfter(end); cursor = cursor.plusDays(1)) {
             int week = (int) (ChronoUnit.DAYS.between(gridStart, cursor) / 7L);
@@ -266,18 +336,31 @@ public final class WrappedScreen extends Screen {
 
             graphics.fill(x, y, x + cell, y + cell, color);
         }
-
-        int legendY = gridTop + 7 * (cell + gap) + 3;
-        graphics.centeredText(font, "Each square is one day  •  brighter = more playtime",
-                width / 2, legendY, withAlpha(0xFFE8E8E8, Math.max(70, alpha * 3 / 4)));
     }
 
     private void renderNavigationHint(GuiGraphicsExtractor graphics) {
         String hint = paused
                 ? "◀ / ▶ navigate   •   SPACE next   •   P resume   •   ESC close"
                 : "◀ / ▶ navigate   •   SPACE next   •   P pause   •   click sides";
-        graphics.centeredText(font, hint, width / 2, height - 20, 0xCCFFFFFF);
-        graphics.centeredText(font, (slideIndex + 1) + " / " + slides.size(), width / 2, height - 31, 0x99FFFFFF);
+        int footerTop = height - FOOTER_HEIGHT;
+        graphics.centeredText(font, (slideIndex + 1) + " / " + slides.size(), width / 2, footerTop + 21, 0x99FFFFFF);
+        graphics.centeredText(font, hint, width / 2, footerTop + 34, 0xCCFFFFFF);
+    }
+
+    private void renderExportFolder(GuiGraphicsExtractor graphics) {
+        String location = WrappedPdfExporter.exportDirectory().toString();
+        int footerTop = height - FOOTER_HEIGHT;
+        String visiblePath = font.plainSubstrByWidth("Export folder: " + location, Math.max(120, width - 36));
+        graphics.centeredText(font, visiblePath, width / 2, footerTop + 55, 0xFFB8B8C4);
+
+
+        if (!exportStatus.isBlank()) {
+            int color = exportStatus.startsWith("Saved") || exportStatus.startsWith("Opened")
+                    ? 0xFFB9F6C5
+                    : 0xFFFFB8B8;
+            String visibleStatus = font.plainSubstrByWidth(exportStatus, Math.max(120, width - 36));
+            graphics.centeredText(font, visibleStatus, width / 2, footerTop + 44, color);
+        }
     }
 
     private void maybeAutoAdvance(long now) {
@@ -479,7 +562,7 @@ public final class WrappedScreen extends Screen {
             }
             if (settings.other.chatMessagesSent) stats.add(new Stat("Chat messages sent", formatCount(snapshot.chatMessagesSent)));
             if (!stats.isEmpty()) {
-                result.add(new Slide("THE PEOPLE AROUND YOU", memory ? "Social" : "Other", memory ? "Your SkyBlock history was not solo." : "A few things outside the grind.", stats, palette++, SlideKind.STANDARD));
+                result.add(new Slide("", memory ? "Social" : "Other", memory ? "Your SkyBlock history was not solo." : "A few things outside the grind.", stats, palette++, SlideKind.STANDARD));
             }
         }
 
@@ -505,12 +588,13 @@ public final class WrappedScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (super.mouseClicked(event, doubleClick)) return true;
         if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             if (event.x() < width * 0.38) previousSlide();
             else nextSlide();
             return true;
         }
-        return super.mouseClicked(event, doubleClick);
+        return false;
     }
 
     @Override
@@ -570,6 +654,31 @@ public final class WrappedScreen extends Screen {
         slideStartedAt = System.currentTimeMillis();
         paused = false;
         pausedAt = 0L;
+    }
+
+    private void exportPdf() {
+        try {
+            Path exported = WrappedPdfExporter.export(month, snapshot, slides);
+            exportStatus = "Saved: " + exported.getFileName();
+        } catch (IOException exception) {
+            System.err.println("[NSM Wrapped] Could not export PDF: " + exception.getMessage());
+            exportStatus = "Export failed: " + exception.getMessage();
+        }
+    }
+
+    private void openExportFolder() {
+        try {
+            Path directory = WrappedPdfExporter.ensureExportDirectory();
+            if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                exportStatus = "Could not open export folder on this system";
+                return;
+            }
+            Desktop.getDesktop().open(directory.toFile());
+            exportStatus = "Opened: config/nicos_super_mods/wrapped_exports";
+        } catch (Exception exception) {
+            System.err.println("[NSM Wrapped] Could not open export folder: " + exception.getMessage());
+            exportStatus = "Could not open export folder";
+        }
     }
 
     @Override
@@ -702,15 +811,15 @@ public final class WrappedScreen extends Screen {
         return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
-    private enum SlideKind {
+    enum SlideKind {
         INTRO,
         TIME,
         STANDARD
     }
 
-    private record Stat(String label, String value) { }
+    record Stat(String label, String value) { }
 
-    private record Slide(
+    record Slide(
             String kicker,
             String title,
             String subtitle,

@@ -9,6 +9,7 @@ import com.nico.client.bloodrush.RouteEditor;
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonTeammateScanner;
+import com.nico.client.history.WrappedArchiveScreen;
 import com.nico.client.history.WrappedConfig;
 import com.nico.client.history.WrappedScreen;
 import com.nico.client.memleak.MemLeakFeature;
@@ -211,10 +212,9 @@ public final class NsmClientCommands {
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> createWrappedNode() {
         return ClientCommands.literal("wrapped")
-                .executes(context -> openWrappedScreen(30))
-                .then(ClientCommands.literal("config").executes(context -> openWrappedConfig()))
-                .then(ClientCommands.argument("days", IntegerArgumentType.integer(1, 3650))
-                            .executes(context -> openWrappedScreen(IntegerArgumentType.getInteger(context, "days"))));
+                .executes(context -> openWrappedArchive())
+                .then(ClientCommands.literal("config").executes(context -> openWrappedConfig()));
+
     }
 
     private static int sendMemLeakLines(Iterable<String> lines) {
@@ -260,9 +260,9 @@ public final class NsmClientCommands {
         }
     }
 
-    private static int openWrappedScreen(int days) {
+    private static int openWrappedArchive() {
         Minecraft minecraft = Minecraft.getInstance();
-        minecraft.execute(() -> minecraft.setScreen(new WrappedScreen(minecraft.screen, days)));
+        minecraft.execute(() -> minecraft.setScreen(new WrappedArchiveScreen(minecraft.screen)));
         return 1;
     }
 

@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.*;
 
 public final class WrappedStore {
@@ -62,6 +63,35 @@ public final class WrappedStore {
         int safeDays = Math.max(1, Math.min(3650, days));
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(safeDays - 1L);
+        return snapshot(start, end);
+    }
+
+    public synchronized WrappedSnapshot snapshot(YearMonth month) {
+        Objects.requireNonNull(month, "month");
+        return snapshot(month.atDay(1), month.atEndOfMonth());
+    }
+
+    /**
+     * Returns completed calendar months for which at least one day of history exists.
+     * The current month is intentionally excluded so Wrapped never exposes partial data.
+     */
+    public synchronized List<YearMonth> completedMonths() {
+        YearMonth currentMonth = YearMonth.now();
+        Set<YearMonth> months = new TreeSet<>(Comparator.reverseOrder());
+
+        for (String key : data.days.keySet()) {
+            try {
+                YearMonth month = YearMonth.from(LocalDate.parse(key));
+                if (month.isBefore(currentMonth)) months.add(month);
+            } catch (RuntimeException ignored) {
+                // Ignore malformed legacy entries
+            }
+        }
+
+        return List.copyOf(months);
+    }
+
+    private WrappedSnapshot snapshot(LocalDate start, LocalDate end) {
         WrappedSnapshot result = new WrappedSnapshot(start, end);
 
         for (Map.Entry<String, DayStats> entry : data.days.entrySet()) {
