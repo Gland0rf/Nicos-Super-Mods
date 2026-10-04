@@ -289,14 +289,14 @@ public final class RoomStackingDetector {
 
         if (includesSelf) {
             if (NsmConfig.INSTANCE.dungeons.roomStacking.showSelfTitleAlert) {
-                mc.gui.setTimes(10, 35, 20);
+                mc.gui.hud.setTimes(10, 35, 20);
 
-                mc.gui.setTitle(
+                mc.gui.hud.setTitle(
                         Component.literal("You are stacking!")
                                 .withStyle(ChatFormatting.RED)
                 );
 
-                mc.gui.setSubtitle(
+                mc.gui.hud.setSubtitle(
                         Component.literal("With " + otherNames)
                 );
             }
@@ -312,7 +312,7 @@ public final class RoomStackingDetector {
             }
         } else {
             if (NsmConfig.INSTANCE.dungeons.roomStacking.showOtherStackingChatAlert) {
-                mc.gui.getChat().addClientSystemMessage(
+                mc.gui.hud.getChat().addClientSystemMessage(
                         Component.literal("[NSM] ")
                                 .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
                                 .append(Component.literal(allNames + " are stacking in " + roomName + "!")

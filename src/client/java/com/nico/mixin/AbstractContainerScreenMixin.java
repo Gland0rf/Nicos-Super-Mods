@@ -107,7 +107,7 @@ public abstract class AbstractContainerScreenMixin {
         Minecraft client = Minecraft.getInstance();
         Screen currentScreen = (Screen) (Object) this;
 
-        client.setScreen(
+        client.gui.setScreen(
                 new WikiScreen(
                         currentScreen,
                         stack.copy()

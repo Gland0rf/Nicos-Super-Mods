@@ -61,7 +61,7 @@ public class LagMonitorFeature {
 
     public static void openLastSummary(Screen parent) {
         Minecraft client = Minecraft.getInstance();
-        client.setScreen(new LagSummaryScreen(
+        client.gui.setScreen(new LagSummaryScreen(
                 parent,
                 LagMonitorService.getInstance().lastSummary()
         ));

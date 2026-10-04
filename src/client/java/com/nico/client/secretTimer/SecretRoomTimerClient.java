@@ -455,7 +455,7 @@ public final class SecretRoomTimerClient {
         Minecraft mc = Minecraft.getInstance();
 
         if (mc.player != null) {
-            mc.gui.getChat().addClientSystemMessage(Component.literal(message));
+            mc.gui.hud.getChat().addClientSystemMessage(Component.literal(message));
         }
     }
 

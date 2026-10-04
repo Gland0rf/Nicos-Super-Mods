@@ -78,7 +78,7 @@ public final class WrappedConfig {
             System.err.println("[NSM Wrapped] Could not open config file: " + exception.getMessage());
             Minecraft minecraft = Minecraft.getInstance();
             minecraft.execute(() -> {
-                minecraft.gui.getChat().addClientSystemMessage(Component.literal(
+                minecraft.gui.hud.getChat().addClientSystemMessage(Component.literal(
                         "§e[NSM Wrapped] Could not open the file automatically. Edit §f" + FILE.toAbsolutePath()
                 ));
             });

@@ -38,7 +38,7 @@ public class InventoryLayoutPreviewScreen extends Screen {
         addRenderableWidget(
                 Button.builder(Component.literal("Load"), button -> {
                             manager.activate(layout);
-                            Minecraft.getInstance().setScreen(inventoryParent);
+                            Minecraft.getInstance().gui.setScreen(inventoryParent);
                         })
                         .bounds(width / 2 - 102, height - 34, 96, 20)
                         .build()
@@ -105,7 +105,7 @@ public class InventoryLayoutPreviewScreen extends Screen {
 
     @Override
     public void onClose() {
-        Minecraft.getInstance().setScreen(menuParent);
+        Minecraft.getInstance().gui.setScreen(menuParent);
     }
 
     @Override

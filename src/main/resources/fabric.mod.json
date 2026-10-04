@@ -8,8 +8,7 @@
 		"Nico8k"
 	],
 	"contact": {
-		"homepage": "https://modrinth.com/mod/nicos-super-mods",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://modrinth.com/mod/nicos-super-mods"
 	},
 	"license": "GPL-3.0-only",
 	"icon": "assets/nsm/NSM_Logo.png",
@@ -30,7 +29,7 @@
 	],
 	"depends": {
 		"fabricloader": ">=0.19.3",
-		"minecraft": "~26.1.2",
+		"minecraft": "~26.2",
 		"java": ">=21",
 		"fabric-api": "*",
 		"modmenu": "*"

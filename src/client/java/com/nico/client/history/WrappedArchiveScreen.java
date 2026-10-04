@@ -45,7 +45,7 @@ public final class WrappedArchiveScreen extends Screen {
             int y = top + (index - first) * ROW_HEIGHT;
             addRenderableWidget(
                     Button.builder(Component.literal("View"), button ->
-                                    Minecraft.getInstance().setScreen(new WrappedScreen(this, month)))
+                                    Minecraft.getInstance().gui.setScreen(new WrappedScreen(this, month)))
                             .bounds(left + panelWidth - 62, y, 54, 20)
                             .build()
             );
@@ -123,7 +123,7 @@ public final class WrappedArchiveScreen extends Screen {
 
     @Override
     public void onClose() {
-        Minecraft.getInstance().setScreen(parent);
+        Minecraft.getInstance().gui.setScreen(parent);
     }
 
     @Override

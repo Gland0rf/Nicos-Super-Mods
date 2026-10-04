@@ -63,8 +63,8 @@ public abstract class ClientPacketListenerMixin {
     ) {
         packet.getParameters().ifPresent(parameters -> {
             LocationUtils.onTeamText(
-                    parameters.getPlayerPrefix(),
-                    parameters.getPlayerSuffix()
+                    parameters.playerPrefix(),
+                    parameters.playerSuffix()
             );
         });
     }

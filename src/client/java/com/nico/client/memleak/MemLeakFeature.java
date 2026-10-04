@@ -100,7 +100,7 @@ public class MemLeakFeature {
 
         MemLeakService current = service;
         if (current != null) {
-            current.observeClientState(minecraft.level, minecraft.player, minecraft.screen);
+            current.observeClientState(minecraft.level, minecraft.player, minecraft.gui.screen());
         }
     }
 
