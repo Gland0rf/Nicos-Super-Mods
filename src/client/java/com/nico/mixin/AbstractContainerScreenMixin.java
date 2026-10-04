@@ -57,6 +57,12 @@ public abstract class AbstractContainerScreenMixin {
             boolean doubleClick,
             CallbackInfoReturnable<Boolean> callback
     ) {
+        if ((Object) this instanceof InventoryScreen inventoryScreen
+                && InventoryLayoutsFeature.handleInventoryLayoutsClick(inventoryScreen, event)) {
+            callback.setReturnValue(true);
+            return;
+        }
+
         if (!nsm$matchesWikiShortcut(event.hasControlDownWithQuirk(), event.input())) {
             return;
         }

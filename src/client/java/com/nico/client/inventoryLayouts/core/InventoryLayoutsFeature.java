@@ -11,7 +11,11 @@ import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+
+import java.util.Map;
+import java.util.WeakHashMap;
 
 public class InventoryLayoutsFeature {
     private static final int FALLBACK_INVENTORY_GUI_WIDTH = 176;
@@ -21,6 +25,7 @@ public class InventoryLayoutsFeature {
 
     private static final InventoryLayoutStorage STORAGE = new InventoryLayoutStorage();
     private static final InventoryLayoutManager MANAGER = new InventoryLayoutManager(STORAGE);
+    private static final Map<InventoryScreen, InventoryButtonState> INVENTORY_BUTTONS = new WeakHashMap<>();
 
     private static HudLayoutManager hudLayoutManager;
     private static boolean initialized;
@@ -40,7 +45,10 @@ public class InventoryLayoutsFeature {
         if (initialized) return;
 
         STORAGE.load();
-        ClientTickEvents.END_CLIENT_TICK.register(MANAGER::tick);
+        ClientTickEvents.END_CLIENT_TICK.register(minecraft -> {
+            MANAGER.tick(minecraft);
+            refreshInventoryButton(minecraft);
+        });
 
         ScreenEvents.AFTER_INIT.register((minecraft, screen, scaledWidth, scaledHeight) -> {
             if (!(screen instanceof InventoryScreen inventoryScreen)) {
@@ -87,17 +95,60 @@ public class InventoryLayoutsFeature {
 
     private static void addInventoryLayoutsButton(InventoryScreen screen) {
         ButtonBounds bounds = getButtonBounds(screen);
+        Button button = Button.builder(
+                    inventoryButtonLabel(),
+                    ignored -> handleInventoryButtonPress(screen)
+                )
+                .bounds(bounds.x(), bounds.y(), bounds.width(), bounds.height())
+                .build();
 
-        Screens.getWidgets(screen).add(
-                Button.builder(
-                                Component.literal(MANAGER.activeLayout() == null ? "Layouts" : "Layouts *"),
-                                button -> Minecraft.getInstance().setScreen(
-                                        new InventoryLayoutsScreen(screen, MANAGER)
-                                )
-                        )
-                        .bounds(bounds.x(), bounds.y(), bounds.width(), bounds.height())
-                        .build()
-        );
+        INVENTORY_BUTTONS.put(screen, new InventoryButtonState(button, bounds));
+        Screens.getWidgets(screen).add(button);
+    }
+
+    public static boolean handleInventoryLayoutsClick(InventoryScreen screen, MouseButtonEvent event) {
+        if (!initialized || !MANAGER.config().enabled || event.button() != 0) {
+            return false;
+        }
+
+        InventoryButtonState state = INVENTORY_BUTTONS.get(screen);
+        if (state == null || !state.bounds().contains(event.x(), event.y())) {
+            return false;
+        }
+
+        handleInventoryButtonPress(screen);
+        return true;
+    }
+
+    private static void handleInventoryButtonPress(InventoryScreen screen) {
+        if (MANAGER.activeLayout() != null) {
+            MANAGER.deactivate(true);
+            refreshInventoryButton(screen);
+            return;
+        }
+
+        openLayoutsScreen(screen);
+    }
+
+    private static void refreshInventoryButton(Minecraft minecraft) {
+        if (minecraft.screen instanceof InventoryScreen inventoryScreen) {
+            refreshInventoryButton(inventoryScreen);
+        }
+    }
+
+    private static void refreshInventoryButton(InventoryScreen screen) {
+        InventoryButtonState state = INVENTORY_BUTTONS.get(screen);
+        if (state != null) {
+            state.button().setMessage(inventoryButtonLabel());
+        }
+    }
+
+    private static Component inventoryButtonLabel() {
+        return Component.literal(MANAGER.activeLayout() == null ? "Layouts" : "Stop Layout");
+    }
+
+    private static void openLayoutsScreen(InventoryScreen screen) {
+        Minecraft.getInstance().setScreen(new InventoryLayoutsScreen(screen, MANAGER));
     }
 
     private static ButtonBounds getButtonBounds(InventoryScreen screen) {
@@ -139,5 +190,12 @@ public class InventoryLayoutsFeature {
         return Math.min(value, max);
     }
 
-    private record ButtonBounds(int x, int y, int width, int height) { }
+    private record InventoryButtonState(Button button, ButtonBounds bounds) { }
+
+    private record ButtonBounds(int x, int y, int width, int height) {
+        private boolean contains(double mouseX, double mouseY) {
+            return mouseX >= x && mouseX < x + width
+                    && mouseY >= y && mouseY < y + height;
+        }
+    }
 }
