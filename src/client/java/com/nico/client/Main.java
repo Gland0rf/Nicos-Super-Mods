@@ -1,5 +1,6 @@
 package com.nico.client;
 
+import com.nico.client.history.SkyblockHistoryFeature;
 import com.nico.client.hud.HudLayoutManager;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutsFeature;
 import com.nico.client.lag.LagMonitorFeature;
@@ -19,6 +20,7 @@ public final class Main implements ClientModInitializer {
         BazaarService bazaarService = new BazaarService(apiClient);
 
         HudLayoutManager hudLayout = ClientFeatureInitializer.initialize(bazaarService);
+        SkyblockHistoryFeature.initialize();
         MemLeakFeature.initialize();
 
         InventoryLayoutsFeature.initialize();

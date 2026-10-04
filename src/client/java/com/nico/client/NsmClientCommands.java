@@ -1,6 +1,6 @@
 package com.nico.client;
 
-import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.nico.client.bloodrush.BloodRoutes;
 import com.nico.client.bloodrush.RouteCommands;
@@ -9,6 +9,9 @@ import com.nico.client.bloodrush.RouteEditor;
 import com.nico.client.configuration.NsmConfigManager;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonTeammateScanner;
+import com.nico.client.history.WrappedArchiveScreen;
+import com.nico.client.history.WrappedConfig;
+import com.nico.client.history.WrappedScreen;
 import com.nico.client.memleak.MemLeakFeature;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
@@ -40,14 +43,22 @@ public final class NsmClientCommands {
         );
     }
 
-    private static void registerRoomsCommand(CommandDispatcher<FabricClientCommandSource> dispatcher) {
+    private static void registerRoomsCommand(
+            com.mojang.brigadier.CommandDispatcher<
+                    net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
+                    > dispatcher
+    ) {
         dispatcher.register(
                 ClientCommands.literal("nsmrooms")
                         .executes(context -> executeRoomsCommand())
         );
     }
 
-    private static void registerConfigCommands(CommandDispatcher<FabricClientCommandSource> dispatcher) {
+    private static void registerConfigCommands(
+            com.mojang.brigadier.CommandDispatcher<
+                    net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
+                    > dispatcher
+    ) {
         dispatcher.register(
                 ClientCommands.literal("nsmconfig")
                         .executes(context -> openConfigScreen())
@@ -59,6 +70,7 @@ public final class NsmClientCommands {
                         .then(RouteCommands.node(routeEditor))
                         .then(createMemoryNode("memory"))
                         .then(createMemoryNode("memleak"))
+                        .then(createWrappedNode())
         );
     }
 
@@ -98,7 +110,7 @@ public final class NsmClientCommands {
             return;
         }
 
-        Set<String> teammateNames = DungeonTeammateScanner.getDungeonTeammateNames();
+        Set<String> teammateNames = getDungeonTeammateNames();
 
         sendMessage(
                 Component.literal(
@@ -108,7 +120,7 @@ public final class NsmClientCommands {
 
         sendMessage(
                 Component.literal(
-                        "7§Dungeon teammates found: §e" + teammateNames.size()
+                        "§7Odin teammates found: §e" + teammateNames.size()
                 )
         );
 
@@ -140,6 +152,23 @@ public final class NsmClientCommands {
                                 + " §8(" + x + ", " + y + ", " + z + ")"
                 )
         );
+    }
+
+    public static Set<String> getDungeonTeammateNames() {
+        Set<String> names = new HashSet<>();
+
+        try {
+            Set<String> teammateNames = DungeonTeammateScanner.getDungeonTeammateNames();
+            for (String name : teammateNames) {
+                if (name != null && !name.isBlank()) {
+                    names.add(name);
+                }
+            }
+        } catch (Throwable throwable) {
+            throwable.printStackTrace();
+        }
+
+        return names;
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> createMemoryNode(String literal) {
@@ -179,6 +208,13 @@ public final class NsmClientCommands {
                         ClientCommands.literal("export")
                                 .executes(context -> exportMemLeakReport())
                 );
+    }
+
+    private static LiteralArgumentBuilder<FabricClientCommandSource> createWrappedNode() {
+        return ClientCommands.literal("wrapped")
+                .executes(context -> openWrappedArchive())
+                .then(ClientCommands.literal("config").executes(context -> openWrappedConfig()));
+
     }
 
     private static int sendMemLeakLines(Iterable<String> lines) {
@@ -222,6 +258,17 @@ public final class NsmClientCommands {
             sendMessage(Component.literal("§c[NSM Memory Check] Could not create the report: " + exception.getMessage()));
             return 0;
         }
+    }
+
+    private static int openWrappedArchive() {
+        Minecraft minecraft = Minecraft.getInstance();
+        minecraft.execute(() -> minecraft.setScreen(new WrappedArchiveScreen(minecraft.screen)));
+        return 1;
+    }
+
+    private static int openWrappedConfig() {
+        WrappedConfig.openConfigFile();
+        return 1;
     }
 
     public static RouteEditor getRouteEditor() {

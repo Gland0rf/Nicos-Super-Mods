@@ -1,5 +1,6 @@
 package com.nico.client.configuration.category;
 
+import com.nico.client.history.WrappedConfig;
 import io.github.notenoughupdates.moulconfig.annotations.*;
 import org.lwjgl.glfw.GLFW;
 
@@ -39,6 +40,20 @@ public class CategoryOther {
     )
     @Accordion
     public PartySafety partySafety = new PartySafety();
+
+    @ConfigOption(
+            name = "Party Memory",
+            desc = "Remembers players you play with and shows a small history line when they join again."
+    )
+    @Accordion
+    public PartyMemory partyMemory = new PartyMemory();
+
+    @ConfigOption(
+            name = "Skyblock Wrapped",
+            desc = "Wrapped display settings live in a separate JSON file so the normal config menu stays clean."
+    )
+    @Accordion
+    public SkyblockWrapped skyblockWrapped = new SkyblockWrapped();
 
     public static class IntegratedWiki {
         @ConfigOption(
@@ -343,6 +358,24 @@ public class CategoryOther {
         )
         @ConfigEditorBoolean
         public boolean prefillPartyWarning = true;
+    }
+
+    public static class PartyMemory {
+        @ConfigOption(
+                name = "Enable",
+                desc = "Remember party/Dungeon encounters locally and show your history when a known player joins.\n"
+        )
+        @ConfigEditorBoolean
+        public boolean enabled = false;
+    }
+
+    public static class SkyblockWrapped {
+        @ConfigOption(
+                name = "Wrapped Config File",
+                desc = "Choose exactly which Wrapped sections/stats are shown in wrapped_config.json"
+        )
+        @ConfigEditorButton(buttonText = "Open File")
+        public transient Runnable openWrappedConfig = WrappedConfig::openConfigFile;
     }
 
 }
