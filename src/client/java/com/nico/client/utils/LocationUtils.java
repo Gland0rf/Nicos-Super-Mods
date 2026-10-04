@@ -35,6 +35,7 @@ public class LocationUtils {
         RIFT("The Rift"),
         BACKWATER_BAYOU("Backwater Bayou"),
         GALATEA("Galatea"),
+        THORRUS_CANYON("Thorrus Canyon"),
         UNKNOWN("(Unknown)");
 
         public final String displayName;
