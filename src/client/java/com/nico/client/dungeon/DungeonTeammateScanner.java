@@ -10,18 +10,18 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/** Reads dungeon teammate names and classes from Hypixel's tab list. */
 public final class DungeonTeammateScanner {
 
-    private static final Map<String, String> CLASS_BY_PLAYER =
-            new HashMap<>();
+    private static final Map<String, String> CLASS_BY_PLAYER = new HashMap<>();
 
     private static final Pattern DUNGEON_PLAYER_PATTERN = Pattern.compile(
             "^\\[\\d+]\\s+"
-                        + "(?:\\[[^]]+]\\s+)*"
-                        + "(?<name>[A-Za-z0-9_]{1,16})"
-                        + ".*?"
-                        + "\\((?<clazz>[A-Za-z]+)(?:\\s+[IVXLCDM]+)?\\)"
-                        + "$"
+                    + "(?:\\[[^]]+]\\s+)*"
+                    + "(?<name>[A-Za-z0-9_]{1,16})"
+                    + ".*?"
+                    + "\\((?<clazz>[A-Za-z]+)(?:\\s+[IVXLCDM]+)?\\)"
+                    + "$"
     );
 
     private static final Set<String> DUNGEON_CLASSES = Set.of(
@@ -40,105 +40,67 @@ public final class DungeonTeammateScanner {
     }
 
     public static Set<String> getDungeonTeammateNames() {
-        Minecraft minecraft = Minecraft.getInstance();
-        ClientPacketListener connection = minecraft.getConnection();
-
+        ClientPacketListener connection = Minecraft.getInstance().getConnection();
         if (connection == null) return Set.of();
 
         Set<String> names = new LinkedHashSet<>();
         for (PlayerInfo playerInfo : connection.getOnlinePlayers()) {
-            Component displayName = playerInfo.getTabListDisplayName();
-            if (displayName == null) continue;
-
-            String line = displayName.getString().trim();
-
-            Matcher matcher = DUNGEON_PLAYER_PATTERN.matcher(line);
-            if (!matcher.matches()) continue;
-
-            String dungeonClass = matcher.group("clazz").toUpperCase(Locale.ROOT);
-            if (!DUNGEON_CLASSES.contains(dungeonClass)) continue;
-
-            names.add(matcher.group("name"));
+            DungeonPlayer entry = parseDungeonPlayer(playerInfo);
+            if (entry != null && DUNGEON_CLASSES.contains(entry.dungeonClass())) {
+                names.add(entry.name());
+            }
         }
 
         return names;
     }
 
     public static String getDungeonClassForPlayer(Player player) {
-        Minecraft minecraft = Minecraft.getInstance();
-        ClientPacketListener connection = minecraft.getConnection();
+        ClientPacketListener connection = Minecraft.getInstance().getConnection();
+        String wantedName = player.getName().getString();
+        String cacheKey = wantedName.toLowerCase(Locale.ROOT);
 
         if (connection == null) {
             return "Unknown";
         }
 
-        String wantedName = player.getName().getString();
-
         for (PlayerInfo playerInfo : connection.getOnlinePlayers()) {
-            Component displayName = playerInfo.getTabListDisplayName();
+            DungeonPlayer entry = parseDungeonPlayer(playerInfo);
+            if (entry == null || !entry.name().equalsIgnoreCase(wantedName)) continue;
 
-            if (displayName == null) {
-                continue;
+            // Hypixel displays DEAD instead of the player's class after they die.
+            // Keep the last class we saw rather than replacing it with DEAD.
+            if (entry.dungeonClass().equalsIgnoreCase("DEAD")) {
+                return CLASS_BY_PLAYER.getOrDefault(cacheKey, "Unknown");
             }
 
-            String line = displayName.getString().trim();
-
-            Matcher matcher = DUNGEON_PLAYER_PATTERN.matcher(line);
-
-            if (!matcher.matches()) {
-                continue;
-            }
-
-            String name = matcher.group("name");
-
-            if (!name.equalsIgnoreCase(wantedName)) {
-                continue;
-            }
-
-            String clazz = matcher.group("clazz");
-
-            if (clazz == null || clazz.isBlank()) {
-                return CLASS_BY_PLAYER.getOrDefault(
-                        wantedName.toLowerCase(Locale.ROOT),
-                        "Unknown"
-                );
-            }
-
-            /*
-             * Hypixel displays DEAD instead of the player's class
-             * after they die. Keep the class we saw previously.
-             */
-            if (clazz.equalsIgnoreCase("DEAD")) {
-                return CLASS_BY_PLAYER.getOrDefault(
-                        wantedName.toLowerCase(Locale.ROOT),
-                        "Unknown"
-                );
-            }
-
-            String formatted = formatClassName(clazz);
-
-            CLASS_BY_PLAYER.put(
-                    wantedName.toLowerCase(Locale.ROOT),
-                    formatted
-            );
-
-            return formatted;
+            String formattedClass = formatClassName(entry.dungeonClass());
+            CLASS_BY_PLAYER.put(cacheKey, formattedClass);
+            return formattedClass;
         }
 
-        return CLASS_BY_PLAYER.getOrDefault(
-                wantedName.toLowerCase(Locale.ROOT),
-                "Unknown"
-        );
+        return CLASS_BY_PLAYER.getOrDefault(cacheKey, "Unknown");
     }
 
-    private static String formatClassName(String clazz) {
-        if (clazz == null || clazz.isBlank()) {
+
+    private static DungeonPlayer parseDungeonPlayer(PlayerInfo playerInfo) {
+        Component displayName = playerInfo.getTabListDisplayName();
+        if (displayName == null) return null;
+
+        Matcher matcher = DUNGEON_PLAYER_PATTERN.matcher(displayName.getString().trim());
+        if (!matcher.matches()) return null;
+
+        String dungeonClass = matcher.group("clazz").toUpperCase(Locale.ROOT);
+        return new DungeonPlayer(matcher.group("name"), dungeonClass);
+    }
+
+    private static String formatClassName(String dungeonClazz) {
+        if (dungeonClazz == null || dungeonClazz.isBlank()) {
             return "Unknown";
         }
 
-        String lower = clazz.toLowerCase(Locale.ROOT);
-
-        return Character.toUpperCase(lower.charAt(0))
-                + lower.substring(1);
+        String lower = dungeonClazz.toLowerCase(Locale.ROOT);
+        return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
     }
+
+    private record DungeonPlayer(String name, String dungeonClass) { }
 }

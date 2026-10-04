@@ -96,14 +96,6 @@ public final class DungeonRunPacketDetector {
         return text.contains("mort: here, i found this map when i first entered the dungeon");
     }
 
-    private static boolean isDungeonStartClue(String text) {
-        return text.contains("starting in ")
-                || text.contains("starts in ")
-                || text.contains("first entered the dungeon")
-                || text.contains("found this map")
-                || text.contains("the catacombs");
-    }
-
     private static boolean isDungeonEnd(String text) {
         return text.equals("victory")
                 || text.equals("victory!")
@@ -112,16 +104,6 @@ public final class DungeonRunPacketDetector {
                 || text.contains("team score:")
                 || text.equals("defeat")
                 || text.equals("defeat!");
-    }
-
-    private static String markerName(boolean startMarker, boolean endMarker) {
-        if (startMarker) {
-            return "START";
-        }
-        if (endMarker) {
-            return "END";
-        }
-        return "CLUE";
     }
 
     private static String normalize(String text) {
