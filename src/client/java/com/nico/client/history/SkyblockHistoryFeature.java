@@ -467,7 +467,7 @@ public final class SkyblockHistoryFeature {
         if (!previous.usualClass().equalsIgnoreCase("Unknown")) line.append(" §8| §7usually ").append(previous.usualClass());
         if (days > 0) line.append(" §8| §7last seen ").append(days).append(days == 1 ? " day ago" : " days ago");
 
-        minecraft.execute(() -> minecraft.gui.getChat().addClientSystemMessage(Component.literal(line.toString())));
+        minecraft.execute(() -> minecraft.gui.hud.getChat().addClientSystemMessage(Component.literal(line.toString())));
     }
 
     private static void parsePet(String text) {

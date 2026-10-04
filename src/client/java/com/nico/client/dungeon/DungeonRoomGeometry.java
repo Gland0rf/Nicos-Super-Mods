@@ -1,6 +1,7 @@
 package com.nico.client.dungeon;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -79,7 +80,7 @@ public final class DungeonRoomGeometry {
                 );
 
                 if (!level.hasChunkAt(markerPos)) continue;
-                if (!level.getBlockState(markerPos).is(Blocks.BLUE_TERRACOTTA)) continue;
+                if (!level.getBlockState(markerPos).is(Blocks.DYED_TERRACOTTA.pick(DyeColor.BLUE))) continue;
 
                 if (room.tiles().size() > 1 && !isIsolatedMarker(level, markerPos)) {
                     continue;
@@ -119,7 +120,7 @@ public final class DungeonRoomGeometry {
 
         for (BlockPos neighbor : neighbors) {
             Block block = level.getBlockState(neighbor).getBlock();
-            if (block != Blocks.AIR && block != Blocks.BLUE_TERRACOTTA) {
+            if (block != Blocks.AIR && block != Blocks.DYED_TERRACOTTA.pick(DyeColor.BLUE)) {
                 return false;
             }
         }

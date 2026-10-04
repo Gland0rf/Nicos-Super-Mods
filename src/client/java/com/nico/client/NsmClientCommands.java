@@ -174,8 +174,8 @@ public final class NsmClientCommands {
         Minecraft minecraft = Minecraft.getInstance();
 
         minecraft.execute(() ->
-                minecraft.setScreen(
-                        NsmConfigManager.createScreen(minecraft.screen)
+                minecraft.gui.setScreen(
+                        NsmConfigManager.createScreen(minecraft.gui.screen())
                 )
         );
 
@@ -376,8 +376,8 @@ public final class NsmClientCommands {
         Minecraft minecraft = Minecraft.getInstance();
 
         minecraft.execute(() ->
-                minecraft.setScreen(
-                        new WrappedArchiveScreen(minecraft.screen)
+                minecraft.gui.setScreen(
+                        new WrappedArchiveScreen(minecraft.gui.screen())
                 )
         );
 

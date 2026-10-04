@@ -94,7 +94,7 @@ public final class SaveInventoryLayoutScreen extends Screen {
 
     @Override
     public void onClose() {
-        Minecraft.getInstance().setScreen(menuParent);
+        Minecraft.getInstance().gui.setScreen(menuParent);
     }
 
     @Override
@@ -129,7 +129,7 @@ public final class SaveInventoryLayoutScreen extends Screen {
 
         InventoryLayout layout = InventoryLayout.capture(name, minecraft.player);
         manager.storage().upsert(layout);
-        Minecraft.getInstance().setScreen(new InventoryLayoutsScreen(inventoryParent, manager));
+        Minecraft.getInstance().gui.setScreen(new InventoryLayoutsScreen(inventoryParent, manager));
     }
 
     private void clearOverwriteWarning() {

@@ -3,9 +3,9 @@ package com.nico.client.bloodrush;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionContext;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
@@ -24,8 +24,8 @@ public final class RouteRenderer {
     }
 
     public static void register(RouteEditor editor) {
-        LevelRenderEvents.END_EXTRACTION.register(context -> extract(context, editor));
-        LevelRenderEvents.BEFORE_GIZMOS.register(RouteRenderer::render);
+        LevelExtractionEvents.END_EXTRACTION.register(context -> extract(context, editor));
+        LevelRenderEvents.COLLECT_SUBMITS.register(RouteRenderer::render);
     }
 
     private static void extract(LevelExtractionContext context, RouteEditor editor) {
@@ -93,76 +93,76 @@ public final class RouteRenderer {
     }
 
     private static void render(LevelRenderContext context) {
-        if (preparedRoutes.isEmpty()) {
+        List<PreparedRoute> routes = preparedRoutes;
+
+        if (routes.isEmpty()) {
             return;
         }
 
-            PoseStack matrices = context.poseStack();
-            MultiBufferSource consumers = context.bufferSource();
-        if (matrices == null || consumers == null) {
-            return;
-        }
+        PoseStack matrices = context.poseStack();
+        context.submitNodeCollector().submitCustomGeometry(
+                matrices,
+                RenderTypes.lines(),
+                (pose, consumer) -> {
+                    for (PreparedRoute route : preparedRoutes) {
+                        for (int i = 0; i < route.nodes().size() - 1; i++) {
+                            PreparedNode from = route.nodes().get(i);
+                            PreparedNode to = route.nodes().get(i + 1);
 
-        VertexConsumer consumer = consumers.getBuffer(RenderTypes.lines());
-        PoseStack.Pose pose = matrices.last();
+                            Vec3 start = from.position();
 
-        for (PreparedRoute route : preparedRoutes) {
-            for (int i = 0; i < route.nodes().size() - 1; i++) {
-                PreparedNode from = route.nodes().get(i);
-                PreparedNode to = route.nodes().get(i + 1);
+                            if (from.etherwarpTarget() != null) {
+                                start = etherwarpLandingPoint(from.etherwarpTarget());
+                            }
 
-                Vec3 start = from.position();
+                            drawFloorSegment(
+                                    consumer,
+                                    pose,
+                                    route.cameraPosition(),
+                                    start,
+                                    to.position(),
+                                    route.key()
+                            );
+                        }
 
-                if (from.etherwarpTarget() != null) {
-                    start = etherwarpLandingPoint(from.etherwarpTarget());
+                        for (PreparedNode node : route.nodes) {
+                            if (node.etherwarpTarget() != null) {
+                                drawEtherwarpBlock(
+                                        consumer,
+                                        pose,
+                                        route.cameraPosition(),
+                                        node.etherwarpTarget()
+                                );
+                            }
+                        }
+
+                        for (BlockPos block : route.breakerBlocks()) {
+                            drawHighlightedBlock(
+                                    consumer,
+                                    pose,
+                                    route.cameraPosition(),
+                                    block,
+                                    0.2f,
+                                    1.0f,
+                                    0.3f
+                            );
+                        }
+
+                        if (route.editing()) {
+                            int count = Math.min(route.committedPoints(), route.nodes().size());
+                            for (int i = 0; i < count; i++) {
+                                drawAnchor(
+                                        consumer,
+                                        pose,
+                                        route.cameraPosition(),
+                                        route.nodes().get(i).position(),
+                                        route.key()
+                                );
+                            }
+                        }
+                    }
                 }
-
-                drawFloorSegment(
-                        consumer,
-                        pose,
-                        route.cameraPosition(),
-                        start,
-                        to.position(),
-                        route.key()
-                );
-            }
-
-            for (PreparedNode node : route.nodes) {
-                if (node.etherwarpTarget() != null) {
-                    drawEtherwarpBlock(
-                            consumers,
-                            pose,
-                            route.cameraPosition(),
-                            node.etherwarpTarget()
-                    );
-                }
-            }
-
-            for (BlockPos block : route.breakerBlocks()) {
-                drawHighlightedBlock(
-                        consumers,
-                        pose,
-                        route.cameraPosition(),
-                        block,
-                        0.2f,
-                        1.0f,
-                        0.3f
-                );
-            }
-
-            if (route.editing()) {
-                int count = Math.min(route.committedPoints(), route.nodes().size());
-                for (int i = 0; i < count; i++) {
-                    drawAnchor(
-                            consumer,
-                            pose,
-                            route.cameraPosition(),
-                            route.nodes().get(i).position(),
-                            route.key()
-                    );
-                }
-            }
-        }
+        );
     }
 
     private static void drawFloorSegment(
@@ -230,13 +230,13 @@ public final class RouteRenderer {
     }
 
     private static void drawEtherwarpBlock(
-            MultiBufferSource consumers,
+            VertexConsumer consumer,
             PoseStack.Pose pose,
             Vec3 camera,
             BlockPos block
     ) {
         drawHighlightedBlock(
-                consumers,
+                consumer,
                 pose,
                 camera,
                 block,
@@ -304,7 +304,7 @@ public final class RouteRenderer {
     }
 
     private static void drawHighlightedBlock(
-            MultiBufferSource consumers,
+            VertexConsumer consumer,
             PoseStack.Pose pose,
             Vec3 camera,
             BlockPos block,
@@ -321,10 +321,8 @@ public final class RouteRenderer {
         double maxY = block.getY() + 1.0 - camera.y + expand;
         double maxZ = block.getZ() + 1.0 - camera.z + expand;
 
-        VertexConsumer outline = consumers.getBuffer(RenderTypes.lines());
-
         drawBoxOutline(
-                outline,
+                consumer,
                 pose,
                 minX, minY, minZ,
                 maxX, maxY, maxZ,

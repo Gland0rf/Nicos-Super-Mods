@@ -279,7 +279,7 @@ public final class PartySafety {
         );
 
         Minecraft minecraft = Minecraft.getInstance();
-        minecraft.execute(() -> minecraft.gui.getChat().addClientSystemMessage(Component.literal(message)));
+        minecraft.execute(() -> minecraft.gui.hud.getChat().addClientSystemMessage(Component.literal(message)));
     }
 
     private static void openPrefilledPartyWarning(String playerKey, String sourceMod) {
@@ -293,10 +293,10 @@ public final class PartySafety {
                 if (!RECENT_JOINS.containsKey(playerKey)) return;
 
                 // Do not replace another open screen or anything the user is already typing.
-                if (minecraft.screen != null) return;
+                if (minecraft.gui.screen() != null) return;
 
                 PREFILLED_WARNING_PLAYERS.add(playerKey);
-                minecraft.setScreen(new ChatScreen(chatInput, true));
+                minecraft.gui.setScreen(new ChatScreen(chatInput, true));
             }
         });
     }

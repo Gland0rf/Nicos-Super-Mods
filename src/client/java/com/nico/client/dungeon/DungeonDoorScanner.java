@@ -1,6 +1,7 @@
 package com.nico.client.dungeon;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -34,7 +35,7 @@ public final class DungeonDoorScanner {
                 if (pos == null || !level.hasChunkAt(pos)) continue;
 
                 BlockState state = level.getBlockState(pos);
-                boolean specialDoor = state.is(Blocks.COAL_BLOCK) || state.is(Blocks.RED_TERRACOTTA);
+                boolean specialDoor = state.is(Blocks.COAL_BLOCK) || state.is(Blocks.DYED_TERRACOTTA.pick(DyeColor.RED));
                 if (!specialDoor && !isDoorwayBetween(level, tile, neighbor)) continue;
 
                 DungeonRoom otherRoom = layout.roomAt(neighbor);
@@ -64,7 +65,7 @@ public final class DungeonDoorScanner {
 
         BlockState state = level.getBlockState(door.pos());
         if (state.is(Blocks.COAL_BLOCK)) return Type.WITHER;
-        if (state.is(Blocks.RED_TERRACOTTA)) return Type.BLOOD;
+        if (state.is(Blocks.DYED_TERRACOTTA.pick(DyeColor.RED))) return Type.BLOOD;
         return Type.NORMAL;
     }
 
@@ -145,7 +146,7 @@ public final class DungeonDoorScanner {
         if (pos == null || !level.hasChunkAt(pos)) return false;
 
         BlockState state = level.getBlockState(pos);
-        return state.is(Blocks.COAL_BLOCK) || state.is(Blocks.RED_TERRACOTTA);
+        return state.is(Blocks.COAL_BLOCK) || state.is(Blocks.DYED_TERRACOTTA.pick(DyeColor.RED));
     }
 
     public enum Type {

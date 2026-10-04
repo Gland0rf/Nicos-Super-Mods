@@ -16,7 +16,7 @@ public class HudMoveCommand {
                             .then(literal("gui")
                                     .executes(context -> {
                                         Minecraft.getInstance().execute(() -> {
-                                            Minecraft.getInstance().setScreen(
+                                            Minecraft.getInstance().gui.setScreen(
                                                     new HudMoveScreen(layoutManager)
                                             );
                                         });
@@ -27,7 +27,7 @@ public class HudMoveCommand {
                             .then(literal("hud")
                                     .executes(context -> {
                                         Minecraft.getInstance().execute(() -> {
-                                            Minecraft.getInstance().setScreen(
+                                            Minecraft.getInstance().gui.setScreen(
                                                     new HudMoveScreen(layoutManager)
                                             );
                                         });

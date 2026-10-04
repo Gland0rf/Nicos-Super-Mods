@@ -287,7 +287,7 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
                         italic = false;
                         underlined = false;
                         strikethrough = false;
-                    } else if (formatting.isColor()) {
+                    } else if (isLegacyColor(formatting)) {
                         color = formatting;
                         bold = false;
                         italic = false;
@@ -358,6 +358,29 @@ abstract class WikiScreenInteractionRenderer extends WikiScreenWidgetRenderer {
             case 'o' -> ChatFormatting.ITALIC;
             case 'r' -> ChatFormatting.RESET;
             default -> null;
+        };
+    }
+
+    private static boolean isLegacyColor(ChatFormatting formatting) {
+        return switch (formatting) {
+            case BLACK,
+                 DARK_BLUE,
+                 DARK_GREEN,
+                 DARK_AQUA,
+                 DARK_RED,
+                 DARK_PURPLE,
+                 GOLD,
+                 GRAY,
+                 DARK_GRAY,
+                 BLUE,
+                 GREEN,
+                 AQUA,
+                 RED,
+                 LIGHT_PURPLE,
+                 YELLOW,
+                 WHITE -> true;
+
+            default -> false;
         };
     }
 

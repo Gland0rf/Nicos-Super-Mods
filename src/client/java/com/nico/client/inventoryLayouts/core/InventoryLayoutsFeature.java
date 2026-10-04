@@ -131,7 +131,7 @@ public class InventoryLayoutsFeature {
     }
 
     private static void refreshInventoryButton(Minecraft minecraft) {
-        if (minecraft.screen instanceof InventoryScreen inventoryScreen) {
+        if (minecraft.gui.screen() instanceof InventoryScreen inventoryScreen) {
             refreshInventoryButton(inventoryScreen);
         }
     }
@@ -148,7 +148,7 @@ public class InventoryLayoutsFeature {
     }
 
     private static void openLayoutsScreen(InventoryScreen screen) {
-        Minecraft.getInstance().setScreen(new InventoryLayoutsScreen(screen, MANAGER));
+        Minecraft.getInstance().gui.setScreen(new InventoryLayoutsScreen(screen, MANAGER));
     }
 
     private static ButtonBounds getButtonBounds(InventoryScreen screen) {

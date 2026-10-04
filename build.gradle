@@ -67,7 +67,8 @@ dependencies {
 
 	clientImplementation "maven.modrinth:modmenu:${project.modmenu_version}"
 
-	clientImplementation include("org.notenoughupdates.moulconfig:${project.moulconfig_version}")
+	//clientImplementation include("org.notenoughupdates.moulconfig:${project.moulconfig_version}")
+	clientImplementation include("io.github.akinsoft.softconfig:modern-26.2:${project.softconfig_version}")
 }
 
 tasks.named('shadowJar') {
