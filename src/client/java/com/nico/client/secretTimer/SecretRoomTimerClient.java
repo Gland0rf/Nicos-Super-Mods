@@ -14,10 +14,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Tracks per-room secret timing from local pickup evidence and the server's authoritative counter.
@@ -29,6 +26,7 @@ public final class SecretRoomTimerClient {
     private static final Map<String, Attempt> attempts = new HashMap<>();
     private static final Map<String, Integer> knownFoundByRoom = new HashMap<>();
     private static final Map<String, Integer> knownTotalByRoom = new HashMap<>();
+    private static final Set<String> roomsAlreadyStarted = new HashSet<>();
 
     private static final SecretPickupCorrelation pickupCorrelation = new SecretPickupCorrelation();
 
@@ -60,6 +58,10 @@ public final class SecretRoomTimerClient {
         // Room stacking relies on the authoritative room counters even when PB timing is disabled.
         if (!enabled()) {
             knownFoundByRoom.put(roomName, Math.max(0, foundSecrets));
+            // Remember an already-started room even if the setting is enabled later.
+            if (foundSecrets > 0) roomsAlreadyStarted.add(roomName);
+            attempts.remove(roomName);
+            pickupCorrelation.clearRoom(roomName);
             if (totalSecrets > 0) {
                 knownTotalByRoom.put(roomName, totalSecrets);
             }
@@ -84,6 +86,8 @@ public final class SecretRoomTimerClient {
 
         String roomName = getCurrentRoomName(mc);
         if (roomName == null) return;
+
+        if (!canTimeRoom(roomName)) return;
 
         if (shouldIgnoreSecretPickup(mc, secretPos)) {
             long now = System.currentTimeMillis();
@@ -116,14 +120,21 @@ public final class SecretRoomTimerClient {
         Integer previousFound = knownFoundByRoom.get(roomName);
 
         if (previousFound == null) {
+            // The observasion is snapshot, NOT a sqeuence of newly found secrets.
+            // The room may have been cleared by teammtes long before we arrived.
             knownFoundByRoom.put(roomName, foundSecrets);
 
-            processCounterIncrements(roomName, foundSecrets, now);
+            if (foundSecrets > 0) {
+                roomsAlreadyStarted.add(roomName);
+                attempts.remove(roomName);
+                pickupCorrelation.clearRoom(roomName);
+            }
 
             return;
         }
 
         if (foundSecrets < previousFound) {
+            // Server counter reset / new run. A nonzero replacement is still a snapshot.
             resetRoomState(roomName);
 
             knownFoundByRoom.put(roomName, foundSecrets);
@@ -132,12 +143,18 @@ public final class SecretRoomTimerClient {
                 knownTotalByRoom.put(roomName, totalSecrets);
             }
 
+            if (foundSecrets > 0) {
+                roomsAlreadyStarted.add(roomName);
+            }
+
             return;
         }
 
         int delta = foundSecrets - previousFound;
         knownFoundByRoom.put(roomName, foundSecrets);
-        processCounterIncrements(roomName, delta, now);
+        if (canTimeRoom(roomName)) {
+            processCounterIncrements(roomName, delta, now);
+        }
     }
 
     private static void updateKnownTotal(String roomName, int totalSecrets) {
@@ -270,7 +287,14 @@ public final class SecretRoomTimerClient {
         );
     }
 
+    private static boolean canTimeRoom(String roomName) {
+        return knownFoundByRoom.containsKey(roomName) && !roomsAlreadyStarted.contains(roomName);
+    }
+
     private static void resolveUnmatchedCounterIncrement(String roomName, long observedAtMs) {
+        Attempt attempt = attempts.get(roomName);
+        if (attempt == null || attempt.finished || attempt.invalidated || !canTimeRoom(roomName)) return;
+
         // If no other player is physically in this dungeon room, an unmatched room
         // counter increment cannot reasonably be a teammate's secret. Treat it as a
         // missed local detection instead of invalidating an otherwise valid solo run.
@@ -278,12 +302,6 @@ public final class SecretRoomTimerClient {
             creditMissedSoloSecret(roomName, observedAtMs);
             return;
         }
-
-        Attempt attempt = attempts.get(roomName);
-
-        if (attempt == null) return;
-        if (attempt.finished) return;
-        if (attempt.invalidated) return;
 
         attempt.invalidated = true;
 
@@ -332,20 +350,12 @@ public final class SecretRoomTimerClient {
     private static void creditMissedSoloSecret(String roomName, long observedAtMs) {
         int knownFound = knownFoundByRoom.getOrDefault(roomName, 0);
         int knownTotal = knownTotalByRoom.getOrDefault(roomName, -1);
-        if (knownFound <= 0) return;
+
+        if (knownFound <= 0 || !canTimeRoom(roomName)) return;
 
         Attempt attempt = attempts.get(roomName);
 
-        if (attempt == null) {
-            attempt = new Attempt(observedAtMs, knownTotal);
-            attempts.put(roomName, attempt);
-
-            if (config().showStartMessage) {
-                send("§a[NSM] Timer started for §b" + roomName + "§a.");
-            }
-        }
-
-        if (attempt.invalidated || attempt.finished) return;
+        if (attempt == null || attempt.invalidated || attempt.finished) return;
 
         // A local pickup may already have been counted but its pending confirmation can
         // expire before a very delayed counter packet arrives. Never let the fallback
@@ -442,6 +452,7 @@ public final class SecretRoomTimerClient {
         knownFoundByRoom.clear();
         knownTotalByRoom.clear();
         pickupCorrelation.clear();
+        roomsAlreadyStarted.clear();
     }
 
     private static void resetRoomState(String roomName) {
@@ -449,6 +460,7 @@ public final class SecretRoomTimerClient {
         knownFoundByRoom.remove(roomName);
         knownTotalByRoom.remove(roomName);
         pickupCorrelation.clearRoom(roomName);
+        roomsAlreadyStarted.remove(roomName);
     }
 
     private static void send(String message) {
@@ -565,7 +577,7 @@ public final class SecretRoomTimerClient {
         if (!isDungeonRoomContext(mc)) return;
 
         String roomName = getCurrentRoomName(mc);
-        if (roomName == null) return;
+        if (roomName == null || !canTimeRoom(roomName)) return;
 
         long now = System.currentTimeMillis();
 
@@ -593,6 +605,8 @@ public final class SecretRoomTimerClient {
             long now,
             boolean matchedEarlierCounterIncrement
     ) {
+        if (!canTimeRoom(roomName)) return;
+
         int knownFound = knownFoundByRoom.getOrDefault(roomName, 0);
         int foundBeforeThisPickup = knownFound - (matchedEarlierCounterIncrement ? 1 : 0);
 
@@ -673,7 +687,7 @@ public final class SecretRoomTimerClient {
         if (!isDungeonRoomContext(mc)) return;
 
         String roomName = getCurrentRoomName(mc);
-        if (roomName == null) return;
+        if (roomName == null || !canTimeRoom(roomName)) return;
         if (itemSecret && secretPos == null) return;
 
         if (itemSecret && pickupCorrelation.isNearRememberedChestSecret(roomName, secretPos)) return;
@@ -728,7 +742,7 @@ public final class SecretRoomTimerClient {
         if (!isDungeonRoomContext(mc)) return;
 
         String roomName = getCurrentRoomName(mc);
-        if (roomName == null || chestPos == null) return;
+        if (roomName == null || chestPos == null || !canTimeRoom(roomName)) return;
 
         if (pickupCorrelation.hasSeenPosition(roomName, chestPos)) return;
 
