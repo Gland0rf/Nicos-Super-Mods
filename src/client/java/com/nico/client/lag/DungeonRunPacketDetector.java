@@ -1,5 +1,6 @@
 package com.nico.client.lag;
 
+import com.nico.client.history.SkyblockHistoryFeature;
 import com.nico.client.utils.LocationUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
@@ -25,6 +26,10 @@ public final class DungeonRunPacketDetector {
             return;
         }
 
+        if (packet instanceof ClientboundSetTitleTextPacket) {
+            SkyblockHistoryFeature.onTitle(component);
+        }
+
         String rawText = component.getString();
         String text = normalize(rawText);
         if (text.isEmpty()) {
@@ -38,6 +43,7 @@ public final class DungeonRunPacketDetector {
         if (startMarker) {
             if (LocationUtils.isInSkyblock()) {
                 service.onDungeonRunStart();
+                SkyblockHistoryFeature.onDungeonRunStart();
             }
             return;
         }
@@ -49,6 +55,7 @@ public final class DungeonRunPacketDetector {
         if (mortDungeonStart) {
             if (!service.isDungeonRunActive()) {
                 service.onDungeonRunStart();
+                SkyblockHistoryFeature.onDungeonRunStart();
             }
             return;
         }
@@ -59,6 +66,8 @@ public final class DungeonRunPacketDetector {
 
         if (endMarker) {
             service.onDungeonRunEnd(minecraft);
+            boolean failed = text.equals("defeat") || text.equals("defeat!");
+            SkyblockHistoryFeature.onDungeonRunEnd(failed);
         }
     }
 

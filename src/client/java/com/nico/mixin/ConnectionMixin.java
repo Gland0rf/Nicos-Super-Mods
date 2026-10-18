@@ -1,6 +1,7 @@
 package com.nico.mixin;
 
 import com.nico.client.dungeon.SecretDispatcher;
+import com.nico.client.history.SkyblockHistoryFeature;
 import com.nico.client.lag.DungeonRunPacketDetector;
 import com.nico.client.lag.LagMonitorService;
 import com.nico.client.party.PartySafety;
@@ -29,6 +30,15 @@ public abstract class ConnectionMixin {
                 && PartySafety.interceptOutgoingCommand(chatCommandPacket.command())) {
             ci.cancel();
             return;
+        }
+
+        if (packet instanceof ServerboundChatPacket) {
+            SkyblockHistoryFeature.onOutgoingChat();
+        }
+
+        if (packet instanceof ServerboundPlayerActionPacket actionPacket
+                && actionPacket.getAction() == ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK) {
+            runOnClientThread(() -> SkyblockHistoryFeature.onBlockBreakAttempt(actionPacket.getPos()));
         }
 
         if (packet instanceof ServerboundUseItemOnPacket useItemOnPacket) {

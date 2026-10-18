@@ -45,7 +45,7 @@ public class InventoryLayoutsScreen extends Screen {
             addRenderableWidget(
                     Button.builder(Component.literal("Load"), button -> {
                                 manager.activate(layout);
-                                Minecraft.getInstance().setScreen(inventoryParent);
+                                Minecraft.getInstance().gui.setScreen(inventoryParent);
                             })
                             .bounds(left + panelWidth - 174, y, 52, 20)
                             .build()
@@ -53,7 +53,7 @@ public class InventoryLayoutsScreen extends Screen {
 
             addRenderableWidget(
                     Button.builder(Component.literal("Preview"), button ->
-                                    Minecraft.getInstance().setScreen(
+                                    Minecraft.getInstance().gui.setScreen(
                                             new InventoryLayoutPreviewScreen(
                                                     this,
                                                     inventoryParent,
@@ -105,32 +105,16 @@ public class InventoryLayoutsScreen extends Screen {
     private void addFooterButtons(int left, int panelWidth) {
         int footerTop = height - 80;
         int saveWidth = 112;
-        int stopWidth = 100;
-        int gap = 8;
-        int totalWidth = manager.activeLayout() == null
-                ? saveWidth
-                : saveWidth + gap + stopWidth;
-        int startX = left + Math.max(0, (panelWidth - totalWidth) / 2);
+        int startX = left + Math.max(0, (panelWidth - saveWidth) / 2);
 
         addRenderableWidget(
                 Button.builder(Component.literal("Save current"), button ->
-                                Minecraft.getInstance().setScreen(
+                                Minecraft.getInstance().gui.setScreen(
                                         new SaveInventoryLayoutScreen(this, inventoryParent, manager)
                                 ))
                         .bounds(startX, footerTop, saveWidth, 20)
                         .build()
         );
-
-        if (manager.activeLayout() != null) {
-            addRenderableWidget(
-                    Button.builder(Component.literal("Stop active"), button -> {
-                                manager.deactivate(true);
-                                InventoryLayoutsScreen.this.rebuildWidgets();
-                            })
-                            .bounds(startX + saveWidth + gap, footerTop, stopWidth, 20)
-                            .build()
-            );
-        }
     }
 
     @Override
@@ -192,7 +176,7 @@ public class InventoryLayoutsScreen extends Screen {
 
     @Override
     public void onClose() {
-        Minecraft.getInstance().setScreen(inventoryParent);
+        Minecraft.getInstance().gui.setScreen(inventoryParent);
     }
 
     @Override

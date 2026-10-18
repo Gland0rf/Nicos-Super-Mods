@@ -21,8 +21,8 @@ public final class RoomStackingDetector {
     public static final long ROOM_STACK_ALERT_COOLDOWN_MS = 5000L;
 
     private static final int SCORE_SAME_ROOM_ONCE = 60;
-    private static final int SCORE_EVERY_X_SECONDS = 30;
-    private static final int SCORE_GLOBAL_SECRET_INCREASE = 5;
+    private static final int SCORE_EVERY_X_SECONDS = 40;
+    private static final int SCORE_GLOBAL_SECRET_INCREASE = 20;
     private static final int ALERT_THRESHOLD = 100;
 
     private static final long SCORE_TIME_INTERVAL_MS = 2000L;
@@ -289,14 +289,14 @@ public final class RoomStackingDetector {
 
         if (includesSelf) {
             if (NsmConfig.INSTANCE.dungeons.roomStacking.showSelfTitleAlert) {
-                mc.gui.setTimes(10, 35, 20);
+                mc.gui.hud.setTimes(10, 35, 20);
 
-                mc.gui.setTitle(
+                mc.gui.hud.setTitle(
                         Component.literal("You are stacking!")
                                 .withStyle(ChatFormatting.RED)
                 );
 
-                mc.gui.setSubtitle(
+                mc.gui.hud.setSubtitle(
                         Component.literal("With " + otherNames)
                 );
             }
@@ -312,7 +312,7 @@ public final class RoomStackingDetector {
             }
         } else {
             if (NsmConfig.INSTANCE.dungeons.roomStacking.showOtherStackingChatAlert) {
-                mc.gui.getChat().addClientSystemMessage(
+                mc.gui.hud.getChat().addClientSystemMessage(
                         Component.literal("[NSM] ")
                                 .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
                                 .append(Component.literal(allNames + " are stacking in " + roomName + "!")

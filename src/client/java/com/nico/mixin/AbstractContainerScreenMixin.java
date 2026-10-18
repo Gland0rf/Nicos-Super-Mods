@@ -57,6 +57,12 @@ public abstract class AbstractContainerScreenMixin {
             boolean doubleClick,
             CallbackInfoReturnable<Boolean> callback
     ) {
+        if ((Object) this instanceof InventoryScreen inventoryScreen
+                && InventoryLayoutsFeature.handleInventoryLayoutsClick(inventoryScreen, event)) {
+            callback.setReturnValue(true);
+            return;
+        }
+
         if (!nsm$matchesWikiShortcut(event.hasControlDownWithQuirk(), event.input())) {
             return;
         }
@@ -101,7 +107,7 @@ public abstract class AbstractContainerScreenMixin {
         Minecraft client = Minecraft.getInstance();
         Screen currentScreen = (Screen) (Object) this;
 
-        client.setScreen(
+        client.gui.setScreen(
                 new WikiScreen(
                         currentScreen,
                         stack.copy()
