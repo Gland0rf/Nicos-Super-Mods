@@ -83,9 +83,9 @@ final class LagTitleNotifier {
     }
 
     private static void show(Minecraft client, String title, String subtitle, ChatFormatting color) {
-        client.gui.setTimes(5, 40, 10);
-        client.gui.setSubtitle(Component.literal(subtitle).withStyle(ChatFormatting.GRAY));
-        client.gui.setTitle(Component.literal(title).withStyle(color, ChatFormatting.BOLD));
+        client.gui.hud.setTimes(5, 40, 10);
+        client.gui.hud.setSubtitle(Component.literal(subtitle).withStyle(ChatFormatting.GRAY));
+        client.gui.hud.setTitle(Component.literal(title).withStyle(color, ChatFormatting.BOLD));
     }
 
     private static long updateSince(boolean condition, long since, long nowNanos) {

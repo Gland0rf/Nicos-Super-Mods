@@ -4,15 +4,11 @@ A [Fabric](https://fabricmc.net/) mod for **Minecraft** focused on quality-of-li
 
 The goal of NSM is to fill niche gaps in Hypixel SkyBlock by providing high-quality, lightweight quality-of-life features that aren't available elsewhere.
 
-> [IMPORTANT]
-> NSM is an unofficial community project. It is not affiliated with or endorsed by Mojang, Microsoft, Hypixel, or the Hypixel SkyBlock Wiki. Use modifications at your own risk and follow the rules of every server you join.
-
 ## Features
 
 ### Dungeon tools
 - **Room Stacking Detector**
 - **Room Secret Timer**
-- **Lag Monitor**
 
 ### Hypixel Wiki browser
 
@@ -51,6 +47,10 @@ The Wiki browser requires an internet connection (duh) and makes requests direct
 ### Minion tools
 
 NSM includes minion output and ROI tools backed by the public Hypixel Skyblock Bazaar API.
+
+### Lag Monitor
+
+An accurate TPS, Ping and Jitter display which also let's you differentiate between TPS issues, high ping, and a broken connection.
 
 ### Central HUD editor
 

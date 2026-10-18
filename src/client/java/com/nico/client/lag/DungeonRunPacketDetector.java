@@ -1,5 +1,6 @@
 package com.nico.client.lag;
 
+import com.nico.client.history.SkyblockHistoryFeature;
 import com.nico.client.utils.LocationUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
@@ -25,6 +26,10 @@ public final class DungeonRunPacketDetector {
             return;
         }
 
+        if (packet instanceof ClientboundSetTitleTextPacket) {
+            SkyblockHistoryFeature.onTitle(component);
+        }
+
         String rawText = component.getString();
         String text = normalize(rawText);
         if (text.isEmpty()) {
@@ -38,6 +43,7 @@ public final class DungeonRunPacketDetector {
         if (startMarker) {
             if (LocationUtils.isInSkyblock()) {
                 service.onDungeonRunStart();
+                SkyblockHistoryFeature.onDungeonRunStart();
             }
             return;
         }
@@ -49,6 +55,7 @@ public final class DungeonRunPacketDetector {
         if (mortDungeonStart) {
             if (!service.isDungeonRunActive()) {
                 service.onDungeonRunStart();
+                SkyblockHistoryFeature.onDungeonRunStart();
             }
             return;
         }
@@ -59,6 +66,8 @@ public final class DungeonRunPacketDetector {
 
         if (endMarker) {
             service.onDungeonRunEnd(minecraft);
+            boolean failed = text.equals("defeat") || text.equals("defeat!");
+            SkyblockHistoryFeature.onDungeonRunEnd(failed);
         }
     }
 
@@ -87,14 +96,6 @@ public final class DungeonRunPacketDetector {
         return text.contains("mort: here, i found this map when i first entered the dungeon");
     }
 
-    private static boolean isDungeonStartClue(String text) {
-        return text.contains("starting in ")
-                || text.contains("starts in ")
-                || text.contains("first entered the dungeon")
-                || text.contains("found this map")
-                || text.contains("the catacombs");
-    }
-
     private static boolean isDungeonEnd(String text) {
         return text.equals("victory")
                 || text.equals("victory!")
@@ -103,16 +104,6 @@ public final class DungeonRunPacketDetector {
                 || text.contains("team score:")
                 || text.equals("defeat")
                 || text.equals("defeat!");
-    }
-
-    private static String markerName(boolean startMarker, boolean endMarker) {
-        if (startMarker) {
-            return "START";
-        }
-        if (endMarker) {
-            return "END";
-        }
-        return "CLUE";
     }
 
     private static String normalize(String text) {

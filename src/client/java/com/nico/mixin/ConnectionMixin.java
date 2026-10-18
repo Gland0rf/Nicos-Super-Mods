@@ -1,6 +1,7 @@
 package com.nico.mixin;
 
 import com.nico.client.dungeon.SecretDispatcher;
+import com.nico.client.history.SkyblockHistoryFeature;
 import com.nico.client.lag.DungeonRunPacketDetector;
 import com.nico.client.lag.LagMonitorService;
 import com.nico.client.party.PartySafety;
@@ -8,15 +9,12 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.Connection;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.*;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import java.util.Locale;
 
 @Mixin(value = Connection.class, priority = 100)
 public abstract class ConnectionMixin {
@@ -32,6 +30,15 @@ public abstract class ConnectionMixin {
                 && PartySafety.interceptOutgoingCommand(chatCommandPacket.command())) {
             ci.cancel();
             return;
+        }
+
+        if (packet instanceof ServerboundChatPacket) {
+            SkyblockHistoryFeature.onOutgoingChat();
+        }
+
+        if (packet instanceof ServerboundPlayerActionPacket actionPacket
+                && actionPacket.getAction() == ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK) {
+            runOnClientThread(() -> SkyblockHistoryFeature.onBlockBreakAttempt(actionPacket.getPos()));
         }
 
         if (packet instanceof ServerboundUseItemOnPacket useItemOnPacket) {
@@ -61,29 +68,12 @@ public abstract class ConnectionMixin {
         runOnClientThread(() -> {
             DungeonRunPacketDetector.handle(packet);
 
-            if (packet instanceof ClientboundSoundPacket
-                    || packet instanceof ClientboundSystemChatPacket
+            if (packet instanceof ClientboundSystemChatPacket
                     || packet instanceof ClientboundDamageEventPacket) {
 
                 SecretDispatcher.onReceive(packet);
             }
         });
-    }
-
-    private static Component extractText(Packet<?> packet) {
-        if (packet instanceof ClientboundSystemChatPacket chatPacket) {
-            return chatPacket.content();
-        }
-        if (packet instanceof ClientboundSetTitleTextPacket titlePacket) {
-            return titlePacket.text();
-        }
-        if (packet instanceof ClientboundSetSubtitleTextPacket subtitlePacket) {
-            return subtitlePacket.text();
-        }
-        if (packet instanceof ClientboundSetActionBarTextPacket actionBarPacket) {
-            return actionBarPacket.text();
-        }
-        return null;
     }
 
     private static void runOnClientThread(Runnable runnable) {

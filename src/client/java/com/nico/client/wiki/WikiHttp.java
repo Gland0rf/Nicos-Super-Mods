@@ -4,10 +4,13 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpRequest;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /** Builds HTTP requests with a stable, identifiable user agent for Hypixel Skyblock Wiki traffic. **/
 public final class WikiHttp {
@@ -52,6 +55,26 @@ public final class WikiHttp {
 
     public static HttpRequest.Builder request(URI uri) {
         return request(uri, Duration.ofSeconds(25));
+    }
+
+    public static URI buildQueryUri(String endpoint, Map<String, String> parameters) {
+        if (parameters == null || parameters.isEmpty()) return URI.create(endpoint);
+
+        StringBuilder result = new StringBuilder(endpoint).append('?');
+        boolean first = true;
+
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            if (!first) {
+                result.append('&');
+            }
+            first = false;
+
+            result.append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8))
+                    .append('=')
+                    .append(URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
+        }
+
+        return URI.create(result.toString());
     }
 
     public static String modPageUrl() {

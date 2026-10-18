@@ -20,13 +20,26 @@ public final class PartySafety {
     private static final Pattern PARTY_TRANSFER_COMMAND =
             Pattern.compile("^(?:p|party)\\s+transfer\\s+([A-Za-z0-9_]{1,16})(?:\\s+.*)?$", Pattern.CASE_INSENSITIVE);
 
+    private static final Pattern PARTY_FINDER_JOIN = Pattern.compile(
+            "^(?:Party|Dungeon)\\s+Finder\\s*>\\s*(?:\\[[^\\]]+\\]\\s*)*"
+                    + "([A-Za-z0-9_]{1,16})\\s+(?:has\\s+)?joined\\s+(?:the\\s+)?"
+                    + "(?:(?:[A-Za-z]+\\s+)*group|party)[!.]?(?:\\s+\\(.*\\))?$",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern PARTY_TRANSFER_REQUEST = Pattern.compile(
+            "^!(?:pt|ptme)(?:\\s+.*)?$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PARTY_MEMBER_LEFT = Pattern.compile(
+            "^(?:\\[[^\\]]+\\]\\s*)*([A-Za-z0-9_]{1,16})\\s+"
+                    + "(?:has\\s+)?(?:left\\s+the\\s+party|been\\s+removed\\s+from\\s+the\\s+party)"
+                    + "[.!]?$",
+            Pattern.CASE_INSENSITIVE);
+
     private static final String PARTY_CHAT_PREFIX = "Party > ";
-    private static final String WARNING_MESSAGE_PREFIX = "[NSM] Killed party transfer command triggered by: ";
-    private static final String WARNING_MESSAGE_SUFFIX = ". Reason: Player joined party and immediately tries to take lead.";
+    private static final String WARNING_MESSAGE_PREFIX = "[NSM] Party transfer command from ";
+    private static final String WARNING_MESSAGE_SUFFIX = " was intercepted and terminated. Reason: Player joined party and immediately tries to take lead.";
 
     private static final StackWalker STACK_WALKER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
 
-    private static final Map<String, Long> RECENT_JOINS = new HashMap<>();
+    private static final Map<String, Long> RECENT_QUEUE_JOINS = new HashMap<>();
     private static final Map<String, PartyChatTrigger> RECENT_CHAT_TRIGGERS = new HashMap<>();
     private static final Set<String> PREFILLED_WARNING_PLAYERS = new HashSet<>();
 
@@ -41,20 +54,28 @@ public final class PartySafety {
         String text = stripFormatting(component.getString()).trim();
         if (text.isEmpty()) return;
 
-        String joinedPlayer = extractJoinedPlayer(text);
-        if (joinedPlayer != null) {
-            String key = normalizePlayerName(joinedPlayer);
-            RECENT_JOINS.put(key, now);
-            RECENT_CHAT_TRIGGERS.remove(key);
-            PREFILLED_WARNING_PLAYERS.remove(joinedPlayer);
+        if (isPartySessionEnd(text)) {
+            RECENT_QUEUE_JOINS.clear();
+            RECENT_CHAT_TRIGGERS.clear();
+            PREFILLED_WARNING_PLAYERS.clear();
             return;
         }
 
+        Matcher leftMatcher = PARTY_MEMBER_LEFT.matcher(text);
+        if (leftMatcher.matches()) {
+            String key = normalizePlayerName(leftMatcher.group(1));
+            RECENT_QUEUE_JOINS.remove(key);
+            RECENT_CHAT_TRIGGERS.remove(key);
+            PREFILLED_WARNING_PLAYERS.remove(key);
+            return;
+        }
+
+        // A normal /party invite is not a queue admission, so it must not arm safety.
         PartyChatMessage partyMessage = parsePartyChat(text);
-        if (partyMessage == null || !partyMessage.message().stripLeading().startsWith("!")) return;
+        if (partyMessage == null || !PARTY_TRANSFER_REQUEST.matcher(partyMessage.message().strip()).matches()) return;
 
         String key = normalizePlayerName(partyMessage.playerName());
-        Long joinedAt = RECENT_JOINS.get(key);
+        Long joinedAt = RECENT_QUEUE_JOINS.get(key);
         if (joinedAt == null || now - joinedAt > recentJoinWindowMillis()) return;
 
         RECENT_CHAT_TRIGGERS.put(key, new PartyChatTrigger(now, partyMessage.message().strip()));
@@ -83,7 +104,7 @@ public final class PartySafety {
         String targetName = transferMatcher.group(1);
         String key = normalizePlayerName(targetName);
 
-        Long joinedAt = RECENT_JOINS.get(key);
+        Long joinedAt = RECENT_QUEUE_JOINS.get(key);
         long windowMillis = recentJoinWindowMillis();
         if (joinedAt == null || now - joinedAt > windowMillis) return false;
 
@@ -113,36 +134,31 @@ public final class PartySafety {
 
     private static void cleanupExpired(long now) {
         long windowMillis = recentJoinWindowMillis();
-        RECENT_JOINS.entrySet().removeIf(entry -> now - entry.getValue() > windowMillis);
+        RECENT_QUEUE_JOINS.entrySet().removeIf(entry -> now - entry.getValue() > windowMillis);
         RECENT_CHAT_TRIGGERS.entrySet().removeIf(entry -> {
-            Long joinedAt = RECENT_JOINS.get(entry.getKey());
+            Long joinedAt = RECENT_QUEUE_JOINS.get(entry.getKey());
             return joinedAt == null
                     || entry.getValue().timeMillis() < joinedAt
                     || now - entry.getValue().timeMillis() > windowMillis;
         });
-        PREFILLED_WARNING_PLAYERS.removeIf(key -> !RECENT_JOINS.containsKey(key));
+        PREFILLED_WARNING_PLAYERS.removeIf(key -> !RECENT_QUEUE_JOINS.containsKey(key));
     }
 
-    private static String extractJoinedPlayer(String text) {
+    private static boolean isPartySessionEnd(String text) {
         String lower = text.toLowerCase(Locale.ROOT);
-        String joinPhrase = " joined the party.";
 
-        int phraseIndex = lower.indexOf(joinPhrase);
-        if (phraseIndex < 0) return null;
-
-        String beforeJoin = text.substring(0, phraseIndex).trim();
-        int arrowIndex = beforeJoin.lastIndexOf('>');
-        if (arrowIndex > 0) {
-            beforeJoin = beforeJoin.substring(arrowIndex + 1).trim();
-        }
-
-        beforeJoin = beforeJoin.replaceAll("\\[[^\\]]+\\]", " ").trim();
-        Matcher usernameMatcher = USERNAME_AT_END.matcher(beforeJoin);
-        if (usernameMatcher.find()) {
-            return usernameMatcher.group(1);
-        }
-
-        return null;
+        return lower.equals("you have left the party.")
+                || lower.equals("you have left the party")
+                || lower.equals("you left the party.")
+                || lower.equals("you left the party")
+                || lower.contains("you have been kicked from the party")
+                || lower.contains("you were kicked from the party")
+                || lower.contains("the party was disbanded")
+                || lower.contains("the party has been disbanded")
+                || lower.matches("^(?:\\[[^\\]]+\\]\\s*)*[a-z0-9_]{1,16} has disbanded the party!$")
+                || lower.contains("you are not currently in a party")
+                || (lower.startsWith("you have joined ")
+                && (lower.endsWith("'s party!") || lower.endsWith("’s party!")));
     }
 
     private static PartyChatMessage parsePartyChat(String text) {
@@ -279,24 +295,24 @@ public final class PartySafety {
         );
 
         Minecraft minecraft = Minecraft.getInstance();
-        minecraft.execute(() -> minecraft.gui.getChat().addClientSystemMessage(Component.literal(message)));
+        minecraft.execute(() -> minecraft.gui.hud.getChat().addClientSystemMessage(Component.literal(message)));
     }
 
     private static void openPrefilledPartyWarning(String playerKey, String sourceMod) {
         String warning = WARNING_MESSAGE_PREFIX + sourceMod + WARNING_MESSAGE_SUFFIX;
-        String chatInput = "/pc" + warning;
+        String chatInput = "/pc " + warning;
 
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.execute(() -> {
             synchronized (PartySafety.class) {
                 if (PREFILLED_WARNING_PLAYERS.contains(playerKey)) return;
-                if (!RECENT_JOINS.containsKey(playerKey)) return;
+                if (!RECENT_QUEUE_JOINS.containsKey(playerKey)) return;
 
                 // Do not replace another open screen or anything the user is already typing.
-                if (minecraft.screen != null) return;
+                if (minecraft.gui.screen() != null) return;
 
                 PREFILLED_WARNING_PLAYERS.add(playerKey);
-                minecraft.setScreen(new ChatScreen(chatInput, true));
+                minecraft.gui.setScreen(new ChatScreen(chatInput, true));
             }
         });
     }
