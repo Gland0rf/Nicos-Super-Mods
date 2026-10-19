@@ -1,8 +1,7 @@
 package com.nico.client.memleak;
 
 import com.nico.client.configuration.NsmConfig;
-import com.nico.client.configuration.NsmConfigManager;
-import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.configuration.category.FeatureOptions;
 import com.nico.client.lifecycle.WorldStateCleanup;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -33,7 +32,7 @@ public class MemLeakFeature {
             return;
         }
 
-        CategoryOther.MemLeak settings = NsmConfig.INSTANCE.other.memLeak;
+        FeatureOptions.MemLeak settings = NsmConfig.INSTANCE.feature(FeatureOptions.MemLeak.class);
 
         if (!settings.enabled) return;
 
@@ -85,7 +84,7 @@ public class MemLeakFeature {
         Object previousWorld = lastWorld.get();
         boolean changedAwayFromExistingWorld = lastTickHadWorld && (world == null || previousWorld != world);
 
-        if (changedAwayFromExistingWorld && NsmConfig.INSTANCE.other.memLeak.autoCleanupTransientData) {
+        if (changedAwayFromExistingWorld && NsmConfig.INSTANCE.feature(FeatureOptions.MemLeak.class).autoCleanupTransientData) {
             WorldStateCleanup.Result result = WorldStateCleanup.cleanupWorldState();
             MemLeakService current = service;
             if (current != null) {
@@ -223,7 +222,7 @@ public class MemLeakFeature {
     }
 
     private static void sendAutomaticAlert(String message) {
-        if (!NsmConfig.INSTANCE.other.memLeak.chatAlerts) {
+        if (!NsmConfig.INSTANCE.feature(FeatureOptions.MemLeak.class).chatAlerts) {
             return;
         }
 

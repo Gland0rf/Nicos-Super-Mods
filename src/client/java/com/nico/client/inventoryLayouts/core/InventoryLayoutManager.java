@@ -1,7 +1,7 @@
 package com.nico.client.inventoryLayouts.core;
 
 import com.nico.client.configuration.NsmConfig;
-import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.configuration.category.FeatureOptions;
 import com.nico.client.inventoryLayouts.storage.InventoryLayoutMatcher;
 import com.nico.client.inventoryLayouts.storage.InventoryLayoutStorage;
 import net.minecraft.ChatFormatting;
@@ -27,8 +27,8 @@ public class InventoryLayoutManager {
         return storage;
     }
 
-    public CategoryOther.InventoryLayouts config() {
-        return NsmConfig.INSTANCE.other.inventoryLayouts;
+    public FeatureOptions.InventoryLayouts config() {
+        return NsmConfig.INSTANCE.feature(FeatureOptions.InventoryLayouts.class);
     }
 
     public InventoryLayout activeLayout() {
@@ -94,7 +94,7 @@ public class InventoryLayoutManager {
     }
 
     public void tick(Minecraft minecraft) {
-        CategoryOther.InventoryLayouts config = config();
+        FeatureOptions.InventoryLayouts config = config();
 
         if (!config.enabled || activeLayout == null || minecraft.player == null) return;
 

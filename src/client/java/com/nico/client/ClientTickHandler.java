@@ -1,6 +1,7 @@
 package com.nico.client;
 
 import com.nico.client.configuration.NsmConfig;
+import com.nico.client.configuration.category.FeatureOptions;
 import com.nico.client.dungeon.DungeonState;
 import com.nico.client.stacking.RoomStackingDetector;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -29,7 +30,7 @@ public final class ClientTickHandler {
     }
 
     private static void tickOncePerSecond() {
-        if (NsmConfig.INSTANCE.dungeons.roomStacking.enabled) {
+        if (NsmConfig.INSTANCE.feature(FeatureOptions.RoomStacking.class).enabled) {
             RoomStackingDetector.tick();
         }
     }

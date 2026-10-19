@@ -1,20 +1,15 @@
 package com.nico.client.lag;
 
 import com.google.gson.*;
-import com.nico.client.configuration.category.CategoryDungeons;
-import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.configuration.category.FeatureOptions;
 import net.fabricmc.loader.api.FabricLoader;
 
-import java.io.IOException;
-import java.io.Reader;
-import java.io.Writer;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
  * Runtime lag-monitor settings.
  *
- * <p>User-facing values are copied from {@link CategoryOther.LagMonitor}. The remaining
+ * <p>User-facing values are copied from {@link FeatureOptions.LagMonitor}. The remaining
  * thresholds are internal tuning defaults and are intentionally not persisted separately.</p>
  */
 public final class LagMonitorConfig {
@@ -95,7 +90,7 @@ public final class LagMonitorConfig {
         hudYOffset = clamp(hudYOffset, 0, 500);
     }
 
-    public void applyMoulConfig(CategoryOther.LagMonitor settings) {
+    public void applyMoulConfig(FeatureOptions.LagMonitor settings) {
         if (settings == null) {
             return;
         }

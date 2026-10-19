@@ -1,16 +1,12 @@
 package com.nico.client.lag;
 
 import com.nico.client.configuration.NsmConfig;
-import com.nico.client.configuration.NsmConfigManager;
-import com.nico.client.configuration.category.CategoryDungeons;
-import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.configuration.category.FeatureOptions;
 import com.nico.client.hud.HudLayoutManager;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-
-import java.util.function.Supplier;
 
 public class LagMonitorFeature {
     private static boolean initialized;
@@ -47,9 +43,7 @@ public class LagMonitorFeature {
     }
 
     private static void syncConfig() {
-        CategoryOther.LagMonitor settings = NsmConfig.INSTANCE.other == null
-                ? null
-                : NsmConfig.INSTANCE.other.lagMonitor;
+        FeatureOptions.LagMonitor settings = NsmConfig.INSTANCE.feature(FeatureOptions.LagMonitor.class);
 
         config.applyMoulConfig(settings);
         config.sanitize();

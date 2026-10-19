@@ -1,6 +1,7 @@
 package com.nico.client.minions;
 
 import com.nico.client.configuration.NsmConfig;
+import com.nico.client.configuration.category.FeatureOptions;
 import com.nico.client.hud.HudElement;
 import com.nico.client.hud.HudLayoutManager;
 import com.nico.client.minions.MinionOutputEstimator;
@@ -62,7 +63,7 @@ public final class MinionGuiOverlay {
     }
 
     public void onRenderPost(Screen screen, GuiGraphicsExtractor graphics) {
-        if (!NsmConfig.INSTANCE.island.minionInfo.enabled) return;
+        if (!NsmConfig.INSTANCE.feature(FeatureOptions.MinionProfitOverlay.class).enabled) return;
 
         Optional<DetectedMinionWindow> optionalWindow = detector.detect(screen);
 
@@ -146,7 +147,7 @@ public final class MinionGuiOverlay {
     }
 
     private void renderPanel(GuiGraphicsExtractor graphics, DetectedMinionWindow window) {
-        if (!NsmConfig.INSTANCE.island.minionInfo.enabled) return;
+        if (!NsmConfig.INSTANCE.feature(FeatureOptions.MinionProfitOverlay.class).enabled) return;
 
         Minecraft minecraft = Minecraft.getInstance();
         Font font = minecraft.font;
@@ -307,7 +308,7 @@ public final class MinionGuiOverlay {
             }
         }
 
-        if (NsmConfig.INSTANCE.island.minionInfo.showUpgradeRoi) {
+        if (NsmConfig.INSTANCE.feature(FeatureOptions.MinionProfitOverlay.class).showUpgradeRoi) {
             if (upgradeEstimate != null) {
                 lines.add("");
                 lines.add("Next Upgrade:");
