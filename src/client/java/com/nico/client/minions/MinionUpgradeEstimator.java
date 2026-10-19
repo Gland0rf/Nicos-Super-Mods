@@ -1,6 +1,7 @@
 package com.nico.client.minions;
 
 import com.nico.client.configuration.NsmConfig;
+import com.nico.client.configuration.category.FeatureOptions;
 import com.nico.client.minions.base.*;
 import com.nico.client.utils.BazaarService;
 
@@ -79,7 +80,7 @@ public class MinionUpgradeEstimator {
             }
 
             BazaarService.PriceMode priceMode =
-                    NsmConfig.INSTANCE.island.minionInfo.bazaarPriceMode == 1
+                    NsmConfig.INSTANCE.feature(FeatureOptions.MinionProfitOverlay.class).bazaarPriceMode == 1
                             ? BazaarService.PriceMode.INSTANT_BUY
                             : BazaarService.PriceMode.INSTANT_SELL;
 

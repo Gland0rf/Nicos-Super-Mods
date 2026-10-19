@@ -1,6 +1,6 @@
 package com.nico.client.inventoryLayouts.storage;
 
-import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.configuration.category.FeatureOptions;
 import com.nico.client.inventoryLayouts.core.InventoryLayout;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutSlot;
 import net.minecraft.world.entity.player.Player;
@@ -13,7 +13,7 @@ public class InventoryLayoutMatcher {
             InventoryLayout layout,
             Player player,
             int inventorySlot,
-            CategoryOther.InventoryLayouts config
+            FeatureOptions.InventoryLayouts config
     ) {
         InventoryLayoutSlot expected = layout.expectedAt(inventorySlot);
         ItemStack actual = player.getInventory().getItem(inventorySlot);
@@ -36,7 +36,7 @@ public class InventoryLayoutMatcher {
     public static LayoutProgress getProgress(
         InventoryLayout layout,
         Player player,
-        CategoryOther.InventoryLayouts config
+        FeatureOptions.InventoryLayouts config
     ) {
         int correctSlots = 0;
 

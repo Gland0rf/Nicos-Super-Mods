@@ -1,6 +1,6 @@
 package com.nico.client.inventoryLayouts.render;
 
-import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.configuration.category.FeatureOptions;
 import com.nico.client.inventoryLayouts.core.InventoryLayout;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutSlot;
 import com.nico.client.inventoryLayouts.storage.InventoryLayoutStackSnapshot;
@@ -21,7 +21,7 @@ public class InventoryLayoutRenderUtil {
     public static ItemStack findRepresentativeStack(
             InventoryLayoutSlot expected,
             Player player,
-            CategoryOther.InventoryLayouts config
+            FeatureOptions.InventoryLayouts config
     ) {
         if (expected == null) return ItemStack.EMPTY;
 

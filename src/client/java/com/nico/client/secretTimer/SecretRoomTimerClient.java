@@ -2,6 +2,7 @@ package com.nico.client.secretTimer;
 
 import com.nico.client.configuration.NsmConfig;
 import com.nico.client.configuration.category.CategoryDungeons;
+import com.nico.client.configuration.category.FeatureOptions;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonState;
 import com.nico.client.dungeon.DungeonTeammateScanner;
@@ -499,8 +500,8 @@ public final class SecretRoomTimerClient {
         }
     }
 
-    private static CategoryDungeons.SecretRoomTimer config() {
-        return NsmConfig.INSTANCE.dungeons.secretRoomTimer;
+    private static FeatureOptions.SecretRoomTimer config() {
+        return NsmConfig.INSTANCE.feature(FeatureOptions.SecretRoomTimer.class);
     }
 
     private static boolean enabled() {

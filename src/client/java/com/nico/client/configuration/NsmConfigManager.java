@@ -1,8 +1,6 @@
 package com.nico.client.configuration;
 
 import com.google.gson.*;
-import com.nico.client.configuration.category.CategoryDungeons;
-import com.nico.client.configuration.category.CategoryOther;
 import com.nico.client.utils.AtomicFiles;
 import io.github.notenoughupdates.moulconfig.gui.GuiContext;
 import io.github.notenoughupdates.moulconfig.gui.GuiElementComponent;
@@ -18,10 +16,8 @@ import net.minecraft.network.chat.Component;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 
 public final class NsmConfigManager {
 
@@ -99,52 +95,13 @@ public final class NsmConfigManager {
 
         try (Reader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
             JsonElement rawConfig = JsonParser.parseReader(reader);
-            NsmConfig loadedConfig = GSON.fromJson(rawConfig, NsmConfig.class);
-            migrateLegacyLagMonitor(loadedConfig, rawConfig);
-            return loadedConfig;
+            if (rawConfig == null || !rawConfig.isJsonObject()) throw new JsonParseException("Expected config JSON object");
+            FeatureRegistry.migrate(rawConfig.getAsJsonObject());
+            return GSON.fromJson(rawConfig, NsmConfig.class);
         } catch (IOException | RuntimeException exception) {
             System.err.println("[NSM] Could not load config; using defaults: " + exception.getMessage());
             return null;
         }
-    }
-
-    private static void migrateLegacyLagMonitor(NsmConfig config, JsonElement rawConfig) {
-        if (config == null || rawConfig == null || !rawConfig.isJsonObject()) {
-            return;
-        }
-
-        JsonObject root = rawConfig.getAsJsonObject();
-        JsonObject other = getObject(root, "other");
-        if (other != null && other.has("lagMonitor")) return;
-
-        JsonObject dungeons = getObject(root, "dungeons");
-        if (dungeons == null || !dungeons.has("dungeonLagMonitor")) return;
-
-        JsonElement legacyElement = dungeons.get("dungeonLagMonitor");
-        CategoryOther.LagMonitor migrated = GSON.fromJson(legacyElement, CategoryOther.LagMonitor.class);
-        if (migrated == null) return;
-
-        if (migrated.visibility == null) {
-            migrated.visibility = new CategoryOther.LagMonitor.Visibility();
-        }
-        if (migrated.design == null) {
-            migrated.design = new CategoryOther.LagMonitor.Design();
-        }
-
-        if (legacyElement.isJsonObject()) {
-            JsonObject legacyObject = legacyElement.getAsJsonObject();
-            JsonElement onlyDungeons = legacyObject.get("onlyShowInDungeons");
-            if (onlyDungeons != null && onlyDungeons.isJsonPrimitive() && onlyDungeons.getAsJsonPrimitive().isBoolean()) {
-                migrated.visibility.showInDungeons = true;
-                migrated.visibility.showOnHypixelOutsideDungeons = !onlyDungeons.getAsBoolean();
-                migrated.visibility.showOnOtherServers = false;
-            }
-        }
-
-        if (config.other == null) {
-            config.other = new CategoryOther();
-        }
-        config.other.lagMonitor = migrated;
     }
 
     private static JsonObject getObject(JsonObject parent, String name) {

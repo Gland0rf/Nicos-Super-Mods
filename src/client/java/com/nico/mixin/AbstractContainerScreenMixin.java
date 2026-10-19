@@ -1,7 +1,7 @@
 package com.nico.mixin;
 
 import com.nico.client.configuration.NsmConfig;
-import com.nico.client.configuration.category.CategoryOther;
+import com.nico.client.configuration.category.FeatureOptions;
 import com.nico.client.inventoryLayouts.core.InventoryLayoutsFeature;
 import com.nico.client.inventoryLayouts.render.InventoryLayoutOverlay;
 import com.nico.client.wiki.screen.WikiScreen;
@@ -118,7 +118,7 @@ public abstract class AbstractContainerScreenMixin {
     }
 
     private boolean nsm$matchesWikiShortcut(boolean controlDown, int input) {
-        CategoryOther.IntegratedWiki wiki = NsmConfig.INSTANCE.other.wiki;
+        FeatureOptions.IntegratedWiki wiki = NsmConfig.INSTANCE.feature(FeatureOptions.IntegratedWiki.class);
         return wiki.wikiShortcutEnabled && controlDown && input == wiki.wikiShortcut;
     }
 }

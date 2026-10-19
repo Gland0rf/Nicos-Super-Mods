@@ -1,59 +1,12 @@
 package com.nico.client.configuration.category;
 
 import com.nico.client.history.WrappedConfig;
+import com.nico.client.secretTimer.SecretRoomTimerClient;
 import io.github.notenoughupdates.moulconfig.annotations.*;
 import org.lwjgl.glfw.GLFW;
 
-public class CategoryOther {
-
-    @ConfigOption(
-            name = "Lag Monitor",
-            desc = "Tracks TPS, ping, jitter, and connection stalls with a customizable HUD."
-    )
-    @Accordion
-    public LagMonitor lagMonitor = new LagMonitor();
-
-    @ConfigOption(
-            name = "Inventory Layouts",
-            desc = "Lets you save inventory arrangements and display a visual guide while rebuilding them."
-    )
-    @Accordion
-    public InventoryLayouts inventoryLayouts = new InventoryLayouts();
-
-    @ConfigOption(
-            name = "Integrated Wiki",
-            desc = "Open up the skyblock wiki inside minecraft, so you don't have to tab out all the time."
-    )
-    @Accordion
-    public IntegratedWiki wiki = new IntegratedWiki();
-
-    @ConfigOption(
-            name = "Memory Leak Detector",
-            desc = "Detects sustained heap growth and identifies likely mod allocation sources."
-    )
-    @Accordion
-    public MemLeak memLeak = new MemLeak();
-
-    @ConfigOption(
-            name = "Party Safety",
-            desc = "Blocks automatic party transfers triggered by a player that just joined"
-    )
-    @Accordion
-    public PartySafety partySafety = new PartySafety();
-
-    @ConfigOption(
-            name = "Party Memory",
-            desc = "Remembers players you play with and shows a small history line when they join again."
-    )
-    @Accordion
-    public PartyMemory partyMemory = new PartyMemory();
-
-    @ConfigOption(
-            name = "Skyblock Wrapped",
-            desc = "Wrapped display settings live in a separate JSON file so the normal config menu stays clean."
-    )
-    @Accordion
-    public SkyblockWrapped skyblockWrapped = new SkyblockWrapped();
+public final class FeatureOptions {
+    private FeatureOptions() { }
 
     public static class IntegratedWiki {
         @ConfigOption(
@@ -376,6 +329,161 @@ public class CategoryOther {
         )
         @ConfigEditorButton(buttonText = "Open File")
         public transient Runnable openWrappedConfig = WrappedConfig::openConfigFile;
+    }
+
+    public static class RoomStacking {
+        @ConfigOption(
+                name = "Enabled",
+                desc = "Detects when two or more dungeon teammates are in the same room."
+        )
+        @ConfigEditorBoolean
+        public boolean enabled = false;
+
+        @ConfigOption(
+                name = "Self Title Alert",
+                desc = "Shows a title alert when you are stacking."
+        )
+        @ConfigEditorBoolean
+        public boolean showSelfTitleAlert = true;
+
+        @ConfigOption(
+                name = "Other Players Chat Alert",
+                desc = "Sends a chat message when other players are stacking."
+        )
+        @ConfigEditorBoolean
+        public boolean showOtherStackingChatAlert = true;
+
+        @ConfigOption(
+                name = "Copy message to clipboard",
+                desc = "Copies the displayed title or chat message to you clipboard."
+        )
+        @ConfigEditorBoolean
+        public boolean copyStackingMessageToClipboard = true;
+
+        @ConfigOption(
+                name = "Alert Sounds",
+                desc = "Plays a sound when stacking is detected."
+        )
+        @ConfigEditorBoolean
+        public boolean playAlertSounds = true;
+
+        @ConfigOption(
+                name = "Include Classes In Chat",
+                desc = "Shows dungeon classes next to player names in chat alerts."
+        )
+        @ConfigEditorBoolean
+        public boolean includeClassesInChat = true;
+
+        @ConfigOption(
+                name = "Ignore Fairy",
+                desc = "Does not alert for players stacked in Fairy room."
+        )
+        @ConfigEditorBoolean
+        public boolean ignoreFairy = true;
+
+        @ConfigOption(
+                name = "Ignore Blood",
+                desc = "Does not alert for players stacked in Blood room."
+        )
+        @ConfigEditorBoolean
+        public boolean ignoreBlood = true;
+
+        @ConfigOption(
+                name = "Disable At Secret Percent",
+                desc = "Room stacking alerts stop after this total secret percentage."
+        )
+        @ConfigEditorSlider(
+                minValue = 0,
+                maxValue = 100,
+                minStep = 1
+        )
+        public int disableRoomStackingAtSecretPercent = 80;
+    }
+
+    public static class SecretRoomTimer {
+        @ConfigOption(
+                name = "Enabled",
+                desc = "Times your personal full-secret clears per dungeon room and saves PBs."
+        )
+        @ConfigEditorBoolean
+        public boolean enabled = false;
+
+        @ConfigOption(
+                name = "Show Start Message",
+                desc = "Sends a chat message when a room timer starts."
+        )
+        @ConfigEditorBoolean
+        public boolean showStartMessage = false;
+
+        @ConfigOption(
+                name = "Show Progress Messages",
+                desc = "Sends chat progress like 2/5 secrets."
+        )
+        @ConfigEditorBoolean
+        public boolean showProgressMessages = true;
+
+        @ConfigOption(
+                name = "Show Completion Message",
+                desc = "Sends a chat message when you complete all secrets in a room."
+        )
+        @ConfigEditorBoolean
+        public boolean showCompletionMessage = true;
+
+        @ConfigOption(
+                name = "Only Announce New PBs",
+                desc = "If enabled, only sends a completion message when the time is a new PB."
+                )
+                @ConfigEditorBoolean
+        public boolean onlyAnnounceNewPbs = false;
+
+        @ConfigOption(
+                name = "Display All PBs",
+                desc = "Prints all saved secret room PBs in chat."
+        )
+        @ConfigEditorButton(buttonText = "Display")
+        public transient Runnable displayAllPbs = SecretRoomTimerClient::displayAllPbs;
+
+        @ConfigOption(
+                name = "Reset Current Room PB",
+                desc = "Deletes the saved PB for your current dungeon room."
+        )
+        @ConfigEditorButton(buttonText = "Reset Current")
+        public transient Runnable resetCurrentRoomPb = SecretRoomTimerClient::resetCurrentRoomPb;
+
+        @ConfigOption(
+                name = "Reset All PBs",
+                desc = "Deletes every saved secret room PB."
+        )
+        @ConfigEditorButton(buttonText = "Reset All")
+        public transient Runnable resetAllPbs = SecretRoomTimerClient::resetAllPbs;
+    }
+
+    public static class MinionProfitOverlay {
+        @ConfigOption(
+                name = "Enabled",
+                desc = "Shows the minion profit overlay while a minion GUI is open."
+        )
+        @ConfigEditorBoolean
+        public boolean enabled = true;
+
+        @ConfigOption(
+                name = "Show Upgrade ROI",
+                desc = "Shows next-tier upgrade cost, profit gain, and payback time."
+        )
+        @ConfigEditorBoolean
+        public boolean showUpgradeRoi = true;
+
+        @ConfigOption(
+                name = "Bazaar Price Mode",
+                desc = "Choose whether profit uses instant-sell or instant-buy Bazaar prices."
+        )
+        @ConfigEditorDropdown(
+                values = {
+                        "Instant Sell",
+                        "Instant Buy"
+                }
+        )
+        public int bazaarPriceMode = 0;
     }
 
 }

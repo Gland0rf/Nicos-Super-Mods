@@ -1,6 +1,7 @@
 package com.nico.client.history;
 
 import com.nico.client.configuration.NsmConfig;
+import com.nico.client.configuration.category.FeatureOptions;
 import com.nico.client.dungeon.DungeonTeammateScanner;
 import com.nico.client.utils.LocationUtils;
 import com.nico.client.utils.SkyblockItemResolver;
@@ -1048,7 +1049,7 @@ public final class SkyblockHistoryFeature {
     }
 
     private static boolean partyMemoryEnabled() {
-        return NsmConfig.INSTANCE.other.partyMemory.enabled;
+        return NsmConfig.INSTANCE.feature(FeatureOptions.PartyMemory.class).enabled;
     }
 
     private static boolean tracking() {

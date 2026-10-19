@@ -2,6 +2,7 @@ package com.nico.client.stacking;
 
 import com.nico.client.NsmClientCommands;
 import com.nico.client.configuration.NsmConfig;
+import com.nico.client.configuration.category.FeatureOptions;
 import com.nico.client.dungeon.DungeonScanner;
 import com.nico.client.dungeon.DungeonState;
 import com.nico.client.dungeon.DungeonStatsTracker;
@@ -88,10 +89,10 @@ public final class RoomStackingDetector {
         if (isStartRoom(roomName)) {
             return true;
         }
-        if (NsmConfig.INSTANCE.dungeons.roomStacking.ignoreFairy && isFairyRoom(roomName)) {
+        if (NsmConfig.INSTANCE.feature(FeatureOptions.RoomStacking.class).ignoreFairy && isFairyRoom(roomName)) {
             return true;
         }
-        if (NsmConfig.INSTANCE.dungeons.roomStacking.ignoreBlood && isBloodRoom(roomName)) {
+        if (NsmConfig.INSTANCE.feature(FeatureOptions.RoomStacking.class).ignoreBlood && isBloodRoom(roomName)) {
             return true;
         }
 
@@ -247,7 +248,7 @@ public final class RoomStackingDetector {
 
         if (total <= 0) return false;
 
-        double configuredPercent = NsmConfig.INSTANCE.dungeons.roomStacking.disableRoomStackingAtSecretPercent / 100.0;
+        double configuredPercent = NsmConfig.INSTANCE.feature(FeatureOptions.RoomStacking.class).disableRoomStackingAtSecretPercent / 100.0;
 
         return found / (double) total >= configuredPercent;
     }
@@ -277,7 +278,7 @@ public final class RoomStackingDetector {
 
         if (mc.player == null) return;
 
-        String allNames = NsmConfig.INSTANCE.dungeons.roomStacking.includeClassesInChat
+        String allNames = NsmConfig.INSTANCE.feature(FeatureOptions.RoomStacking.class).includeClassesInChat
                 ? getPlayerNamesWithClasses(players)
                 : getPlayerNames(players);
 
@@ -288,7 +289,7 @@ public final class RoomStackingDetector {
         );
 
         if (includesSelf) {
-            if (NsmConfig.INSTANCE.dungeons.roomStacking.showSelfTitleAlert) {
+            if (NsmConfig.INSTANCE.feature(FeatureOptions.RoomStacking.class).showSelfTitleAlert) {
                 mc.gui.hud.setTimes(10, 35, 20);
 
                 mc.gui.hud.setTitle(
@@ -303,7 +304,7 @@ public final class RoomStackingDetector {
 
             copyStackingMessageToClipboard("[NSM] Stacking with " + otherNames);
 
-            if (NsmConfig.INSTANCE.dungeons.roomStacking.playAlertSounds) {
+            if (NsmConfig.INSTANCE.feature(FeatureOptions.RoomStacking.class).playAlertSounds) {
                 mc.player.playSound(
                         SoundEvents.BELL_BLOCK,
                         1.0F,
@@ -311,7 +312,7 @@ public final class RoomStackingDetector {
                 );
             }
         } else {
-            if (NsmConfig.INSTANCE.dungeons.roomStacking.showOtherStackingChatAlert) {
+            if (NsmConfig.INSTANCE.feature(FeatureOptions.RoomStacking.class).showOtherStackingChatAlert) {
                 mc.gui.hud.getChat().addClientSystemMessage(
                         Component.literal("[NSM] ")
                                 .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD)
@@ -322,7 +323,7 @@ public final class RoomStackingDetector {
 
             copyStackingMessageToClipboard("[NSM] " + allNames + " are stacking in " + roomName + "!");
 
-            if (NsmConfig.INSTANCE.dungeons.roomStacking.playAlertSounds) {
+            if (NsmConfig.INSTANCE.feature(FeatureOptions.RoomStacking.class).playAlertSounds) {
                 mc.player.playSound(
                         SoundEvents.NOTE_BLOCK_BELL.value(),
                         1.0F,
@@ -382,7 +383,7 @@ public final class RoomStackingDetector {
     }
 
     private static void copyStackingMessageToClipboard(String message) {
-        if (!NsmConfig.INSTANCE.dungeons.roomStacking.copyStackingMessageToClipboard) {
+        if (!NsmConfig.INSTANCE.feature(FeatureOptions.RoomStacking.class).copyStackingMessageToClipboard) {
             return;
         }
 
